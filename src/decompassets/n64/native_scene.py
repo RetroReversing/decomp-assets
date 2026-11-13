@@ -2,7 +2,7 @@
 import re
 import struct
 
-from ...rom.asset_formats import AssetError, integer
+from ..formats import AssetError, integer
 from . import animation, models, resource_inspection, textures
 
 

@@ -10,10 +10,18 @@ import bisect
 import re
 import struct
 
-from ...rom.asset_formats import AssetError
-from . import rnc
+from .. import rnc
+from ..formats import AssetError
 
 MAX_BYTES=4*1024*1024
+JR_RA=0x03E00008
+
+
+def _looks_like_code(data):
+    """MIPS program text: many returns (jr $ra) and many stack frames made (addiu $sp, $sp, -N)."""
+    words=struct.unpack('>'+str(len(data)//4)+'I',data[:len(data)//4*4])
+    return sum(w==JR_RA for w in words)>=16 and sum((w&0xFFFF8000)==0x27BD8000 for w in words)>=16
+
 MAX_EXPANDED=64*1024*1024
 MAX_TABLES=16384
 MAX_ENTRIES=16384
@@ -206,7 +214,6 @@ def regions(image,*,known=(),check=lambda:None,progress=lambda _:None):
         try:raw=(rnc.unpack if image[lo+3]==1 else rnc.unpack_m2)(image[lo:lo+18+packed],max_output=MAX_BYTES)
         except rnc.RncError:continue
         role='compressed data';info=dict(bytes=len(raw))
-        from .code import _looks_like_code
         if _looks_like_code(raw):
             match_at=image.find(raw,lo+18+packed)
             if match_at>=0:

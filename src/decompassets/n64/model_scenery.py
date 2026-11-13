@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import struct
 
-from ...rom import asset_archives
-from ...rom.asset_formats import AssetError
+from .. import archives as asset_archives
+from ..formats import AssetError
 
 IDENTITY=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
 

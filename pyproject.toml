@@ -1,0 +1,37 @@
+[project]
+name = "decompassets"
+version = "0.1.0"
+description = "Find and preview game assets (textures, audio banks, models, fonts) inside cartridge and disc images by their structure, with no per-game offsets."
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [
+    { name = "RetroReversing" },
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/RetroReversing/decomp-assets"
+Source = "https://github.com/RetroReversing/decomp-assets"
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "crunch64>=0.6.1",  # compresses Yay0/Yaz0/MIO0 test fixtures; the library decodes them itself
+    "pytest>=9.1.1",
+    "ruff==0.14.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "I", "E9", "B006", "B008", "B023"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["decompassets"]

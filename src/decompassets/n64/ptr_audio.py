@@ -9,7 +9,7 @@ import itertools
 import re
 import struct
 
-from ...rom.asset_formats import MAX_BYTES, AssetError, integer
+from ..formats import MAX_BYTES, AssetError, integer
 from . import audio
 
 MAGIC=b'N64 PtrTablesV2\0'
@@ -122,7 +122,7 @@ def sequence_layout(data):
 
 def sequences(image, *, check=lambda:None, progress=lambda _:None):
     """Describe CRC-checked archived channel tables as unrendered sequence candidates."""
-    from ...rom import asset_archives
+    from .. import archives as asset_archives
     results=[];expanded=0
     for member in asset_archives.zip_members(image,check=check):
         check()

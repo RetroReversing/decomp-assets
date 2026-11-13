@@ -2,7 +2,7 @@
 import math
 import struct
 
-from ...rom.asset_formats import integer
+from ..formats import integer
 from .resources import SchemaError, blocks, stream
 
 PAGE=64

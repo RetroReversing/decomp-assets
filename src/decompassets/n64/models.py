@@ -9,8 +9,9 @@ from __future__ import annotations
 import re
 import struct
 
-from ...rom.asset_formats import AssetError, integer
-from . import rnc, textures
+from .. import rnc
+from ..formats import AssetError, integer
+from . import textures
 
 MAX_BYTES = 4*1024*1024
 MAX_EXPANDED = 64*1024*1024

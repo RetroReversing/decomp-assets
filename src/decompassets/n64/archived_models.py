@@ -8,8 +8,8 @@ from __future__ import annotations
 import math
 import struct
 
-from ...rom import asset_archives
-from ...rom.asset_formats import AssetError, integer
+from .. import archives as asset_archives
+from ..formats import AssetError, integer
 from . import model_links, texture_packs
 
 MAX_EXPANDED=64*1024*1024

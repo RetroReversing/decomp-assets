@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import struct
 
-from . import rnc
+from .. import rnc
 
 MAX_BANK = 4 * 1024 * 1024
 MAX_EXPANDED = 64 * 1024 * 1024
@@ -80,7 +80,7 @@ def layout(data):
 
 def preview(data, asset, selection):
     """Resolve frame/palette/LOD indices from validated metadata, never arbitrary offsets."""
-    from ...rom import asset_formats as formats
+    from .. import formats
     frame = formats.integer(selection.get('frame',0),'Frame',0,asset['frames']-1)
     palette = formats.integer(selection.get('palette',frame%max(1,asset['palettes'])),'Palette',0,max(0,asset['palettes']-1))
     levels = asset.get('levels',[dict(width=asset['preview_settings']['width'],height=asset['preview_settings']['height'],offset=0)])
@@ -120,7 +120,7 @@ def decode(data):
     if data[:4] not in (b'RNC\x01',b'RNC\x02'):return None
     try:return (rnc.unpack if data[3]==1 else rnc.unpack_m2)(data[:MAX_BANK], max_output=MAX_BANK), 'RNC method '+str(data[3])
     except rnc.RncError as exc:
-        from ...rom.asset_formats import AssetError
+        from ..formats import AssetError
         raise AssetError('The RNC block is incomplete or its checksum failed. Check its offset.') from exc
 
 

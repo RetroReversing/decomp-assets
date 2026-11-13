@@ -1,7 +1,7 @@
 """Source-family I4 fonts corroborated by a named writer and mapped glyph tables."""
 import struct
 
-from ...rom.asset_formats import AssetError
+from ..formats import AssetError
 
 
 def regions(image,*,context=None,known=(),check=lambda:None,**kwargs):

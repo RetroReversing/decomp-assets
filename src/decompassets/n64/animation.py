@@ -2,7 +2,7 @@
 import math
 import struct
 
-from ...rom.asset_formats import AssetError
+from ..formats import AssetError
 from .resources import SchemaError, blocks, stream
 
 MAX_NODE_FRAMES=65536

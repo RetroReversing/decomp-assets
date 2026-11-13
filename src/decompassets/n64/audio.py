@@ -13,7 +13,7 @@ import re
 import struct
 import wave
 
-from ...rom.asset_formats import MAX_BYTES, MAX_SECONDS, AssetError, integer
+from ..formats import MAX_BYTES, MAX_SECONDS, AssetError, integer
 
 MAX_CONTROL = 1024*1024
 MAX_CANDIDATES = 128
@@ -99,8 +99,13 @@ def bank(image, offset, *, check=lambda: None):
 
 
 def loader_tables(image, context, *, check=lambda: None):
-    """Read explicit constant table arguments; never execute or patch the game's code."""
-    from ...arch.mips_assets import read
+    """Read explicit constant table arguments; never execute or patch the game's code.
+
+    Finding them needs a reader of MIPS code, which this library doesn't have: the caller passes one as
+    `context['read_code']` (decompdecomp's `arch.mips_assets.read`). Without one, no loader evidence is used.
+    """
+    read=context.get('read_code')
+    if read is None:return {}
     functions=context.get('functions',[])
     targets={f['vram'] for f in functions if f['name'].lstrip('_')=='alBnkfNew'}
     targets.update(s['address'] for s in context.get('symbols',[]) if s['name'].lstrip('_')=='alBnkfNew')

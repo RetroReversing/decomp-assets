@@ -5,7 +5,7 @@ import re
 import struct
 import zlib
 
-from .asset_formats import AssetError
+from .formats import AssetError
 
 MAX_MEMBERS=16384
 MAX_MEMBER=4*1024*1024

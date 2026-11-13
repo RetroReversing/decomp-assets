@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import struct
 
-from ...rom import asset_archives, asset_formats
-from ...rom.asset_formats import AssetError
+from .. import archives as asset_archives
+from .. import formats as asset_formats
+from ..formats import AssetError
 
 MAX_EXPANDED=64*1024*1024
 

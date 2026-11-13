@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import re
 
-from ...rom import asset_archives
-from ...rom.asset_formats import AssetError
+from .. import archives as asset_archives
+from ..formats import AssetError
 
 
 def path(value):
