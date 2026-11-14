@@ -116,3 +116,26 @@ def test_ci8_rejects_missing_colours_and_unsupported_palette_extents():
         broken=bytearray(raw);broken[offset]=16;assert textures.bank_layout(broken) is None
     bad=indexed_set([bytes([0,1,3,3,255,0,0,0]),indexed_set([bytes(64)]),indexed_set([bytes(64)])])
     assert textures.bank_layout(bad) is None
+
+
+def named_bank(name=b'BUSH01.GIF'):
+    """A later engine version appends the texture's source file name as a fourth block."""
+    raw=bank();inner=textures._blocks(raw,0,len(raw))
+    return indexed_set([raw[a:b] for a,b in inner]+[(name+b'\0').ljust((len(name)+8)//8*8,b'\0')])
+
+
+@pytest.mark.parametrize('pack',[lambda x:x,literal_block,literal2])
+def test_fourth_block_names_the_bank(pack):
+    payload=pack(named_bank());found=textures.regions(bytes(16)+payload)
+    assert [asset['label'] for asset in found]==['BUSH01.GIF']
+    assert found[0]['name']=='BUSH01.GIF' and found[0]['preview_settings']['format']=='ci4'
+    data=textures.decode(payload)[0] if payload[:3]==b'RNC' else bytes(16)+payload
+    assert textures.preview(data,found[0],{})['details']['frame']==0
+    # Three-block banks keep the generic label.
+    assert [asset['label'] for asset in textures.regions(bank())]==['Texture bank']
+
+
+@pytest.mark.parametrize('block',[b'\0'*8,b'BUSH\x01.GIF\0\0\0\0\0\0',b'BUSH01.GIF\0\0\0\0\0X',b'NOTERMIN',b'A'*72+b'\0'*8])
+def test_fourth_block_that_is_not_a_name_is_not_a_bank(block):
+    raw=bank();inner=textures._blocks(raw,0,len(raw))
+    assert textures.bank_layout(indexed_set([raw[a:b] for a,b in inner]+[block])) is None

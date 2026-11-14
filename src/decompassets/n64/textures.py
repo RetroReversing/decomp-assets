@@ -2,6 +2,8 @@
 
 The source-assisted layout is three indexed blocks: an eight-byte format record,
 bitmap frames and palettes. No title, release address or source file is needed at runtime.
+A later version of the engine adds a fourth block holding the texture's source file name
+("BUSH01.GIF"), NUL-terminated and zero-padded; that name becomes the bank's label.
 CI4/CI8, RGBA32 and the fixed six-level RGBA16 mipmap layout are checked separately.
 """
 from __future__ import annotations
@@ -14,7 +16,8 @@ from .. import rnc
 MAX_BANK = 4 * 1024 * 1024
 MAX_EXPANDED = 64 * 1024 * 1024
 MAX_BLOCKS = 16384
-RAW_HEADER = re.compile(rb'\x00\x00\x00\x03\x00\x00\x00\x18')
+RAW_HEADER = re.compile(rb'\x00\x00\x00[\x03\x04]\x00\x00\x00\x18')
+MAX_NAME = 64
 
 
 def _blocks(data, start, end, *, empty=False):
@@ -34,10 +37,19 @@ MIP_LEVELS = tuple(dict(width=32>>level,height=32>>level,offset=offset,stride=ma
 MIP_BYTES = 2744
 
 
+def _name(data, start, end):
+    """The fourth block: printable text, one NUL, then only padding to the eight-byte block size."""
+    text, nul, rest = data[start:end].partition(b'\0')
+    if not nul or not 0 < len(text) <= MAX_NAME or any(not 32 <= c < 127 for c in text) or rest.strip(b'\0'):return None
+    return text.decode('ascii')
+
+
 def bank_layout(data):
     """Require all independently indexed frames/palettes to fit the format record."""
     outer = _blocks(data, 0, len(data))
-    if not outer or len(outer) != 3 or outer[0] != (24,32):return None
+    if not outer or len(outer) not in (3,4) or outer[0] != (24,32):return None
+    name = _name(data, *outer[3]) if len(outer) == 4 else ''
+    if name is None:return None
     fmt, speed, width_shift, height_shift, effect, mode, pad1, pad2 = data[24:32]
     if fmt not in (0,1,2,3,4) or not 0 <= width_shift <= 10 or not 0 <= height_shift <= 10:return None
     if pad1 or pad2 or mode > 3:return None
@@ -66,7 +78,7 @@ def bank_layout(data):
                      for i,(start,end) in enumerate(frames)):return None
     settings = dict(format=pixel_format,width=width,height=height,offset=frames[0][0])
     if palettes:settings.update(palette_offset=palettes[0][0],palette_format='ia16' if fmt == 3 else 'rgba5551-be')
-    return dict(preview_settings=settings,frames=len(frames),palettes=len(palettes),
+    return dict(preview_settings=settings,frames=len(frames),name=name,palettes=len(palettes),
                 palette_entries=palette_entries,frame_offsets=[start for start,end in frames],palette_offsets=[start for start,end in palettes],
                 levels=levels,layout='mipmap-rgba16' if fmt == 4 else 'row-major',playback_speed=speed)
 
@@ -148,8 +160,10 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             extent = 18+packed
             contained_end = offset+extent
         else:
-            if offset+20 > len(image):continue
-            extent = int.from_bytes(image[offset+16:offset+20],'big')
+            if offset+24 > len(image):continue
+            # The last offset of the outer index is the bank's length.
+            at = 4+4*int.from_bytes(image[offset:offset+4],'big')
+            extent = int.from_bytes(image[offset+at:offset+at+4],'big')
             if not 32 <= extent <= MAX_BANK or offset+extent > len(image):continue
             data = image[offset:offset+extent]
         found = bank_layout(data)
@@ -161,7 +175,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             if 'palette_offset' in settings:settings['palette_offset']+=offset
             found['frame_offsets']=[offset+at for at in found['frame_offsets']]
             found['palette_offsets']=[offset+at for at in found['palette_offsets']]
-        results.append(dict(offset=offset,size=extent,kind='image',label='Texture bank',confidence='validated',
+        results.append(dict(offset=offset,size=extent,kind='image',label=found['name'] or 'Texture bank',confidence='validated',
                             reason='Source-assisted indexed-set structure: all frame extents match dimensions and all palette extents match the format.'+
                                    (' Both RNC checksums passed.' if compressed else '')+
                                    ' Runtime use is not established.',
