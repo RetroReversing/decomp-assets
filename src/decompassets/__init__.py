@@ -10,4 +10,4 @@
 Everything here reads bytes and returns plain dicts. It never writes a game file, runs a tool or downloads.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
