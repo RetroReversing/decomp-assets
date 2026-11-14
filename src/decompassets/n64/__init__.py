@@ -3,6 +3,8 @@
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - texture_packs.py: texture packs with a trailing count, inside archives.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
+- ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
+- rare_models.py: model textures in a deflated asset table.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
 - models.py: indexed geometry with byte-plane vertices and cache-relative polygons.
@@ -29,15 +31,18 @@ def regions(image, *, context=None, **kwargs):
         archived_models,
         audio,
         display_lists,
+        ffs,
         fonts,
         models,
         native_scene,
         ptr_audio,
+        rare_models,
         resources,
         texture_packs,
         textures,
     )
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
+           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)
            +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs))
@@ -48,7 +53,9 @@ def regions(image, *, context=None, **kwargs):
 
 def preview(data, asset, selection):
     """A preview of one asset `regions` found: an image, a sound, a model or a table, chosen by `selection`."""
-    from . import archived_models, audio, fonts, models, ptr_audio, resources, texture_packs, textures
+    from . import archived_models, audio, ffs, fonts, models, ptr_audio, rare_models, resources, texture_packs, textures
+    if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
+    if asset.get('layout')=='rare-model':return rare_models.preview(data,asset,selection)
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
