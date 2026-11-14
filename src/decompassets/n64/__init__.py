@@ -2,6 +2,7 @@
 
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - texture_packs.py: texture packs with a trailing count, inside archives.
+- display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
 - models.py: indexed geometry with byte-plane vertices and cache-relative polygons.
@@ -24,8 +25,20 @@ def regions(image, *, context=None, **kwargs):
     tables from the constant arguments of alBnkfNew calls (`read_code`). `check` (called often,
     raise to stop) and `progress` (given a dict) are passed to each recogniser.
     """
-    from . import archived_models, audio, fonts, models, native_scene, ptr_audio, resources, texture_packs, textures
-    known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+audio.regions(image,context=context,**kwargs)
+    from . import (
+        archived_models,
+        audio,
+        display_lists,
+        fonts,
+        models,
+        native_scene,
+        ptr_audio,
+        resources,
+        texture_packs,
+        textures,
+    )
+    known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
+           +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
