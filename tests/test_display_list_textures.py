@@ -92,3 +92,15 @@ def test_scan_stops_and_cartridges_without_lists_are_quick():
     def stop():raise RuntimeError('stopped')
     with pytest.raises(RuntimeError, match='stopped'):display_lists.regions(image, check=stop)
     assert display_lists.regions(bytes(0x10000)) == []
+
+
+def test_a_tile_sized_before_its_texels_load_reads_the_new_texels():
+    """The tile is read when it is drawn: sized first, then loaded from another image, the new image is the one."""
+    stale, fresh = 0x100, 0x200
+    commands = [cmd(0xFD100000, 0x01000000 | stale), cmd(0xF5100000, 0x07000000), cmd(0xF3000000, 0x07007800),
+                cmd(0xF5100200, 0), cmd(0xF2000000, 0x0000C004),                       # sized while `stale` is loaded
+                cmd(0xFD100000, 0x01000000 | fresh), cmd(0xF5100000, 0x07000000), cmd(0xF3000000, 0x07007800),
+                cmd(0xBF000000, 0x00020406), cmd(0xB8000000)]
+    data = b''.join(commands) + bytes(0x108)
+    found = list(display_lists._textures(data, dict(start=0, end=8*len(commands))))
+    assert [(t['address'], t['width'], t['height']) for t in found] == [(fresh, 4, 2)]
