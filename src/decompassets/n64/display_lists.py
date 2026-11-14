@@ -184,21 +184,43 @@ def _palette(found, palettes, palette_type):
                 palette_format='ia16' if palette_type == 3 else 'rgba5551-be')
 
 
+def _tile(tiles, sizes, loaded, number):
+    """The texture tile `number` reads, from its settings, its size and what TMEM holds there; None if it can't."""
+    tile = tiles.get(number);size = sizes.get(number);source = tile and loaded.get(tile['tmem'])
+    if not source or not size:return None
+    uls, ult, lrs, lrt = size
+    if uls or ult or lrs & 3 or lrt & 3:return None
+    fmt = FORMATS.get((tile['fmt'], tile['siz']))
+    width, height = lrs//4+1, lrt//4+1
+    if not fmt or width*height > 1024*1024:return None
+    row = (width*BITS[tile['siz']]+7)//8
+    if source['block']:
+        if row*height > source['texels']*BITS[source['siz']]//8 + 8:return None
+    elif source['width']*BITS[source['siz']] != width*BITS[tile['siz']]:return None
+    return dict(fmt=fmt, width=width, height=height, bytes=row*height, space=source['space'],
+                address=source['address'], at=source['at'], palette=tile['palette'],
+                swapped=source['swapped'] and height > 1)
+
+
 def _textures(image, group):
     """Walk the file's commands as the RDP would, and yield each tile that is drawn from loaded texels.
 
-    A tile is taken when something is drawn with it, so a palette loaded after the tile's size (as some games
-    order it) is the one used. TMEM's palette half is tracked entry by entry: a smaller palette load replaces
-    only the entries it covers."""
-    timg = None;tiles = {};loaded = {};palettes = {};palette_type = 2;pending = [];loads = 0
+    A tile is read when something is drawn, from what TMEM holds then: some games set a tile's size before
+    loading its texels, others load a palette after it. The tiles read are those sized since the last draw and
+    the one the draw uses (G_TEXTURE's tile, or a texture rectangle's). TMEM's palette half is tracked entry by
+    entry: a smaller palette load replaces only the entries it covers."""
+    timg = None;tiles = {};sizes = {};loaded = {};palettes = {};palette_type = 2;touched = set();current = 0;loads = 0
     for at in range(group['start'], min(group['end'] + 0x100, len(image) - 8), 8):
         w0, w1 = struct.unpack_from('>II', image, at)
         cmd = w0 >> 24
-        if cmd in DRAWS and pending:
-            for found in pending:
-                found = _palette(found, palettes, palette_type)
-                if found:yield found
-            pending = []
+        if cmd in DRAWS:
+            used = (w1 >> 24) & 7 if cmd in (0xE4, 0xE5) else current
+            if touched or cmd not in END_LISTS:
+                for number in sorted(touched | ({used} if cmd not in END_LISTS else set())):
+                    found = _tile(tiles, sizes, loaded, number)
+                    found = found and _palette(found, palettes, palette_type)
+                    if found:yield found
+            touched = set()
         if cmd == G_SETTIMG:
             space = _space(w1)
             timg = None if space is None else dict(fmt=(w0 >> 21) & 7, siz=(w0 >> 19) & 3, width=(w0 & 0xFFF)+1,
@@ -206,6 +228,8 @@ def _textures(image, group):
         elif cmd == G_SETTILE:
             tiles[(w1 >> 24) & 7] = dict(fmt=(w0 >> 21) & 7, siz=(w0 >> 19) & 3, line=(w0 >> 9) & 0x1FF,
                                          tmem=w0 & 0x1FF, palette=(w1 >> 20) & 0xF)
+        elif cmd in (0xBB, 0xD7):
+            current = (w0 >> 8) & 7
         elif cmd in (G_LOADBLOCK, G_LOADTILE, G_LOADTLUT) and timg:
             tile = tiles.get((w1 >> 24) & 7)
             if not tile:continue
@@ -214,27 +238,20 @@ def _textures(image, group):
                 for index in range(((w1 >> 14) & 0x3FF)+1):
                     palettes[tile['tmem']+index] = (loads, timg['space'], timg['address']+2*index)
             elif cmd == G_LOADBLOCK:
-                if not w0 & 0xFFFFFF:loaded[tile['tmem']] = dict(timg, texels=((w1 >> 12) & 0xFFF)+1, block=True)
+                # No row step (dxt 0): the bytes were stored as TMEM holds them, odd rows' words swapped.
+                if not w0 & 0xFFFFFF:loaded[tile['tmem']] = dict(timg, texels=((w1 >> 12) & 0xFFF)+1, block=True,
+                                                                 swapped=not w1 & 0xFFF)
             elif not w0 & 0xFFFFFF:
-                loaded[tile['tmem']] = dict(timg, texels=(((w1 >> 12) & 0xFFF)//4+1)*((w1 & 0xFFF)//4+1), block=False)
+                loaded[tile['tmem']] = dict(timg, texels=(((w1 >> 12) & 0xFFF)//4+1)*((w1 & 0xFFF)//4+1), block=False,
+                                            swapped=False)
         elif cmd in (0xBA, 0xE3):
             # Set other mode H: only its texture-lookup-table type (bits 14-15) matters here.
             shift, length = ((w0 >> 8) & 0xFF, (w0 & 0xFF)) if cmd == 0xBA else (32-((w0 >> 8) & 0xFF)-((w0 & 0xFF)+1), (w0 & 0xFF)+1)
             if shift <= 14 and 16 <= shift+length:palette_type = (w1 >> 14) & 3
         elif cmd == G_SETTILESIZE:
-            tile = tiles.get((w1 >> 24) & 7);source = tile and loaded.get(tile['tmem'])
-            if not source:continue
-            uls, ult, lrs, lrt = (w0 >> 12) & 0xFFF, w0 & 0xFFF, (w1 >> 12) & 0xFFF, w1 & 0xFFF
-            if uls or ult or lrs & 3 or lrt & 3:continue
-            fmt = FORMATS.get((tile['fmt'], tile['siz']))
-            width, height = lrs//4+1, lrt//4+1
-            if not fmt or width*height > 1024*1024:continue
-            row = (width*BITS[tile['siz']]+7)//8
-            if source['block']:
-                if row*height > source['texels']*BITS[source['siz']]//8 + 8:continue
-            elif source['width']*BITS[source['siz']] != width*BITS[tile['siz']]:continue
-            pending.append(dict(fmt=fmt, width=width, height=height, bytes=row*height, space=source['space'],
-                                address=source['address'], at=source['at'], palette=tile['palette']))
+            number = (w1 >> 24) & 7
+            sizes[number] = ((w0 >> 12) & 0xFFF, w0 & 0xFFF, (w1 >> 12) & 0xFFF, w1 & 0xFFF)
+            touched.add(number)
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
