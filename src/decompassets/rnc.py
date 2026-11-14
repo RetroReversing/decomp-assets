@@ -114,16 +114,8 @@ def _value(bits: _Bits, table: list[tuple[int, int, int, int]]) -> int:
     raise RncError("RNC stream has no matching Huffman code")
 
 
-def unpack(data: bytes, *, max_output: int = MAX_OUTPUT, literals: list[Literal] | None = None) -> bytes:
-    """Unpack a checksummed method-1 block. Optional literal locations support a verified compression template."""
-    if len(data) < HEADER_BYTES or data[:4] != b"RNC\x01":
-        raise RncError("not an RNC method-1 container")
-    size, packed, unpacked_crc, packed_crc = struct.unpack_from(">IIHH", data, 4)
-    if not 0 < size <= max_output or packed < 2 or HEADER_BYTES + packed > len(data):
-        raise RncError("invalid RNC sizes")
-    payload = data[HEADER_BYTES:HEADER_BYTES + packed]
-    if crc16(payload) != packed_crc:
-        raise RncError("RNC packed checksum differs")
+def _method1(payload: bytes, size: int, *, literals: list[Literal] | None = None, max_chunks: int = 255) -> bytearray:
+    """Decode one method-1 bit stream to exactly `size` bytes; the container's checks are the caller's."""
     bits = _Bits(payload)
     if bits.take(2):
         raise RncError("encrypted or locked RNC streams are unsupported")
@@ -149,8 +141,22 @@ def unpack(data: bytes, *, max_output: int = MAX_OUTPUT, literals: list[Literal]
                 for _ in range(n):
                     out.append(out[-offset])  # a run can overlap its own already-decoded bytes
         chunks += 1
-        if chunks > 255:
+        if chunks > max_chunks:
             raise RncError("too many RNC chunks")
+    return out
+
+
+def unpack(data: bytes, *, max_output: int = MAX_OUTPUT, literals: list[Literal] | None = None) -> bytes:
+    """Unpack a checksummed method-1 block. Optional literal locations support a verified compression template."""
+    if len(data) < HEADER_BYTES or data[:4] != b"RNC\x01":
+        raise RncError("not an RNC method-1 container")
+    size, packed, unpacked_crc, packed_crc = struct.unpack_from(">IIHH", data, 4)
+    if not 0 < size <= max_output or packed < 2 or HEADER_BYTES + packed > len(data):
+        raise RncError("invalid RNC sizes")
+    payload = data[HEADER_BYTES:HEADER_BYTES + packed]
+    if crc16(payload) != packed_crc:
+        raise RncError("RNC packed checksum differs")
+    out = _method1(payload, size, literals=literals)
     if crc16(out) != unpacked_crc:
         raise RncError("RNC unpacked checksum differs")
     return bytes(out)
@@ -257,3 +263,48 @@ def unpack_m2(data: bytes, *, max_output: int = MAX_OUTPUT) -> bytes:
         for _ in range(length):out.append(out[-offset])
     if len(out)!=size or crc16(out)!=out_crc:raise RncError('RNC unpacked size or checksum differs')
     return bytes(out)
+
+
+CHUNK_BYTES = 4096
+MAX_CHUNKED = 64 << 20
+
+
+def chunked(image: bytes, offset: int) -> dict | None:
+    """A chunked stream's layout: method byte 0x81, then a table of each 4 KB chunk's packed size.
+
+    Each chunk is a method-1 stream of its own, so any part of the output can be read without the rest; a
+    chunk starts on an even offset. Its checksum fields don't use the method-1 CRC, so a stream is accepted
+    only when every chunk table entry is plausible and all of them fit inside the image."""
+    if image[offset:offset+4] != b"RNC\x81" or offset + HEADER_BYTES > len(image):
+        return None
+    size, packed = struct.unpack_from(">II", image, offset + 4)
+    count = -(-size // CHUNK_BYTES)
+    table = offset + HEADER_BYTES
+    if not 0 < size <= MAX_CHUNKED or table + 2*count > len(image):
+        return None
+    sizes = struct.unpack_from(f">{count}H", image, table)
+    starts, at = [], table + 2*count
+    for packed_size in sizes:
+        if not 2 <= packed_size <= 2*CHUNK_BYTES:
+            return None
+        starts.append(at)
+        at += packed_size + (packed_size & 1)
+    if at > len(image):
+        return None
+    return dict(offset=offset, size=size, chunks=list(zip(starts, sizes)), end=at)
+
+
+def unpack_chunked(image: bytes, layout: dict, start: int = 0, end: int | None = None, *, check=lambda: None) -> bytes:
+    """Output bytes `start` to `end` of a chunked stream, decoding only the chunks that hold them."""
+    end = layout["size"] if end is None else end
+    if not 0 <= start <= end <= layout["size"]:
+        raise RncError("range is outside the chunked stream")
+    first, last = start // CHUNK_BYTES, max(start, end - 1) // CHUNK_BYTES
+    out = bytearray()
+    for index in range(first, last + 1):
+        check()
+        at, packed = layout["chunks"][index]
+        want = min(CHUNK_BYTES, layout["size"] - index*CHUNK_BYTES)
+        out += _method1(image[at:at + packed], want)
+    base = first * CHUNK_BYTES
+    return bytes(out[start - base:end - base])
