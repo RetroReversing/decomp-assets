@@ -3,6 +3,7 @@
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - texture_packs.py: texture packs with a trailing count, inside archives.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
+- fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
 - rare_models.py: model textures in a deflated asset table.
 - blast_textures.py: textures packed with a demolition game's own codecs, listed in its texture table.
@@ -37,6 +38,7 @@ def regions(image, *, context=None, **kwargs):
         blast_textures,
         display_lists,
         ffs,
+        fla2,
         fonts,
         mainfs,
         models,
@@ -50,7 +52,7 @@ def regions(image, *, context=None, **kwargs):
         uv_textures,
     )
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
-           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)
+           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs))
@@ -66,6 +68,7 @@ def preview(data, asset, selection):
         audio,
         blast_textures,
         ffs,
+        fla2,
         fonts,
         mainfs,
         models,
@@ -77,6 +80,7 @@ def preview(data, asset, selection):
         textures,
         uv_textures,
     )
+    if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
