@@ -21,7 +21,7 @@ the RNC unpacker work for any console. The interface may change before 1.0.
 ## Use
 
 ```bash
-uv add "decompassets @ https://github.com/RetroReversing/decomp-assets/archive/refs/tags/v0.7.0.tar.gz"
+uv add "decompassets @ https://github.com/RetroReversing/decomp-assets/archive/refs/tags/v0.8.0.tar.gz"
 ```
 
 ```python
