@@ -8,6 +8,7 @@
 - rare_models.py: model textures in a deflated asset table.
 - blast_textures.py: textures packed with a demolition game's own codecs, listed in its texture table.
 - mainfs.py: image packs and model bitmaps in a party-game series' main filesystem (three packings).
+- sno.py: sno unpacking and its texture sheets, read where a caller knows a stream's start and size.
 - reloc_files.py: textures and sprites in a table of relocatable files, some VPK0-packed (vpk0.py).
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
