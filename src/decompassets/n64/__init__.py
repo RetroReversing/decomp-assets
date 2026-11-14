@@ -6,6 +6,7 @@
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
 - rare_models.py: model textures in a deflated asset table.
 - blast_textures.py: textures packed with a demolition game's own codecs, listed in its texture table.
+- mainfs.py: image packs and model bitmaps in a party-game series' main filesystem (three packings).
 - reloc_files.py: textures and sprites in a table of relocatable files, some VPK0-packed (vpk0.py).
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
@@ -37,6 +38,7 @@ def regions(image, *, context=None, **kwargs):
         display_lists,
         ffs,
         fonts,
+        mainfs,
         models,
         native_scene,
         ptr_audio,
@@ -48,7 +50,7 @@ def regions(image, *, context=None, **kwargs):
         uv_textures,
     )
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
-           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)
+           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)
            +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs))
@@ -65,6 +67,7 @@ def preview(data, asset, selection):
         blast_textures,
         ffs,
         fonts,
+        mainfs,
         models,
         ptr_audio,
         rare_models,
@@ -74,6 +77,7 @@ def preview(data, asset, selection):
         textures,
         uv_textures,
     )
+    if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
