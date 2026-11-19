@@ -15,6 +15,7 @@ from .. import rnc
 from ..formats import AssetError
 from . import rnc_textures
 
+RNC_SUM32_CODEC = 'RNC method 1 (32-bit byte sum)'
 MAX_BANK = 4 * 1024 * 1024
 MAX_EXPANDED = 64 * 1024 * 1024
 MAX_BLOCKS = 16384
@@ -145,7 +146,7 @@ def _decode_rnc(data):
     try:
         return rnc.unpack(data, max_output=MAX_BANK), 'RNC method 1'
     except rnc.RncError:
-        return rnc.unpack_sum32(data, max_output=MAX_BANK), 'RNC method 1 (32-bit byte sum)'
+        return rnc.unpack_sum32(data, max_output=MAX_BANK), RNC_SUM32_CODEC
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
@@ -171,7 +172,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             except rnc.RncError:continue
             extent = 18+packed
             contained_end = offset+extent
-            if codec == 'RNC method 1 (32-bit byte sum)':
+            if codec == RNC_SUM32_CODEC:
                 items = rnc_textures.layout(data)
                 if items:
                     results.append(rnc_textures.asset(items, offset, extent))

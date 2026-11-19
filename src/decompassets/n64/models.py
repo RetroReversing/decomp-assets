@@ -11,7 +11,7 @@ import struct
 
 from .. import rnc
 from ..formats import AssetError, integer
-from . import textures
+from . import rnc_meshes, textures
 
 MAX_BYTES = 4*1024*1024
 MAX_EXPANDED = 64*1024*1024
@@ -103,9 +103,13 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             if not 0<size<=MAX_BYTES or not 2<=packed<=MAX_BYTES-18 or offset+extent>len(image):continue
             if expanded+size>MAX_EXPANDED:break
             expanded+=size
-            try:data=(rnc.unpack if image[offset+3]==1 else rnc.unpack_m2)(image[offset:offset+extent],max_output=MAX_BYTES)
+            try:data,codec=textures._decode_rnc(image[offset:offset+extent])
             except rnc.RncError:continue
             contained_end=offset+extent
+            if codec==textures.RNC_SUM32_CODEC:
+                if mesh:=rnc_meshes.asset(data,offset,extent):
+                    result.append(mesh)
+                continue
         else:
             if offset+16>len(image):continue
             extent=int.from_bytes(image[offset+12:offset+16],'big')

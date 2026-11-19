@@ -14,6 +14,7 @@
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
+- rnc_meshes.py: EMsh polygon tables and delta-encoded positions in byte-sum RNC blocks.
 - models.py: indexed geometry with byte-plane vertices and cache-relative polygons.
 - archived_models.py, model_links.py, model_scenery.py: models inside archives, their texture links and scenery.
 - animation.py: three-bit shared-header animation ADPCM and node tracks.
@@ -78,6 +79,7 @@ def preview(data, asset, selection):
         rare_models,
         reloc_files,
         resources,
+        rnc_meshes,
         rnc_textures,
         texture_packs,
         textures,
@@ -93,6 +95,7 @@ def preview(data, asset, selection):
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
+    if asset.get('layout')=='emsh-v010':return rnc_meshes.preview(data,asset,selection)
     if asset.get('layout')=='rnc-sum32-texture-bank':return rnc_textures.preview(data,asset,selection)
     if asset.get('layout')=='trailer-count-texture-pack':return texture_packs.preview(data,asset,selection)
     return {'audio':audio.preview,'model':models.preview,'metadata':resources.preview}.get(asset.get('media'),textures.preview)(data,asset,selection)
