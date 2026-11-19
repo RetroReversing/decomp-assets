@@ -40,6 +40,7 @@ def regions(image, *, context=None, **kwargs):
         audio,
         blast_textures,
         display_lists,
+        emsh_links,
         ffs,
         fla2,
         fonts,
@@ -61,6 +62,7 @@ def regions(image, *, context=None, **kwargs):
            +archived_models.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
+    emsh_links.link(image,assets,kwargs.get('check',lambda:None))
     return assets+fonts.regions(image,context=context,known=assets,**kwargs)
 
 
@@ -103,8 +105,13 @@ def preview(data, asset, selection):
 
 def scene(image, asset, selection, assets):
     """An object from a resource directory with its linked model, textures and animation."""
-    from . import native_scene
+    from . import native_scene, rnc_meshes
     from .models import ModelError
     from .resources import SchemaError
+    if asset.get('layout')=='emsh-v010' and (link:=asset.get('emsh_texture_bank')):
+        bank=next((a for a in assets if a['offset']==link['offset'] and a.get('layout')=='rnc-sum32-texture-bank'),None)
+        if bank is not None:
+            return rnc_meshes.preview(native_scene.raw(image,asset),asset,selection,
+                                      (native_scene.raw(image,bank),bank['offset']))
     try:return native_scene.preview(image,asset,selection,assets)
     except (ModelError,SchemaError) as exc:raise AssetError(str(exc)+' Rescan and choose another resource.') from None
