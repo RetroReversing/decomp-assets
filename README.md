@@ -49,7 +49,8 @@ Errors a user can act on are `decompassets.formats.AssetError`, with a sentence 
 - `formats.py`: readers every console shares, and the browser previews.
 - `archives.py`: zip members inside a game image, bounded.
 - `rnc.py`: Rob Northen ProPack, methods 1 and 2: unpacking, checksums, repacking.
-- `n64/`: Nintendo 64 recognisers; its `__init__.py` lists them.
+- `n64/`: Nintendo 64 recognisers; its `__init__.py` lists them. Its B1 audio reader can follow relocated
+  control pointers in wrapped banks and validate the adjacent ADPCM sample table.
 
 Every recogniser has limits on how much it reads and decodes, so a hostile or damaged image can't make it run long
 or use much memory.
