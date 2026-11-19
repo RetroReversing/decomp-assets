@@ -12,6 +12,8 @@ import re
 import struct
 
 from .. import rnc
+from ..formats import AssetError
+from . import rnc_textures
 
 MAX_BANK = 4 * 1024 * 1024
 MAX_EXPANDED = 64 * 1024 * 1024
@@ -130,10 +132,20 @@ def preview(data, asset, selection):
 def decode(data):
     """Return None for other codecs so the common preview reader can handle them."""
     if data[:4] not in (b'RNC\x01',b'RNC\x02'):return None
-    try:return (rnc.unpack if data[3]==1 else rnc.unpack_m2)(data[:MAX_BANK], max_output=MAX_BANK), 'RNC method '+str(data[3])
+    data = data[:MAX_BANK]
+    try:
+        return _decode_rnc(data)
     except rnc.RncError as exc:
-        from ..formats import AssetError
         raise AssetError('The RNC block is incomplete or its checksum failed. Check its offset.') from exc
+
+
+def _decode_rnc(data):
+    if data[3] == 2:
+        return rnc.unpack_m2(data, max_output=MAX_BANK), 'RNC method 2'
+    try:
+        return rnc.unpack(data, max_output=MAX_BANK), 'RNC method 1'
+    except rnc.RncError:
+        return rnc.unpack_sum32(data, max_output=MAX_BANK), 'RNC method 1 (32-bit byte sum)'
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
@@ -155,10 +167,15 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             if not 0 < size <= MAX_BANK or not 2 <= packed <= MAX_BANK-18 or offset+18+packed > len(image):continue
             if expanded+size > MAX_EXPANDED:break
             expanded += size
-            try:data = (rnc.unpack if image[offset+3]==1 else rnc.unpack_m2)(image[offset:offset+18+packed],max_output=MAX_BANK)
+            try:data, codec = _decode_rnc(image[offset:offset+18+packed])
             except rnc.RncError:continue
             extent = 18+packed
             contained_end = offset+extent
+            if codec == 'RNC method 1 (32-bit byte sum)':
+                items = rnc_textures.layout(data)
+                if items:
+                    results.append(rnc_textures.asset(items, offset, extent))
+                continue
         else:
             if offset+24 > len(image):continue
             # The last offset of the outer index is the bank's length.

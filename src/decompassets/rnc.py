@@ -146,13 +146,31 @@ def _method1(payload: bytes, size: int, *, literals: list[Literal] | None = None
     return out
 
 
-def unpack(data: bytes, *, max_output: int = MAX_OUTPUT, literals: list[Literal] | None = None) -> bytes:
-    """Unpack a checksummed method-1 block. Optional literal locations support a verified compression template."""
+def _method1_header(data, max_output):
     if len(data) < HEADER_BYTES or data[:4] != b"RNC\x01":
         raise RncError("not an RNC method-1 container")
-    size, packed, unpacked_crc, packed_crc = struct.unpack_from(">IIHH", data, 4)
+    size, packed = struct.unpack_from(">II", data, 4)
     if not 0 < size <= max_output or packed < 2 or HEADER_BYTES + packed > len(data):
         raise RncError("invalid RNC sizes")
+    return size, packed
+
+
+def unpack_sum32(data: bytes, *, max_output: int = MAX_OUTPUT) -> bytes:
+    """Decode the method-1 variant with a big-endian sum of the output bytes."""
+    size, packed = _method1_header(data, max_output)
+    checksum, _, chunks = struct.unpack_from(">IBB", data, 12)
+    if not chunks or checksum > 255 * size:
+        raise RncError("invalid RNC byte-sum header")
+    out = _method1(data[HEADER_BYTES:HEADER_BYTES + packed], size, max_chunks=chunks)
+    if sum(out) != checksum:
+        raise RncError("RNC unpacked byte sum differs")
+    return bytes(out)
+
+
+def unpack(data: bytes, *, max_output: int = MAX_OUTPUT, literals: list[Literal] | None = None) -> bytes:
+    """Unpack a checksummed method-1 block. Optional literal locations support a verified compression template."""
+    size, packed = _method1_header(data, max_output)
+    unpacked_crc, packed_crc = struct.unpack_from(">HH", data, 12)
     payload = data[HEADER_BYTES:HEADER_BYTES + packed]
     if crc16(payload) != packed_crc:
         raise RncError("RNC packed checksum differs")

@@ -1,6 +1,7 @@
 """Nintendo 64 asset recognisers. Each one accepts a candidate only when its whole structure checks out.
 
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
+- rnc_textures.py: descriptor-table texture banks inside byte-sum RNC blocks.
 - texture_packs.py: texture packs with a trailing count, inside archives.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
 - fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
@@ -77,6 +78,7 @@ def preview(data, asset, selection):
         rare_models,
         reloc_files,
         resources,
+        rnc_textures,
         texture_packs,
         textures,
         uv_textures,
@@ -91,6 +93,7 @@ def preview(data, asset, selection):
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
+    if asset.get('layout')=='rnc-sum32-texture-bank':return rnc_textures.preview(data,asset,selection)
     if asset.get('layout')=='trailer-count-texture-pack':return texture_packs.preview(data,asset,selection)
     return {'audio':audio.preview,'model':models.preview,'metadata':resources.preview}.get(asset.get('media'),textures.preview)(data,asset,selection)
 
