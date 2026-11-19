@@ -1,6 +1,7 @@
 """Source-assisted libultra B1 banks: bounded pointer graphs and explicit table evidence.
 
-Control pointers are relative to the B1 header, sample pointers to a separate table.
+Control pointers are B1-relative or relocated by a checked wrapper. Sample offsets
+are relative to a separate table.
 ADPCM headers alone cannot locate that table. Named loader arguments corroborate it;
 a unique adjacent structural candidate stays explicitly tentative without that evidence.
 """
@@ -21,15 +22,25 @@ MAX_SOUNDS = 4096
 MAX_SAMPLES = 2048
 MAX_TABLE_PROBES = 32
 MAX_HEADER_CHECKS = 4*1024*1024
+RELOCATED_BASE = 0x800000
+B1_WRAPPER = struct.pack('>III', 1, RELOCATED_BASE+12, 0)
 
 
 class BankError(ValueError):
     pass
 
 
-def bank(image, offset, *, check=lambda: None):
-    """Reject relocated flags, invalid graphs, unsupported books and truncated records."""
+def bank(image, offset, *, relocated=False, check=lambda: None):
+    """Check relocation flags, pointer graphs, predictor books and record extents."""
+    if relocated and (offset < len(B1_WRAPPER) or image[offset-len(B1_WRAPPER):offset] != B1_WRAPPER):
+        raise BankError('Missing relocated B1 wrapper.')
     end = offset+8
+    expected_flag = int(relocated)
+
+    def resolve(value):
+        if not value or not relocated:
+            return value
+        return value - RELOCATED_BASE - len(B1_WRAPPER)
     samples = {}; sounds = 0; visited = set()
     limit = min(len(image),offset+MAX_CONTROL)
 
@@ -39,7 +50,7 @@ def bank(image, offset, *, check=lambda: None):
         end=max(end,offset+at+size)
         return image[offset+at:offset+at+size]
 
-    def pointer(at):return int.from_bytes(take(at,4),'big')
+    def pointer(at):return resolve(int.from_bytes(take(at,4),'big'))
 
     def instrument(at, rate, bank_index, instrument_index):
         nonlocal sounds
@@ -48,7 +59,7 @@ def bank(image, offset, *, check=lambda: None):
         if key in visited:return
         visited.add(key)
         head=take(at,16);count=int.from_bytes(head[14:16],'big')
-        if head[0]>127 or head[1]>127 or head[3] or not 1<=count<=MAX_SOUNDS:raise BankError('Invalid instrument.')
+        if head[0]>127 or head[1]>127 or head[3]!=expected_flag or not 1<=count<=MAX_SOUNDS:raise BankError('Invalid instrument.')
         take(at,16+count*4)
         for index in range(count):
             check();sounds+=1
@@ -56,14 +67,15 @@ def bank(image, offset, *, check=lambda: None):
             sound=pointer(at+16+index*4)
             if not sound:continue
             data=take(sound,16);envelope,keymap,wavetable=struct.unpack_from('>III',data)
-            if data[12]>127 or data[13]>127 or data[14]:raise BankError('Invalid sound flags or gain.')
+            envelope,keymap,wavetable=map(resolve,(envelope,keymap,wavetable))
+            if data[12]>127 or data[13]>127 or data[14]!=expected_flag:raise BankError('Invalid sound flags or gain.')
             env=take(envelope,16);keys=take(keymap,6,2)
             if any(value < -1 for value in struct.unpack_from('>iii',env)) or env[12]>127 or env[13]>127:raise BankError('Invalid envelope.')
             if keys[0]>keys[1] or keys[2]>keys[3] or max(keys[:5])>127:raise BankError('Invalid key map.')
             if (wavetable,rate) in samples:continue
             data=take(wavetable,20);base,length=struct.unpack_from('>II',data);codec,flags=data[8:10]
-            loop,book=struct.unpack_from('>II',data,12)
-            if codec not in (0,1) or flags or not 0<length<=MAX_BYTES:raise BankError('Invalid wavetable.')
+            loop,book=map(resolve,struct.unpack_from('>II',data,12))
+            if codec not in (0,1) or flags!=expected_flag or not 0<length<=MAX_BYTES:raise BankError('Invalid wavetable.')
             sample=dict(relative_offset=base,size=length,rate=rate,codec='N64 VADPCM' if codec==0 else 'PCM16 big endian',
                         bank=bank_index,instrument=instrument_index,sound=index,key_base=keys[4])
             if codec==0:
@@ -90,9 +102,9 @@ def bank(image, offset, *, check=lambda: None):
     for index in range(count):
         at=pointer(4+index*4);header=take(at,12)
         instruments,flags,pad,rate,percussion=struct.unpack('>HBBII',header)
-        if flags or pad or not 0<=instruments<=256 or not 1000<=rate<=192000:raise BankError('Invalid bank header.')
+        if flags!=expected_flag or pad or not 0<=instruments<=256 or not 1000<=rate<=192000:raise BankError('Invalid bank header.')
         take(at,12+instruments*4)
-        instrument(percussion,rate,index,'percussion')
+        instrument(resolve(percussion),rate,index,'percussion')
         for number in range(instruments):instrument(pointer(at+12+number*4),rate,index,number)
     if not samples:raise BankError('Bank has no supported samples.')
     return dict(offset=offset,size=end-offset,samples=list(samples.values()),sound_count=sounds)
@@ -150,22 +162,36 @@ def _candidates(image):
         offset=hit.start()
         if offset+8>len(image):continue
         count=int.from_bytes(image[offset+2:offset+4],'big')
+        relocated=offset>=len(B1_WRAPPER) and image[offset-len(B1_WRAPPER):offset]==B1_WRAPPER
         first=int.from_bytes(image[offset+4:offset+8],'big')
+        if relocated:first-=RELOCATED_BASE+len(B1_WRAPPER)
         if not 4+count*4<=first<=MAX_CONTROL or first%4 or offset+first+12>len(image):continue
         header=image[offset+first:offset+first+12]
-        if header[2] or header[3] or not 1000<=int.from_bytes(header[4:8],'big')<=192000:continue
-        yield offset
+        if header[2]!=int(relocated) or header[3] or not 1000<=int.from_bytes(header[4:8],'big')<=192000:continue
+        yield offset,relocated
 
 
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
-    for number,offset in enumerate(candidates):
+    for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
-        try:info=bank(image,offset,check=check)
+        try:info=bank(image,offset,relocated=relocated,check=check)
         except BankError:continue
         adjacent=(offset+info['size']+15)//16*16
-        bases=sorted(tables,key=lambda at:(at!=adjacent,at))[:MAX_TABLE_PROBES] if tables else [adjacent]
+        if relocated:
+            # The wrapper relocates control pointers, while the sample offsets stay relative
+            # to a separate, aligned table following the control graph.
+            if min(sample['relative_offset'] for sample in info['samples']) != 0:
+                continue
+            for index,sample in enumerate(info['samples'],1):
+                sample['label']=f'Sample {index}'
+            info['offset']-=len(B1_WRAPPER)
+            info['size']+=len(B1_WRAPPER)
+            offset=info['offset']
+            bases=[adjacent]
+        else:
+            bases=sorted(tables,key=lambda at:(at!=adjacent,at))[:MAX_TABLE_PROBES] if tables else [adjacent]
         fits=[]
         for base in bases:
             info['corroborated']=base in tables
@@ -178,7 +204,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                                 preview_settings=dict(format='auto',source='rom',offset=offset)))
             continue
         base=fits[0];confidence='validated' if base in tables else 'tentative'
-        reason=('B1 control graph and every ADPCM frame selector passed. '+
+        reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
+                 'B1 control graph and every ADPCM frame selector passed. ')+
                 ('A named alBnkfNew call supplies the sample-table base.' if base in tables else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')

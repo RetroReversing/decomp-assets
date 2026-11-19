@@ -141,3 +141,28 @@ def test_loop_endpoints_cannot_exceed_the_declared_sample_count(raw):
     struct.pack_into('>I',image,128+256+12,368)
     struct.pack_into('>III',image,128+368,0,1000,1)
     with pytest.raises(audio.BankError,match='Loop'):audio.bank(image,128)
+
+def test_wrapped_b1_finds_the_table_and_previews_each_sound():
+    image,_,base=fixture()
+    controls=bytearray(image[128:base])
+    for field in (4,44,80,84,128,132,136,144,148,152,272,296):
+        value=struct.unpack_from('>I',controls,field)[0]
+        struct.pack_into('>I',controls,field,0x80000c+value)
+    for flag in (34,67,142,158,265,289):
+        controls[flag]=1
+    prefix=bytes(128)+struct.pack('>III',1,0x80000c,0)
+    wrapped=bytearray(prefix+controls+bytes(4)+image[base:])
+    results=audio.regions(wrapped)
+    bank=results[0]
+    assert bank['offset']==128 and bank['table_offset']==base+16
+    assert bank['table_confidence']=='tentative'
+    assert [sample['label'] for sample in bank['samples']]==['Sample 1','Sample 2']
+    for index in range(2):
+        rate,pcm=wav(audio.preview(wrapped,bank,{'sample':index}))
+        assert rate==22050 and struct.unpack('<32h',pcm)==(index+1,)*32
+
+    bad_flag=bytearray(wrapped);bad_flag[len(prefix)+142]=0
+    assert not audio.regions(bad_flag)
+    wrapped[base+16]=15
+    found=audio.regions(wrapped)
+    assert len(found)==1 and found[0]['audio_kind']=='unresolved bank'
