@@ -16,7 +16,8 @@ repository has kept its history.
 ## Status
 
 Nintendo 64 first. The shared readers in `formats.py` (pixel layouts, palettes, PCM, VAG, PNG/JPEG/WAVE checks) and
-the RNC unpacker work for any console. The interface may change before 1.0.
+the RNC unpacker work for any console. The N64 recognisers include CI4 and RGBA32 descriptor-table
+texture banks in the RNC method-1 variant that validates a 32-bit sum of the decoded bytes. The interface may change before 1.0.
 
 ## Use
 
