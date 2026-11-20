@@ -4,7 +4,7 @@ import re
 import struct
 from itertools import islice
 
-from . import ead_sequence
+from . import ead_notes, ead_sequence
 from .resource_inspection import table
 
 _HEADER = re.compile(rb'\0[\x08-\x80]\0{18}', re.S)
@@ -116,15 +116,21 @@ def preview(image, asset, selection):
         key = (start, size)
         if key not in schedules:
             valid = 0 <= start < start+size <= len(image) and size <= 256 * 1024
-            schedules[key] = ead_sequence.schedule(image[start:start+size]) if valid else None
-        parsed = schedules[key]
+            data = image[start:start+size] if valid else b''
+            schedule = ead_sequence.schedule(data) if valid else None
+            score = ead_notes.notes(data) if schedule else None
+            schedules[key] = schedule, score
+        parsed, score = schedules[key]
         return {**item,
                 'channels': len({start.channel for start in parsed['channels']}) if parsed else None,
                 'channel_starts': len(parsed['channels']) if parsed else None,
                 'root_ticks': parsed['ticks'] if parsed else None,
-                'conditional': parsed['conditional'] if parsed else None}
+                'note_events': len(score['notes']) if score else None,
+                'incomplete_scripts': score['incomplete'] if score else None,
+                'conditional': score['conditional'] if score else None}
     return dict(media='metadata', title=asset['label'], fields={'Sequencer': 'Nintendo EAD'},
                 table=table(asset['label'], ['index', 'sequence', 'alias', 'offset', 'bytes', 'fonts',
-                                       'channels', 'channel_starts', 'root_ticks', 'conditional'],
+                                       'channels', 'channel_starts', 'root_ticks', 'note_events',
+                                       'incomplete_scripts', 'conditional'],
                             len(entries), entry, selection),
                 settings=asset['preview_settings'])
