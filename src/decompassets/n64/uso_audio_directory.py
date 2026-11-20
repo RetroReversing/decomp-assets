@@ -4,6 +4,7 @@ import re
 import struct
 from itertools import islice
 
+from . import ead_sequence
 from .resource_inspection import table
 
 _HEADER = re.compile(rb'\0[\x08-\x80]\0{18}', re.S)
@@ -105,9 +106,25 @@ def asset(directory, sequence_start):
                 preview_settings=dict(format='auto', source='rom', offset=offset))
 
 
-def preview(asset, selection):
+def preview(image, asset, selection):
     entries = asset['sequences']
+    schedules = {}
+
+    def entry(index):
+        item = entries[index]
+        start, size = item['offset'], item['bytes']
+        key = (start, size)
+        if key not in schedules:
+            valid = 0 <= start < start+size <= len(image) and size <= 256 * 1024
+            schedules[key] = ead_sequence.schedule(image[start:start+size]) if valid else None
+        parsed = schedules[key]
+        return {**item,
+                'channels': len({start.channel for start in parsed['channels']}) if parsed else None,
+                'channel_starts': len(parsed['channels']) if parsed else None,
+                'root_ticks': parsed['ticks'] if parsed else None,
+                'conditional': parsed['conditional'] if parsed else None}
     return dict(media='metadata', title=asset['label'], fields={'Sequencer': 'Nintendo EAD'},
-                table=table(asset['label'], ['index', 'sequence', 'alias', 'offset', 'bytes', 'fonts'],
-                            len(entries), entries.__getitem__, selection),
+                table=table(asset['label'], ['index', 'sequence', 'alias', 'offset', 'bytes', 'fonts',
+                                       'channels', 'channel_starts', 'root_ticks', 'conditional'],
+                            len(entries), entry, selection),
                 settings=asset['preview_settings'])
