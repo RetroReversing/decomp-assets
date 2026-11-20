@@ -44,6 +44,7 @@ def regions(image, *, context=None, **kwargs):
         blast_textures,
         dean_audio,
         dialogue,
+        dialogue_links,
         display_lists,
         emsh_links,
         ffs,
@@ -68,6 +69,7 @@ def regions(image, *, context=None, **kwargs):
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
+    dialogue_links.link(image,assets,kwargs.get('check',lambda:None))
     emsh_links.link(image,assets,kwargs.get('check',lambda:None))
     return assets+fonts.regions(image,context=context,known=assets,**kwargs)
 

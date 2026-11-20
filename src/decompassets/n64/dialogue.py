@@ -141,6 +141,10 @@ def preview(image, asset, selection):
     columns = ['index', 'scene', 'cue_id', 'speaker', 'text']
     title = source[0]['name'] if chosen else 'All dialogue cues'
     records = table(title, columns, len(lines), lambda i: lines[i], selection)
+    audio = asset.get('cue_audio', {})
+    for row in records['rows']:
+        if row['cue_id'] in audio:
+            row['audio_offset'] = audio[row['cue_id']]
     return dict(media='metadata', title=f'{language} dialogue script',
                 table=records, settings=dict(format='auto', source='rom', offset=asset['offset'],
                                             dialogue_scene=chosen, dialogue_speaker=speaker))
