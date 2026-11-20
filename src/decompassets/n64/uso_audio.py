@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from itertools import islice
 
 from .. import formats
-from . import audio, uso_audio_directory
+from . import audio, ead_font, uso_audio_directory
 from .uso_textures import _MAGIC, _NAME, _SECTION
 
 _MAX_BANK = 512 * 1024
@@ -120,6 +120,60 @@ def _directory_samples(image, control, wave, directory, check):
             for row in rows:
                 if _fits(data, 0, row):
                     yield start, wave+wave_offset, row
+
+
+def _font_sample(control, wave, at):
+    """Validate a named descriptor even when it shares a nonadjacent book."""
+    packed, offset, loop, book = struct.unpack_from('>4I', control, at)
+    size, flags = packed & 0xffffff, packed >> 24
+    frame = 5 if flags == 0x30 else 9
+    if (flags not in (0, 2, 0x30) or not frame <= size <= len(wave)-offset
+            or offset % 16 or size % frame not in (0, 1)
+            or not 16 <= book <= len(control)-8 or not 16 <= loop <= len(control)-12):
+        return None
+    order, predictors = struct.unpack_from('>2I', control, book)
+    first, last, repeat = _SECTION.unpack_from(control, loop)
+    if (order != 2 or not 1 <= predictors <= 8 or book+8+predictors*32 > len(control)
+            or not 0 <= first < last <= (size//frame+1)*16 or repeat not in (0, 0xffffffff)):
+        return None
+    sample = _Sample(offset, size, book+8, predictors, frame)
+    return sample if _fits(wave, 0, sample) else None
+
+
+def sequence_voices(image, control, wave, directory, fonts, notes, *, check=lambda: None):
+    """Pair timed notes with validated samples, leaving unresolved notes silent."""
+    loaded = {}
+    for index in dict.fromkeys(fonts):
+        offset, size, _, _, bank, other_bank, instruments, drums, high, low = directory['fonts'][index]
+        if other_bank != 255:
+            continue
+        if not size:
+            offset, size, *_ = directory['fonts'][offset]
+        data = image[control+offset:control+offset+size]
+        wave_offset, wave_size, *_ = directory['waves'][bank]
+        base = wave+wave_offset
+        loaded[index] = data, (instruments, drums, high*256+low), base, image[base:base+wave_size], {}
+    voices = {}
+    for note in notes:
+        font = note.font if note.font is not None else 0
+        if not 0 <= font < len(fonts):
+            continue
+        index = fonts[-1-font]
+        if index not in loaded:
+            continue
+        data, counts, base, waves, samples = loaded[index]
+        key = index, note.program, note.key
+        if key not in voices:
+            voices[key] = ead_font.voice(data, counts, note.program, note.key)
+        voice = voices[key]
+        if voice is None:
+            continue
+        if voice.descriptor not in samples:
+            check()
+            samples[voice.descriptor] = _font_sample(data, waves, voice.descriptor)
+        sample = samples[voice.descriptor]
+        if sample is not None:
+            yield note, voice, sample, data, base
 
 
 def _guessed_samples(image, control, control_end, wave, wave_end, check, progress):
