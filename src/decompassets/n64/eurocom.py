@@ -8,7 +8,7 @@ from collections import Counter
 from itertools import islice
 
 from .. import formats
-from . import edl, eurocom_mesh, mort, musyx, musyx_project, musyx_song
+from . import edl, eurocom_mesh, mort, musyx, musyx_project, musyx_render, musyx_song
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
@@ -259,22 +259,25 @@ def _samples(image, start, end, check):
         for pos in range(at, min(end-SAMPLE.size,at+2048*SAMPLE.size), SAMPLE.size):
             if image[pos:pos+4] == b'\xff'*4 and len(rows) >= 8:
                 data_base = (pos + 4 + 15) & ~15
-                offsets = sorted({relative for _,relative,_,_ in rows})
+                offsets = sorted({relative for _,relative,*_ in rows})
                 if offsets[0] == 0 and data_base+offsets[-1] < end:
                     extents = {a:b-a for a,b in zip(offsets,offsets[1:]+[end-data_base])}
                     samples = [dict(offset=data_base+relative, size=extents[relative], rate=rate,
-                                    codec='MusyX ADPCM', label=str(identifier), samples=length,
+                                    codec='MusyX ADPCM', label=str(identifier), samples=length, root_key=root_key,
+                                    loop_start=loop_start, loop_end=loop_end,
                                     preview_available=musyx.byte_length(length)<=extents[relative])
-                               for identifier,relative,rate,length in rows]
+                               for identifier,relative,rate,length,root_key,loop_start,loop_end in rows]
                     return _asset(at, len(rows)*SAMPLE.size, 'MusyX sample directory', 'eurocom-samples',
                                   kind='audio', data_base=data_base, bank_end=end, count=len(rows),
                                   samples=samples, audio_kind='indexed sample directory') | {'media':'audio'}
                 break
-            identifier, zero, relative, reserved, _, rate, encoded, _, _ = SAMPLE.unpack_from(image, pos)
+            identifier, zero, relative, reserved, tuning, rate, encoded, loop_start, loop_size = SAMPLE.unpack_from(image, pos)
             if (identifier <= previous_id or zero or reserved or not 4000 <= rate <= 48000
                     or encoded >> 24 != 3 or not encoded & 0xffffff):
                 break
-            rows.append((identifier, relative, rate, encoded & 0xffffff))
+            length = encoded & 0xffffff
+            loop_end = loop_start + loop_size if loop_size and loop_start+loop_size <= length else 0
+            rows.append((identifier, relative, rate, length, tuning >> 8, loop_start, loop_end))
             previous_id = identifier
     return None
 
@@ -378,6 +381,12 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                         music['pool_offset'] = pool['offset']
                         music['pool_objects'] = sum(len(section) for section in pool['objects'].values())
                         music['used_program_objects'] = len(required)
+                        music['sample_index'] = samples['offset']
+                        music['media'] = 'audio'
+                        music['audio_kind'] = 'indexed sample directory'
+                        music['samples'] = [dict(offset=lo, size=hi-lo, codec='MusyX sequence',
+                                                 label=str(song), preview_available=True)
+                                            for lo,hi,_,song in music['songs']]
                 assets.append(dict(offset=samples['data_base'], size=samples['bank_end']-samples['data_base'],
                                    kind='audio', label='MusyX sample payload', confidence='validated',
                                    reason='The ordered sample directory resolves to stored data offsets.'))
@@ -488,6 +497,8 @@ def preview(image, asset, selection):
         return eurocom_mesh.preview(image, asset, selection)
     if asset['layout'] == 'eurocom-textures':
         return _texture_preview(image, asset, selection)
+    if asset['layout'] == 'eurocom-songs' and 'sample' in selection:
+        return _song_preview(image, asset, selection)
     if asset['layout'] in ('eurocom-samples', 'eurocom-speech') and 'sample' in selection:
         return _sample_preview(image, asset, selection)
     rows, fields = _records(image, asset)
@@ -513,6 +524,30 @@ def _sample_preview(image, asset, selection):
     payload, details = formats.pcm(pcm, dict(format='pcm-s16le', rate=rate, length=len(pcm)))
     details.update(format=sample['codec'], sample=index, original_samples=sample['samples'],
                    truncated=count < sample['samples'], note=asset['reason'])
+    return dict(media='audio', mime='audio/wav', details=details,
+                data_url='data:audio/wav;base64,' + base64.b64encode(payload).decode(),
+                settings={**asset['preview_settings'], 'sample': index})
+
+
+def _song_preview(image, asset, selection):
+    index = formats.integer(selection['sample'], 'Song', 0, len(asset['songs'])-1)
+    start, end, group, song = asset['songs'][index]
+    sample_index = asset.get('sample_index', 0)
+    if not 0 < sample_index < start < end <= len(image) or end-start > musyx_song.MAX_SONG_BYTES:
+        raise formats.AssetError('This song needs a validated instrument and sample bank. Rescan the ROM.')
+    songs = asset['songs']
+    bank = _samples(image, sample_index, min(row[0] for row in songs), lambda: None)
+    project = musyx_project.locate(image, sample_index, songs)
+    required = musyx_project.used_programs(image, songs, project['groups']) if project else None
+    pool = musyx_project.find_pool(image, project['end'], sample_index, required) if project else None
+    if bank is None or bank['offset'] != sample_index or pool is None:
+        raise formats.AssetError('The song instrument tables no longer match the ROM. Rescan the ROM.')
+    samples = {int(sample['label']):sample for sample in bank['samples']}
+    pcm, stats = musyx_render.render(image, image[start:end], project['groups'][group], song,
+                                     pool['objects'], samples)
+    payload, details = formats.pcm(pcm, dict(format='pcm-s16le', channels=2, rate=musyx_render.RATE, length=len(pcm)))
+    details.update(stats, format='MusyX sequence', sample=index,
+                   note='One-pass sample-backed preview. Runtime effects and macro timing can differ.')
     return dict(media='audio', mime='audio/wav', details=details,
                 data_url='data:audio/wav;base64,' + base64.b64encode(payload).decode(),
                 settings={**asset['preview_settings'], 'sample': index})
