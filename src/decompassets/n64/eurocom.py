@@ -8,7 +8,7 @@ from collections import Counter
 from itertools import islice
 
 from .. import formats
-from . import edl, eurocom_mesh, mort, musyx, musyx_song
+from . import edl, eurocom_mesh, mort, musyx, musyx_project, musyx_song
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
@@ -369,6 +369,15 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             assets.append(music)
             if samples := _samples(image,archive_end,min(s[0] for s in music['songs']),check):
                 assets.append(samples)
+                project = musyx_project.locate(image, samples['offset'], music['songs'], check)
+                if project:
+                    music['project_offset'] = project['offset']
+                    music['project_groups'] = len(project['groups'])
+                    required = musyx_project.used_programs(image, music['songs'], project['groups'])
+                    if pool := musyx_project.find_pool(image, project['end'], samples['offset'], required):
+                        music['pool_offset'] = pool['offset']
+                        music['pool_objects'] = sum(len(section) for section in pool['objects'].values())
+                        music['used_program_objects'] = len(required)
                 assets.append(dict(offset=samples['data_base'], size=samples['bank_end']-samples['data_base'],
                                    kind='audio', label='MusyX sample payload', confidence='validated',
                                    reason='The ordered sample directory resolves to stored data offsets.'))
@@ -455,6 +464,11 @@ def _records(image, asset):
                              note_events=sum(event['kind']=='note' for stream in streams for event in stream)
                              if streams and all(stream is not None for stream in streams) else None))
         fields = {'Sequencer': 'MusyX'}
+        if 'project_groups' in asset:
+            fields['Instrument groups'] = asset['project_groups']
+        if 'pool_objects' in asset:
+            fields['Sound objects'] = asset['pool_objects']
+            fields['Sound objects used by notes'] = asset['used_program_objects']
     elif layout == 'eurocom-samples':
         rows = []
         for i in range(asset['count']):
