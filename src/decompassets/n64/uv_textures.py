@@ -24,9 +24,9 @@ MAX_FILE = 1024 * 1024
 END = b'\xdf' + bytes(7)
 
 
-def comm(image, at):
-    """The file's COMM bytes and how they were stored ('raw' or 'MIO0'), or None when this isn't a UVTX file."""
-    if image[at:at+4] != b'FORM' or image[at+8:at+12] != b'UVTX':return None
+def comm(image, at, file_type=b'UVTX'):
+    """The file's COMM bytes and how they were stored ('raw' or 'MIO0'), or None when the FORM type does not match."""
+    if image[at:at+4] != b'FORM' or image[at+8:at+12] != file_type:return None
     end = at + 8 + int.from_bytes(image[at+4:at+8], 'big')
     if end > len(image) or end - at > MAX_FILE:return None
     p = at + 12

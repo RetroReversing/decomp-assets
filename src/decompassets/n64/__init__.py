@@ -11,6 +11,7 @@
 - mainfs.py: image packs and model bitmaps in a party-game series' main filesystem (three packings).
 - sno.py: sno unpacking and its texture sheets, read where a caller knows a stream's start and size.
 - reloc_files.py: textures and sprites in a table of relocatable files, some VPK0-packed (vpk0.py).
+- uv_models.py: local geometry from UVMD models.
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - rnx.py: chained byte-sum pages and checked resource payloads.
 - dialogue.py: scene headings, cue text and speaker keys in indexed RAW! scripts.
@@ -64,6 +65,7 @@ def regions(image, *, context=None, **kwargs):
         uso_audio,
         uso_models,
         uso_textures,
+        uv_models,
         uv_textures,
     )
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
@@ -74,6 +76,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
+    known.extend(uv_models.regions(image,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
@@ -111,6 +114,7 @@ def preview(data, asset, selection):
         uso_audio_directory,
         uso_models,
         uso_textures,
+        uv_models,
         uv_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
@@ -124,6 +128,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
+    if asset.get('layout')=='uv-model':return uv_models.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout')=='rare-model':return rare_models.preview(data,asset,selection)
