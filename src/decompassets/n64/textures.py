@@ -132,6 +132,9 @@ def preview(data, asset, selection):
 
 def decode(data):
     """Return None for other codecs so the common preview reader can handle them."""
+    if data[:3] == b'EDL':
+        from . import edl
+        return edl.unpack(data), 'Eurocom EDL'
     if data[:4] in (b'RNX\1', b'FILL'):
         from . import rnx
         try:
