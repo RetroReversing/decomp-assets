@@ -12,6 +12,7 @@ from . import edl, eurocom_mesh, musyx
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
+MORT_HEADER = struct.Struct('>4sHHI')
 INDEX = struct.Struct('>4I')
 ENTRY = struct.Struct('>12I')
 TEX = struct.Struct('>BxHH2xI')
@@ -113,17 +114,21 @@ def _mort(image, check):
             clips = []
             for word, in WORD.iter_unpack(image[base:at]):
                 check()
-                offset = base + (word & 0xffffff)
-                if (word >> 24 != 1 or not at < offset <= len(image) - 2
-                        or clips and clips[-1] >= offset or image[offset - 4:offset] != b'MORT'):
+                offset = base + (word & 0xffffff) - 4
+                if (word >> 24 != 1 or not at <= offset <= len(image) - MORT_HEADER.size
+                        or clips and offset < clips[-1]['offset'] + clips[-1]['size']):
                     break
-                clips.append(offset)
+                magic, frames, rate, words = MORT_HEADER.unpack_from(image, offset)
+                size = words * 4
+                if (magic != b'MORT' or not frames or not 4000 <= rate <= 48000
+                        or size <= MORT_HEADER.size or offset + size > len(image)):
+                    break
+                # Each encoded frame represents 160 mono PCM samples.
+                clips.append(dict(offset=offset, size=size, rate=rate, samples=frames * 160,
+                                  codec='Factor 5 MORT', label=str(len(clips)), preview_available=False))
             if len(clips) == count:
                 return _asset(base - 4, at - base + 4, 'MORT speech index', 'eurocom-speech',
-                              kind='audio', indices=clips, audio_kind='indexed speech',
-                              samples=[dict(offset=offset, size=(clips[i+1]-offset if i+1<len(clips) else 0),
-                                            codec='Factor 5 MORT', label=str(i), preview_available=False)
-                                       for i,offset in enumerate(clips)]) | {'media':'audio'}
+                              kind='audio', audio_kind='indexed speech', samples=clips) | {'media':'audio'}
     return None
 
 
@@ -357,7 +362,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                            reason='Animation index frame extents fit the key bank.'))
     if speech := _mort(image, check):
         assets.append(speech)
-        assets.append(dict(offset=speech['indices'][0]-4, size=speech['indices'][-1]-speech['indices'][0],
+        first, last = speech['samples'][0], speech['samples'][-1]
+        assets.append(dict(offset=first['offset'], size=last['offset']+last['size']-first['offset'],
                            kind='audio', label='Indexed MORT speech payloads', confidence='validated',
                            reason='The ordered speech index resolves to MORT clip markers.'))
         if music := _music(image,index,archive_end,speech):
@@ -430,8 +436,12 @@ def _records(image, asset):
         rows = [dict(script_offset=at) for at in asset['indices']]
         fields = {}
     elif layout == 'eurocom-speech':
-        rows = [dict(clip_offset=at, duration_seconds=round(struct.unpack_from('>H',image,at)[0]/75,3))
-                for at in asset['indices']]
+        rows = [dict(clip_offset=clip['offset'], encoded_bytes=clip['size'], sample_rate=clip['rate'],
+                     duration_seconds=round(clip['samples']/clip['rate'],3))
+                for clip in asset['samples']]
+        if 'indices' in asset:
+            rows = [dict(clip_offset=at, duration_seconds=round(struct.unpack_from('>H',image,at)[0]/75,3))
+                    for at in asset['indices']]
         fields = {'Codec': 'Factor 5 MORT', 'Playback': 'Unavailable'}
     elif layout == 'eurocom-songs':
         rows = [dict(rom_start=a, rom_end=b, group=group, song=song) for a,b,group,song in asset['songs']]
