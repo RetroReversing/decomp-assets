@@ -215,10 +215,15 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
     directory = uso_audio_directory.locate(image, ctl_end-ctl_start, seq_end-seq_start, wave_end-wave_start, check=check)
     result = [uso_audio_directory.asset(directory, seq_start)] if directory else []
     if directory:
+        stored = [(idx, offset, size) for idx, (offset, size, *_) in enumerate(directory['sequences'])
+                  if 0 < size <= _MAX_SEQUENCE]
         result.append(dict(offset=seq_start, size=seq_end-seq_start, label='USO music sequences',
-                           kind='music sequence', media='metadata', layout='uso-music', confidence='validated',
-                           sequences=[idx for idx, (_, size, *_) in enumerate(directory['sequences'])
-                                      if 0 < size <= _MAX_SEQUENCE],
+                           kind='music sequence', media='audio', layout='uso-music', confidence='validated',
+                           audio_kind='indexed sample directory',
+                           sequences=[idx for idx, _, _ in stored],
+                           samples=[dict(offset=seq_start+offset, size=size, codec='Nintendo EAD sequence',
+                                         label=f'Sequence {idx}', preview_available=True)
+                                    for idx, offset, size in stored],
                            sections=[ctl_range, sequence_range, wave_range],
                            reason='Stored EAD sequences use the validated USO instrument and wave tables.',
                            preview_settings=dict(format='auto', source='rom', offset=seq_start)))
