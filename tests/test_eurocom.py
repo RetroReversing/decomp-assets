@@ -100,3 +100,21 @@ def test_musyx_sample_preview_uses_predictor_book_and_both_frame_seeds():
     invalid[264] = 0x80
     with pytest.raises(AssetError, match='missing predictor'):
         eurocom.preview(invalid, asset, {'sample': 0})
+
+
+def test_mort_index_uses_header_rates_and_bounds_final_clip():
+    count = 8
+    base = 36
+    stream = struct.pack('>4sHHII', b'MORT', 75, 16000, 4, 0)
+    clip_data = base + count * 4
+    entries = [0x1000000 | (clip_data - base + i * len(stream) + 4) for i in range(count)]
+    image = bytearray(bytes(base - 4) + struct.pack('>I8I', count, *entries) + stream * count)
+    asset = eurocom._mort(image, lambda: None)
+    assert [(c['offset'], c['size'], c['samples'], c['rate']) for c in asset['samples']] == [
+        (clip_data + i * 16, 16, 12000, 16000) for i in range(count)
+    ]
+    rows, _ = eurocom._records(image, asset)
+    assert rows[-1]['duration_seconds'] == 0.75
+    assert eurocom._mort(image[:-1], lambda: None) is None
+    struct.pack_into('>I', image, clip_data + 8, 5)
+    assert eurocom._mort(image, lambda: None) is None
