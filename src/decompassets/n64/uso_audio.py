@@ -1,5 +1,6 @@
 """Pair USO sound-bank descriptors with unique spans in the named wave file."""
 
+import base64
 import re
 import struct
 from collections import defaultdict
@@ -7,11 +8,12 @@ from dataclasses import dataclass
 from itertools import islice
 
 from .. import formats
-from . import audio, ead_font, uso_audio_directory
+from . import audio, ead_font, ead_notes, ead_render, uso_audio_directory
 from .uso_textures import _MAGIC, _NAME, _SECTION
 
 _MAX_BANK = 512 * 1024
 _MAX_WAVE = 16 * 1024 * 1024
+_MAX_SEQUENCE = 256 * 1024
 _DESCRIPTOR = struct.Struct('>6I')
 _RATE = 22050
 
@@ -23,6 +25,7 @@ class _Sample:
     book: int
     predictors: int
     frame_size: int = 9
+    loop: tuple[int, int] = (0, 0)
 
     @property
     def encoded_size(self):
@@ -136,7 +139,9 @@ def _font_sample(control, wave, at):
     if (order != 2 or not 1 <= predictors <= 8 or book+8+predictors*32 > len(control)
             or not 0 <= first < last <= (size//frame+1)*16 or repeat not in (0, 0xffffffff)):
         return None
-    sample = _Sample(offset, size, book+8, predictors, frame)
+    frames = size//frame*16
+    looping = (first, last) if repeat and last <= frames else (0, 0)
+    sample = _Sample(offset, size, book+8, predictors, frame, looping)
     return sample if _fits(wave, 0, sample) else None
 
 
@@ -209,6 +214,14 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
     seq_start, seq_end = sequence_range
     directory = uso_audio_directory.locate(image, ctl_end-ctl_start, seq_end-seq_start, wave_end-wave_start, check=check)
     result = [uso_audio_directory.asset(directory, seq_start)] if directory else []
+    if directory:
+        result.append(dict(offset=seq_start, size=seq_end-seq_start, label='USO music sequences',
+                           kind='music sequence', media='metadata', layout='uso-music', confidence='validated',
+                           sequences=[idx for idx, (_, size, *_) in enumerate(directory['sequences'])
+                                      if 0 < size <= _MAX_SEQUENCE],
+                           sections=[ctl_range, sequence_range, wave_range],
+                           reason='Stored EAD sequences use the validated USO instrument and wave tables.',
+                           preview_settings=dict(format='auto', source='rom', offset=seq_start)))
     matches = (_directory_samples(image, ctl_start, wave_start, directory, check) if directory
                else _guessed_samples(image, ctl_start, ctl_end, wave_start, wave_end, check, progress))
     samples = {}
@@ -244,3 +257,36 @@ def preview(image, asset, selection):
     result['details']['sample'] = index
     result['settings'].update(sample=index, rate=rate)
     return result
+
+
+def music_preview(image, asset, selection):
+    if 'sample' not in selection:
+        from .resource_inspection import table
+
+        sequences = asset['sequences']
+        return dict(media='metadata', title=asset['label'], fields={'Sequencer':'Nintendo EAD'},
+                    table=table(asset['label'], ['index', 'sequence'], len(sequences),
+                                lambda i: dict(index=i, sequence=sequences[i]), selection),
+                    settings=asset['preview_settings'])
+    index = formats.integer(selection['sample'], 'Sequence', 0, len(asset['sequences'])-1)
+    sections = asset['sections']
+    if len(sections) != 3 or any(not 0 <= start < end <= len(image) for start, end in sections):
+        raise formats.AssetError('The audio resources exceed the current ROM. Rescan ROM Explorer.')
+    (control, _), (sequence, _), (wave, _) = sections
+    directory = uso_audio_directory.locate(image, *(end-start for start, end in sections))
+    song = asset['sequences'][index]
+    if not directory or not 0 <= song < len(directory['sequences']):
+        raise formats.AssetError('The EAD loader tables no longer match the ROM. Rescan ROM Explorer.')
+    offset, size, *_ = directory['sequences'][song]
+    score = ead_notes.notes(image[sequence+offset:sequence+offset+size]) if 0 < size <= _MAX_SEQUENCE else None
+    if score is None:
+        raise formats.AssetError('This EAD sequence could not be decoded for playback.')
+    voices = sequence_voices(image, control, wave, directory, directory['sequence_fonts'][song], score['notes'])
+    pcm, stats = ead_render.render(image, score, voices)
+    payload, details = formats.pcm(pcm, dict(format='pcm-s16le', channels=2, rate=ead_render.RATE, length=len(pcm)))
+    details.update(stats, format='Nintendo EAD sequence', sample=index, sequence=song,
+                   conditional=score['conditional'], incomplete_scripts=score['incomplete'],
+                   note='Sample-backed preview. Runtime effects and instrument envelopes can differ.')
+    return dict(media='audio', mime='audio/wav', details=details,
+                data_url='data:audio/wav;base64,'+base64.b64encode(payload).decode(),
+                settings={**asset['preview_settings'], 'sample':index})
