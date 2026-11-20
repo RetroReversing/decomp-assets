@@ -61,6 +61,7 @@ def regions(image, *, context=None, **kwargs):
         rnx,
         texture_packs,
         textures,
+        uso_models,
         uso_textures,
         uv_textures,
     )
@@ -71,6 +72,7 @@ def regions(image, *, context=None, **kwargs):
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
+    known.extend(uso_models.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
     dialogue_links.link(image,assets,kwargs.get('check',lambda:None))
@@ -103,11 +105,13 @@ def preview(data, asset, selection):
         scene_records,
         texture_packs,
         textures,
+        uso_models,
         uso_textures,
         uv_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
         return eurocom.preview(data,asset,selection)
+    if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
