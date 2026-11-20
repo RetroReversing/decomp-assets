@@ -69,3 +69,34 @@ def test_eurocom_mesh_rejects_bad_cached_vertex_reference():
     image = header + vertices + commands
     assert eurocom_mesh.mesh(image, 0, 0) == (32, 3, [[0, 1, 2]])
     assert eurocom_mesh.mesh(image[:-2] + bytes((32, 12)), 0, 0) is None
+
+
+def test_musyx_sample_preview_uses_predictor_book_and_both_frame_seeds():
+    import base64
+    import io
+    import wave
+
+    from decompassets.n64 import musyx
+
+    coefficients = [0] * 128
+    coefficients[8:16] = [1024] * 8
+    first = bytes([12, 0x1f]) + bytes(14)
+    second = bytes([12]) + bytes(15)
+    encoded = musyx.BOOK.pack(*coefficients) + struct.pack('>4h', 11, 100, -22, -100) + first + second
+    asset = {'layout': 'eurocom-samples', 'samples': [
+        {'offset': 0, 'rate': 11025, 'samples': 35, 'codec': 'MusyX ADPCM', 'preview_available': True},
+    ], 'preview_settings': {'format': 'auto'}, 'reason': 'Validated sample extent'}
+    result = eurocom.preview(encoded, asset, {'sample': 0})
+    assert result['mime'] == 'audio/wav'
+    with wave.open(io.BytesIO(base64.b64decode(result['data_url'].split(',')[1]))) as wav:
+        assert wav.getframerate() == 11025 and wav.getnframes() == 35
+        pcm = struct.unpack('<35h', wav.readframes(35))
+    assert pcm[:4] == (11, 100, 51, 49)
+    assert pcm[32:] == (-22, -100, -50)
+
+    with pytest.raises(AssetError, match='truncated'):
+        eurocom.preview(encoded[:-1], asset, {'sample': 0})
+    invalid = bytearray(encoded)
+    invalid[264] = 0x80
+    with pytest.raises(AssetError, match='missing predictor'):
+        eurocom.preview(invalid, asset, {'sample': 0})
