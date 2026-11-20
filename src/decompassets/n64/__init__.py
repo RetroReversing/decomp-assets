@@ -12,6 +12,8 @@
 - sno.py: sno unpacking and its texture sheets, read where a caller knows a stream's start and size.
 - reloc_files.py: textures and sprites in a table of relocatable files, some VPK0-packed (vpk0.py).
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
+- rnx.py: chained byte-sum pages and checked resource payloads.
+- dean_audio.py: DEAN stream directories and audio metadata.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
 - rnc_meshes.py: EMsh polygon tables and delta-encoded positions in byte-sum RNC blocks.
@@ -39,6 +41,7 @@ def regions(image, *, context=None, **kwargs):
         archived_models,
         audio,
         blast_textures,
+        dean_audio,
         display_lists,
         emsh_links,
         ffs,
@@ -51,6 +54,7 @@ def regions(image, *, context=None, **kwargs):
         rare_models,
         reloc_files,
         resources,
+        rnx,
         texture_packs,
         textures,
         uv_textures,
@@ -59,7 +63,7 @@ def regions(image, *, context=None, **kwargs):
            +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
-           +archived_models.regions(image,**kwargs))
+           +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
     emsh_links.link(image,assets,kwargs.get('check',lambda:None))
@@ -72,6 +76,7 @@ def preview(data, asset, selection):
         archived_models,
         audio,
         blast_textures,
+        dean_audio,
         ffs,
         fla2,
         fonts,
@@ -83,6 +88,8 @@ def preview(data, asset, selection):
         resources,
         rnc_meshes,
         rnc_textures,
+        rnx,
+        rnx_atlas,
         texture_packs,
         textures,
         uv_textures,
@@ -97,6 +104,9 @@ def preview(data, asset, selection):
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
+    if asset.get('layout')=='rnx-ci4-atlas':return rnx_atlas.preview(data,asset,selection)
+    if asset.get('layout')=='rnx-stream':return rnx.preview(data,asset)
+    if asset.get('audio_kind')=='dean stream':return dean_audio.preview(data,asset,selection)
     if asset.get('layout')=='emsh-v010':return rnc_meshes.preview(data,asset,selection)
     if asset.get('layout')=='rnc-sum32-texture-bank':return rnc_textures.preview(data,asset,selection)
     if asset.get('layout')=='trailer-count-texture-pack':return texture_packs.preview(data,asset,selection)
