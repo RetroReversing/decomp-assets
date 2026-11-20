@@ -8,11 +8,10 @@ from collections import Counter
 from itertools import islice
 
 from .. import formats
-from . import edl, eurocom_mesh, musyx
+from . import edl, eurocom_mesh, mort, musyx
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
-MORT_HEADER = struct.Struct('>4sHHI')
 INDEX = struct.Struct('>4I')
 ENTRY = struct.Struct('>12I')
 TEX = struct.Struct('>BxHH2xI')
@@ -115,17 +114,17 @@ def _mort(image, check):
             for word, in WORD.iter_unpack(image[base:at]):
                 check()
                 offset = base + (word & 0xffffff) - 4
-                if (word >> 24 != 1 or not at <= offset <= len(image) - MORT_HEADER.size
+                if (word >> 24 != 1 or not at <= offset <= len(image) - mort.HEADER.size
                         or clips and offset < clips[-1]['offset'] + clips[-1]['size']):
                     break
-                magic, frames, rate, words = MORT_HEADER.unpack_from(image, offset)
+                magic, frames, rate, words = mort.HEADER.unpack_from(image, offset)
                 size = words * 4
                 if (magic != b'MORT' or not frames or not 4000 <= rate <= 48000
-                        or size <= MORT_HEADER.size or offset + size > len(image)):
+                        or size <= mort.HEADER.size or offset + size > len(image)):
                     break
                 # Each encoded frame represents 160 mono PCM samples.
-                clips.append(dict(offset=offset, size=size, rate=rate, samples=frames * 160,
-                                  codec='Factor 5 MORT', label=str(len(clips)), preview_available=False))
+                clips.append(dict(offset=offset, size=size, rate=rate, samples=frames * mort.SAMPLES_PER_FRAME,
+                                  codec='Factor 5 MORT', label=str(len(clips)), preview_available=size<=formats.MAX_BYTES))
             if len(clips) == count:
                 return _asset(base - 4, at - base + 4, 'MORT speech index', 'eurocom-speech',
                               kind='audio', audio_kind='indexed speech', samples=clips) | {'media':'audio'}
@@ -442,7 +441,7 @@ def _records(image, asset):
         if 'indices' in asset:
             rows = [dict(clip_offset=at, duration_seconds=round(struct.unpack_from('>H',image,at)[0]/75,3))
                     for at in asset['indices']]
-        fields = {'Codec': 'Factor 5 MORT', 'Playback': 'Unavailable'}
+        fields = {'Codec': 'Factor 5 MORT'}
     elif layout == 'eurocom-songs':
         rows = [dict(rom_start=a, rom_end=b, group=group, song=song) for a,b,group,song in asset['songs']]
         fields = {'Sequencer': 'MusyX'}
@@ -465,7 +464,7 @@ def preview(image, asset, selection):
         return eurocom_mesh.preview(image, asset, selection)
     if asset['layout'] == 'eurocom-textures':
         return _texture_preview(image, asset, selection)
-    if asset['layout'] == 'eurocom-samples' and 'sample' in selection:
+    if asset['layout'] in ('eurocom-samples', 'eurocom-speech') and 'sample' in selection:
         return _sample_preview(image, asset, selection)
     rows, fields = _records(image, asset)
     result = dict(media='metadata', title=asset['label'], fields=fields, settings=asset['preview_settings'])
@@ -478,10 +477,15 @@ def _sample_preview(image, asset, selection):
     index = formats.integer(selection['sample'], 'Sample', 0, len(asset['samples']) - 1)
     sample = asset['samples'][index]
     if not sample['preview_available']:
-        raise formats.AssetError('The MusyX sample does not fit its recorded extent.')
+        raise formats.AssetError('This sample has no bounded preview. Rescan the ROM to refresh its audio index.')
     rate = sample['rate']
     count = min(sample['samples'], rate * formats.MAX_SECONDS)
-    pcm = musyx.decode(image, sample['offset'], count)
+    if asset['layout'] == 'eurocom-speech':
+        start = sample['offset']
+        pcm = mort.decode(image[start:start+sample['size']], count // mort.SAMPLES_PER_FRAME)
+        count = len(pcm) // 2
+    else:
+        pcm = musyx.decode(image, sample['offset'], count)
     payload, details = formats.pcm(pcm, dict(format='pcm-s16le', rate=rate, length=len(pcm)))
     details.update(format=sample['codec'], sample=index, original_samples=sample['samples'],
                    truncated=count < sample['samples'], note=asset['reason'])

@@ -118,3 +118,37 @@ def test_mort_index_uses_header_rates_and_bounds_final_clip():
     assert eurocom._mort(image[:-1], lambda: None) is None
     struct.pack_into('>I', image, clip_data + 8, 5)
     assert eurocom._mort(image, lambda: None) is None
+
+
+def test_mort_preview_decodes_silent_run_and_honors_frame_limit():
+    import base64
+    import io
+    import wave
+
+    from decompassets.n64 import mort
+
+    clip = struct.pack('>4sHHII', b'MORT', 4, 12000, 4, 7)
+    asset = {'layout': 'eurocom-speech', 'samples': [
+        dict(offset=0, size=len(clip), rate=12000, samples=640, codec='Factor 5 MORT', preview_available=True),
+    ], 'preview_settings': {'format': 'auto'}, 'reason': 'Validated sample extent'}
+    result = eurocom.preview(clip, asset, {'sample': 0})
+    with wave.open(io.BytesIO(base64.b64decode(result['data_url'].split(',')[1]))) as wav:
+        assert (wav.getframerate(), wav.getnframes()) == (12000, 640)
+        assert wav.readframes(640) == bytes(1280)
+    assert mort.decode(clip, 1) == bytes(320)
+    with pytest.raises(AssetError, match='extent'):
+        mort.decode(clip[:-1], 4)
+    with pytest.raises(AssetError, match='frame data'):
+        mort.decode(struct.pack('>4sHHII', b'MORT', 1, 12000, 4, 0), 1)
+
+
+def test_mort_voiced_frame_matches_reference_pcm():
+    from hashlib import sha256
+
+    from decompassets.n64 import mort
+
+    # A synthetic frame with all four excitation phases and nonzero lattice output.
+    clip = bytes.fromhex('4d4f525400012ee00000000c210820001892a922d11f58d11a38b2a8ab1a23eb'
+                         '7d6358d2f2ad6344688fac7800000fac')
+    pcm = mort.decode(clip, 1)
+    assert sha256(pcm).hexdigest() == '63398d1ebb1cde4c40dce1d80c43dabf339b70be940fda48ce9b7585d109a36f'
