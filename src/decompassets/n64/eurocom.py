@@ -8,7 +8,7 @@ from collections import Counter
 from itertools import islice
 
 from .. import formats
-from . import edl, eurocom_mesh, mort, musyx
+from . import edl, eurocom_mesh, mort, musyx, musyx_song
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
@@ -443,7 +443,17 @@ def _records(image, asset):
                     for at in asset['indices']]
         fields = {'Codec': 'Factor 5 MORT'}
     elif layout == 'eurocom-songs':
-        rows = [dict(rom_start=a, rom_end=b, group=group, song=song) for a,b,group,song in asset['songs']]
+        rows = []
+        for start, end, group, song in asset['songs']:
+            valid = 0 <= start < end <= len(image) and end-start <= musyx_song.MAX_SONG_BYTES
+            data = image[start:end] if valid else b''
+            arrangement = musyx_song.arrangement(data)
+            streams = [musyx_song.events(data, lo, hi) for lo, hi in arrangement['streams']] if arrangement else []
+            rows.append(dict(rom_start=start, rom_end=end, group=group, song=song,
+                             bpm=arrangement['tempo'] if arrangement else None,
+                             tracks=len(arrangement['tracks']) if arrangement else None,
+                             note_events=sum(event['kind']=='note' for stream in streams for event in stream)
+                             if streams and all(stream is not None for stream in streams) else None))
         fields = {'Sequencer': 'MusyX'}
     elif layout == 'eurocom-samples':
         rows = []
