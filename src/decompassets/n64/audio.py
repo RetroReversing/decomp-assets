@@ -223,20 +223,27 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     return results
 
 
-def vadpcm(raw, coefficients, predictors, limit, *, check=lambda: None):
+def vadpcm(raw, coefficients, predictors, limit, *, check=lambda: None, bits=4):
     """Decode order-2 mono VADPCM using eight-sample vectors and signed Q11 books.
 
     Equations checked against vgmstream src/coding/vadpcm_decoder.c. This is a
     local preview, not a cycle-accurate audio microcode emulator.
     """
-    if len(raw)%9 or len(coefficients)!=predictors*16:raise AssetError('The ADPCM frames or predictor book are incomplete.')
+    if bits not in (2, 4):raise AssetError('The ADPCM frame width is unsupported.')
+    frame_size = 1 + 2*bits
+    if len(raw)%frame_size or len(coefficients)!=predictors*16:raise AssetError('The ADPCM frames or predictor book are incomplete.')
+    midpoint = 1 << (bits-1)
+    mask = 2*midpoint-1
+    shifts = range(8-bits, -1, -bits)
     history=[0,0];out=[]
-    for frame in range(min(len(raw)//9,(limit+15)//16)):
+    for frame in range(min(len(raw)//frame_size,(limit+15)//16)):
         if frame%256==0:check()
-        data=raw[frame*9:frame*9+9];shift=data[0]>>4;predictor=data[0]&15
+        data=raw[frame*frame_size:(frame+1)*frame_size];shift=data[0]>>4;predictor=data[0]&15
         if predictor>=predictors:raise AssetError('An ADPCM frame selects a missing predictor.')
         book=coefficients[predictor*16:predictor*16+16]
-        residuals=[(n if n<8 else n-16)*(1<<shift) for byte in data[1:] for n in (byte>>4,byte&15)]
+        scale = 1 << (min(shift, 14) if bits == 2 else shift)
+        codes = ((byte >> shift_by) & mask for byte in data[1:] for shift_by in shifts)
+        residuals = [(code if code < midpoint else code-2*midpoint)*scale for code in codes]
         for group in (residuals[:8],residuals[8:]):
             decoded=[]
             for i in range(8):
@@ -254,11 +261,11 @@ def preview(image, asset, selection):
     if not 0<=offset<offset+length<=len(image):raise AssetError('The detected sample exceeds the current image. Refresh ROM Explorer.')
     limit=min(sample['samples'],rate*MAX_SECONDS,(MAX_BYTES-44)//2)
     raw=image[offset:offset+sample.get('encoded_size',length)]
-    if sample['codec']=='N64 VADPCM':
+    if sample['codec'] in ('N64 VADPCM', 'N64 VADPCM (2-bit)'):
         at=sample['book_offset'];count=sample['predictors']*16
         if not 0<=at<at+count*2<=len(image):raise AssetError('The ADPCM predictor book exceeds the current image.')
         coefficients=struct.unpack_from('>'+str(count)+'h',image,at)
-        pcm=vadpcm(raw,coefficients,sample['predictors'],limit)
+        pcm=vadpcm(raw,coefficients,sample['predictors'],limit,bits=sample.get('bits',4))
     else:pcm=b''.join(raw[i:i+2][::-1] for i in range(0,limit*2,2))
     output=io.BytesIO()
     with wave.open(output,'wb') as stream:stream.setnchannels(1);stream.setsampwidth(2);stream.setframerate(rate);stream.writeframes(pcm)

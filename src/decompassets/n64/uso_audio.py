@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from itertools import islice
 
 from .. import formats
-from . import audio
+from . import audio, uso_audio_directory
 from .uso_textures import _MAGIC, _NAME, _SECTION
 
 _MAX_BANK = 512 * 1024
@@ -22,10 +22,11 @@ class _Sample:
     size: int
     book: int
     predictors: int
+    frame_size: int = 9
 
     @property
     def encoded_size(self):
-        return self.size - self.size % 9
+        return self.size - self.size % self.frame_size
 
 
 def _payload(image, named, limit):
@@ -42,7 +43,7 @@ def _payload(image, named, limit):
     return start, end
 
 
-def _groups(control, wave_size, check):
+def _groups(control, wave_size, check, *, known_font=False):
     groups = defaultdict(list)
     for at in range(16, len(control)-_DESCRIPTOR.size+1, 4):
         if at % 4096 == 0:
@@ -51,17 +52,20 @@ def _groups(control, wave_size, check):
         size = packed & 0xffffff
         base = at+16-book
         book_size = 8+predictors*32
-        if (order != 2 or not 1 <= predictors <= 8 or base < 0 or base%16 or at-base < 32
-                or packed >> 24 not in (0, 2) or not 9 <= size <= wave_size-offset
-                or offset%16 or size%9 not in (0, 1)
+        flags = packed >> 24
+        frame_size = 5 if known_font and flags == 0x30 else 9
+        first_descriptor = 16 if known_font else 32
+        if (order != 2 or not 1 <= predictors <= 8 or base < 0 or base%16 or at-base < first_descriptor or known_font and base != 0
+                or flags not in (0, 2) and frame_size != 5 or not frame_size <= size <= wave_size-offset
+                or offset%16 or size%frame_size not in (0, 1)
                 or not book+book_size <= loop <= book+book_size+32
                 or base+loop+12 > len(control)):
             continue
         first, last, repeat = _SECTION.unpack_from(control, base+loop)
-        if not 0 <= first < last <= (size//9+1)*16 or repeat not in (0, 0xffffffff):
+        if not 0 <= first < last <= (size//frame_size+1)*16 or repeat not in (0, 0xffffffff):
             continue
-        groups[base].append(_Sample(offset, size, at+24, predictors))
-    return [list(dict.fromkeys(rows)) for rows in groups.values() if len(rows) >= 3][:64]
+        groups[base].append(_Sample(offset, size, at+24, predictors, frame_size))
+    return [list(dict.fromkeys(rows)) for rows in groups.values() if known_font or len(rows) >= 3][:64]
 
 
 def _fits(wave, base, sample, *, probe=False):
@@ -72,7 +76,7 @@ def _fits(wave, base, sample, *, probe=False):
     if any(wave[end:start+sample.size]):
         return False
     stop = min(end, start+720) if probe else end
-    return all((value & 15) < sample.predictors for value in wave[start:stop:9])
+    return all((value & 15) < sample.predictors for value in wave[start:stop:sample.frame_size])
 
 
 def _wave_base(wave, samples, check):
@@ -103,6 +107,33 @@ def _wave_base(wave, samples, check):
     return identified
 
 
+
+def _directory_samples(image, control, wave, directory, check):
+    for offset, size, _, _, bank, *_ in directory['fonts']:
+        if not size:
+            continue
+        wave_offset, wave_size, *_ = directory['waves'][bank]
+        data = image[wave+wave_offset:wave+wave_offset+wave_size]
+        start = control+offset
+        groups = _groups(image[start:start+size], len(data), check, known_font=True)
+        for rows in groups:
+            for row in rows:
+                if _fits(data, 0, row):
+                    yield start, wave+wave_offset, row
+
+
+def _guessed_samples(image, control, control_end, wave, wave_end, check, progress):
+    data = image[wave:wave_end]
+    groups = _groups(image[control:control_end], len(data), check)
+    for i, group in enumerate(groups):
+        check()
+        progress(dict(phase='Matching USO wave tables', done=i, total=len(groups)))
+        base = _wave_base(data, group, check)
+        if base is not None:
+            for row in group:
+                yield control, wave+base, row
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     files = {}
     for item in islice(_NAME.finditer(image), 1024):
@@ -116,35 +147,39 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         return []
     ctl_range = _payload(image, bank, _MAX_BANK)
     wave_range = _payload(image, wave, _MAX_WAVE)
-    if not ctl_range or not wave_range or ctl_range[1] > sequence:
+    sequence_range = _payload(image, sequence, formats.MAX_BYTES)
+    if not ctl_range or not wave_range or not sequence_range or ctl_range[1] > sequence or sequence_range[1] > wave:
         return []
     ctl_start, ctl_end = ctl_range
     wave_start, wave_end = wave_range
-    waves = image[wave_start:wave_end]
-    rows = _groups(image[ctl_start:ctl_end], len(waves), check)
+    seq_start, seq_end = sequence_range
+    directory = uso_audio_directory.locate(image, ctl_end-ctl_start, seq_end-seq_start, wave_end-wave_start, check=check)
+    result = [uso_audio_directory.asset(directory, seq_start)] if directory else []
+    matches = (_directory_samples(image, ctl_start, wave_start, directory, check) if directory
+               else _guessed_samples(image, ctl_start, ctl_end, wave_start, wave_end, check, progress))
     samples = {}
-    for i, group in enumerate(rows):
-        check()
-        progress(dict(phase='Matching USO wave tables', done=i, total=len(rows)))
-        base = _wave_base(waves, group, check)
-        if base is None:
-            continue
-        for row in group:
-            start = wave_start+base+row.offset
-            samples.setdefault((start, row.size),
-                               dict(offset=start, size=row.size, encoded_size=row.encoded_size, rate=_RATE,
-                                    samples=row.encoded_size//9*16, codec='N64 VADPCM',
-                                    book_offset=ctl_start+row.book, predictors=row.predictors))
+    for control, base, row in matches:
+        start = base+row.offset
+        short = row.frame_size == 5
+        samples.setdefault((start, row.size),
+                           dict(offset=start, size=row.size, encoded_size=row.encoded_size, rate=_RATE,
+                                samples=row.encoded_size//row.frame_size*16,
+                                codec='N64 VADPCM (2-bit)' if short else 'N64 VADPCM',
+                                bits=2 if short else 4,
+                                book_offset=control+row.book, predictors=row.predictors))
     if not samples:
-        return []
+        return result
     entries = sorted(samples.values(), key=lambda sample: sample['offset'])
     for idx, sample in enumerate(entries, 1):
         sample['label'] = f'Sample {idx}'
-    return [dict(offset=bank, size=ctl_end-bank, label='USO sound bank', kind='audio', media='audio',
+    reason = ('The EAD loader tables locate the font and wave bank, and every ADPCM frame selector fits its predictor book.'
+              if directory else 'Every ADPCM frame selector fits its predictor book at a unique wave-table placement.')
+    result.append(dict(offset=bank, size=ctl_end-bank, label='USO sound bank', kind='audio', media='audio',
                  audio_kind='sample bank', layout='uso-audio', confidence='validated', samples=entries,
                  table_confidence='validated', rate_basis='Preview rate',
-                 reason='Named USO controls and wave data. Every ADPCM frame selector fits its stored predictor book at a unique wave-table placement. Preview rate is adjustable.',
-                 preview_settings=dict(format='auto', source='rom', offset=bank))]
+                 reason=reason+' Preview rate is adjustable.',
+                 preview_settings=dict(format='auto', source='rom', offset=bank)))
+    return result
 
 
 def preview(image, asset, selection):
