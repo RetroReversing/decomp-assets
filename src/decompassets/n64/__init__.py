@@ -108,12 +108,14 @@ def preview(data, asset, selection):
         texture_packs,
         textures,
         uso_audio,
+        uso_audio_directory,
         uso_models,
         uso_textures,
         uv_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
         return eurocom.preview(data,asset,selection)
+    if asset.get('layout')=='uso-sequence-directory':return uso_audio_directory.preview(asset,selection)
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
