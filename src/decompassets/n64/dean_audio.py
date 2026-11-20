@@ -1,9 +1,11 @@
 """Identify DEAN audio in byte-sum resource directories."""
 
+import base64
 import re
 import struct
 
-from ..formats import AssetError, integer
+from ..formats import AssetError, integer, pcm
+from . import dean_codec
 
 ROW = struct.Struct('>III')
 RAW_HEADER = re.compile(rb'RAW!....\x00\x00\x2b\x11', re.S)
@@ -70,6 +72,12 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 covered = found[-1]['offset'] + found[-1]['size']
                 progress(dict(phase='Checking DEAN audio directories', done=covered, total=len(image)))
                 break
+    if assets and (book := dean_codec.table_offset(image)) is not None:
+        for asset in assets:
+            _, frames, _ = ROW.unpack_from(image, asset['offset'] + 8)
+            if frames > 1:
+                asset['dean_codebooks'] = book
+                asset['samples'][0].update(samples=(frames - 1) * dean_codec.BLOCK_SAMPLES, preview_available=True)
     return assets
 
 
@@ -82,7 +90,19 @@ def preview(image, asset, selection):
     entry = _entry(image, offset, length)
     if entry is None:
         raise AssetError('The DEAN stream header changed. Rescan ROM Explorer.')
-    _, rate, _, size = entry
-    return dict(media='metadata', title='Acclaim DEAN audio',
-                fields={'Sample rate (Hz)': rate, 'Encoded bytes': size, 'Playback': 'Decoder unavailable'},
-                settings=dict(format='auto', source='rom', offset=offset))
+    _, rate, frames, size = entry
+    settings = dict(format='auto', source='rom', offset=offset, sample=0)
+    if 'dean_codebooks' not in asset:
+        return dict(media='metadata', title='Acclaim DEAN audio',
+                    fields={'Sample rate (Hz)': rate, 'Encoded bytes': size, 'Playback': 'Codebooks unavailable'},
+                    settings=settings)
+
+    count = min(frames - 1, dean_codec.MAX_BLOCKS)
+    raw = dean_codec.decode(image, asset['dean_codebooks'], image[offset + 20:offset + 20 + size], count)
+    wav, details = pcm(raw, dict(format='pcm-s16le', channels=1, rate=rate, length=len(raw)))
+    details.pop('note')
+    details['format'] = 'Acclaim DEAN'
+    if count < frames - 1:
+        details['preview'] = 'First 30 seconds'
+    return dict(media='audio', mime='audio/wav', details=details, settings=settings,
+                data_url='data:audio/wav;base64,' + base64.b64encode(wav).decode('ascii'))
