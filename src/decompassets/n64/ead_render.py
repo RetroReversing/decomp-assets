@@ -89,4 +89,4 @@ def render(image, score, voices):
     pcm = array('h', (round(value*32000/peak) for pair in zip(left, right) for value in pair))
     if sys.byteorder != 'little':
         pcm.byteswap()
-    return pcm.tobytes(), dict(mixed_notes=mixed, unplayed_notes=len(notes)-mixed, truncated=end > frames)
+    return pcm.tobytes(), dict(mixed_notes=mixed, skipped_notes=len(notes)-mixed, truncated=end > frames)

@@ -25,4 +25,4 @@ def test_looping_vadpcm_renders_a_panned_note_beyond_one_frame():
     assert len(samples) == 2*round(ead_render.RATE/24)
     assert all(value == 0 for value in samples[1::2])
     assert any(samples[100::2])
-    assert stats == dict(mixed_notes=1, unplayed_notes=0, truncated=False)
+    assert stats == dict(mixed_notes=1, skipped_notes=0, truncated=False)
