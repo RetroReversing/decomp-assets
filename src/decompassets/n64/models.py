@@ -11,7 +11,7 @@ import struct
 
 from .. import rnc
 from ..formats import AssetError, integer
-from . import rnc_meshes, textures
+from . import rnc_meshes, scene_records, textures
 
 MAX_BYTES = 4*1024*1024
 MAX_EXPANDED = 64*1024*1024
@@ -109,6 +109,8 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             if codec==textures.RNC_SUM32_CODEC:
                 if mesh:=rnc_meshes.asset(data,offset,extent):
                     result.append(mesh)
+                elif records := scene_records.asset(data,offset,extent):
+                    result.append(records)
                 continue
         else:
             if offset+16>len(image):continue
