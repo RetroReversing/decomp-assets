@@ -132,6 +132,13 @@ def preview(data, asset, selection):
 
 def decode(data):
     """Return None for other codecs so the common preview reader can handle them."""
+    if data[:4] in (b'RNX\1', b'FILL'):
+        from . import rnx
+        try:
+            decoded, _ = rnx.unpack(data)
+            return decoded, rnx.CODEC
+        except rnc.RncError as exc:
+            raise AssetError('The RNX stream is incomplete or a page checksum failed. Check its offset.') from exc
     if data[:4] not in (b'RNC\x01',b'RNC\x02'):return None
     data = data[:MAX_BANK]
     try:
