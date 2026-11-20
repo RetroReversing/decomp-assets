@@ -93,6 +93,7 @@ def preview(data, asset, selection):
         rnc_textures,
         rnx,
         rnx_atlas,
+        scene_records,
         texture_packs,
         textures,
         uv_textures,
@@ -109,6 +110,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
     if asset.get('layout')=='rnx-ci4-atlas':return rnx_atlas.preview(data,asset,selection)
     if asset.get('layout')=='rnx-stream':return rnx.preview(data,asset)
+    if asset.get('layout')=='scene-records':return scene_records.preview(data,asset,selection)
     if asset.get('layout')=='dialogue-script':return dialogue.preview(data,asset,selection)
     if asset.get('audio_kind')=='dean stream':return dean_audio.preview(data,asset,selection)
     if asset.get('layout')=='emsh-v010':return rnc_meshes.preview(data,asset,selection)

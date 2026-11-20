@@ -4,7 +4,7 @@ import re
 import struct
 
 from .. import formats, rnc
-from . import rnc_meshes, rnc_textures, rnx_atlas
+from . import rnc_meshes, rnc_textures, rnx_atlas, scene_records
 
 MAGIC = re.compile(rb'RNX\x01|FILL')
 CODEC = 'RNX byte-sum stream'
@@ -86,11 +86,12 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             asset = rnx_atlas.asset(tiles, offset, extent)
         elif mesh := rnc_meshes.asset(data, offset, extent):
             asset = mesh
+        elif records := scene_records.asset(data, offset, extent):
+            asset = records
         else:
-            level = data.startswith(b'ELv9\0\0\0\1\0\0\0\0ES_1')
-            asset = dict(offset=offset, size=extent, kind='container' if level else 'compressed',
+            asset = dict(offset=offset, size=extent, kind='compressed',
                          confidence='validated', media='metadata', layout='rnx-stream',
-                         label='ELv9 level resource' if level else 'RNX resource',
+                         label='RNX resource',
                          preview_settings=dict(format='auto', source='decoded', offset=0, block_offset=offset))
         asset['reason'] = 'RNX page extents, output byte sums and the stream terminator passed validation.'
         asset['decoded_size'] = len(data)
