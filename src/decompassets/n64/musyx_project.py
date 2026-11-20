@@ -130,7 +130,7 @@ def used_programs(image, songs, groups):
         for track in arrangement['tracks']:
             channel = track['channel']
             program = group['setups'][song_id][channel][0]
-            pages = group['drums'] if channel == 9 and group['drums'] else group['pages']
+            pages = group['drums'] if channel == 9 else group['pages']
             for clip in track['clips']:
                 if clip['program'] != 255:
                     program = clip['program']
