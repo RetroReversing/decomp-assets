@@ -13,6 +13,7 @@
 - reloc_files.py: textures and sprites in a table of relocatable files, some VPK0-packed (vpk0.py).
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - rnx.py: chained byte-sum pages and checked resource payloads.
+- dialogue.py: scene headings, cue text and speaker keys in indexed RAW! scripts.
 - dean_audio.py: DEAN stream directories and audio metadata.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
@@ -42,6 +43,7 @@ def regions(image, *, context=None, **kwargs):
         audio,
         blast_textures,
         dean_audio,
+        dialogue,
         display_lists,
         emsh_links,
         ffs,
@@ -63,7 +65,7 @@ def regions(image, *, context=None, **kwargs):
            +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +audio.regions(image,context=context,**kwargs)
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
-           +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs))
+           +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
     emsh_links.link(image,assets,kwargs.get('check',lambda:None))
@@ -77,6 +79,7 @@ def preview(data, asset, selection):
         audio,
         blast_textures,
         dean_audio,
+        dialogue,
         ffs,
         fla2,
         fonts,
@@ -106,6 +109,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
     if asset.get('layout')=='rnx-ci4-atlas':return rnx_atlas.preview(data,asset,selection)
     if asset.get('layout')=='rnx-stream':return rnx.preview(data,asset)
+    if asset.get('layout')=='dialogue-script':return dialogue.preview(data,asset,selection)
     if asset.get('audio_kind')=='dean stream':return dean_audio.preview(data,asset,selection)
     if asset.get('layout')=='emsh-v010':return rnc_meshes.preview(data,asset,selection)
     if asset.get('layout')=='rnc-sum32-texture-bank':return rnc_textures.preview(data,asset,selection)
