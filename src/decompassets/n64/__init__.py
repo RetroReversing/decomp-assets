@@ -76,7 +76,9 @@ def regions(image, *, context=None, **kwargs):
         mwo_graphics,
         native_scene,
         packed_anim,
+        paged_lz_models,
         paged_models,
+        paged_textures,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -122,6 +124,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(sn64.regions(image,**kwargs))
     known.extend(packed_anim.regions(image,**kwargs))
     known.extend(paged_models.regions(image,**kwargs))
+    known.extend(paged_textures.regions(image,**kwargs))
+    known.extend(paged_lz_models.regions(image,**kwargs))
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
@@ -185,7 +189,9 @@ def preview(data, asset, selection):
         models,
         mwo_graphics,
         packed_anim,
+        paged_lz_models,
         paged_models,
+        paged_textures,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -218,6 +224,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout')==paged_lz_models.LAYOUT:return paged_lz_models.preview(data,asset,selection)
     if asset.get('layout')==paged_models.LAYOUT:return paged_models.preview(data,asset,selection)
     if asset.get('layout')==packed_anim.LAYOUT:return packed_anim.preview(data,asset,selection)
     if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
@@ -233,6 +240,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
     if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
+    if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)

@@ -98,10 +98,10 @@ def regions(image, group, displacements, pointers, check):
     return result
 
 
-def preview(image, asset, selection):
+def preview(image, asset, selection, *, extra_state=None):
     offset = asset['offset']
     parsed = geometry(image, offset, offset+asset['size'], dict(asset['address_maps']),
-                      vertex_end=asset.get('vertex_end'))
+                      vertex_end=asset.get('vertex_end'), extra_state=extra_state)
     if parsed is None:
         raise formats.AssetError('The F3DEX list changed. Rescan ROM Explorer.')
     _, vertices, faces = parsed
