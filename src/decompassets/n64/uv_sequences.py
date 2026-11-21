@@ -65,6 +65,12 @@ def _sample_end(samples, base):
     return max(base+s['relative_offset']+s['size'] for s in samples)
 
 
+
+def _adjacent_directory(image, tail):
+    # Cartridge banks can align the next directory to a DMA boundary.
+    return next((offset for offset in ((tail + 3) & ~3, (tail + 15) & ~15)
+                 if image[offset:offset + 2] == b'S1' and not any(image[tail:offset])), None)
+
 def _asset(offset, end, rows, label, reason, control=None):
     asset = dict(offset=offset, size=end-offset, label=label, kind='music sequence',
                  media='metadata', layout='uv-sequence-directory', confidence='validated', sequences=rows,
@@ -187,8 +193,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None, sound_banks=(
                 or base != (control+bank['size']+15)&~15):
             continue
         tail = _sample_end(samples, base)
-        offset = (tail+3)&~3
-        if offset in found or any(image[tail:offset]):
+        offset = _adjacent_directory(image, tail)
+        if offset is None or offset in found:
             continue
         rows = _entries(image, offset, len(image), check, exact=False)
         if rows:
@@ -264,8 +270,7 @@ def _play(image, asset, selection):
     elif 'table_offset' in asset:
         base = asset['table_offset']
         tail = _sample_end(bank['samples'], base)
-        if (base != (control+bank['size']+15)&~15 or (tail+3)&~3 != asset['offset']
-                or any(image[tail:asset['offset']]) or image[asset['offset']:asset['offset']+2] != b'S1'):
+        if base != (control+bank['size']+15)&~15 or _adjacent_directory(image, tail) != asset['offset']:
             raise formats.AssetError('The music bank no longer meets the S1 directory. Rescan ROM Explorer.')
     else:
         bounds = audio._uv_tables(image, lambda: None).get(control)
