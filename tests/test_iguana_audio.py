@@ -58,3 +58,22 @@ def test_iguana_dean_directory_keeps_original_rate_and_requires_exact_extents():
                  (b'extra.bin',b'data'),(b'books.bin',aligned(codebooks))])
     reported=[asset for asset in regions(rom) if asset.get('layout')=='iguana-dean']
     assert len(reported)==2 and all(asset['table_offset'] for asset in reported)
+
+
+def test_packed_directory_recovers_codebooks_from_verified_program_output():
+    code = _image(padding=16,bias=0x100000)
+    program = bytearray(aligned(literal_block(code)))
+    program[14] ^= 0xff  # The output CRC survives an outdated packed CRC.
+    payload = bytes.fromhex('00000000000000000000000080000000')
+    clip = struct.pack('>III',9450,2,len(payload))+payload
+    table = struct.pack('>III',2,12,12+len(clip))+clip*2
+    members = [(b'CODE.BIN',program),(b'data/sound/pbpsfx.bin',table),(b'duplicate.bin',b'123'),
+               (b'duplicate.bin',b'45')]
+    directory = b''.join(struct.pack('>I',len(data))+name+bytes(1) for name,data in members)
+    image = directory+bytes.fromhex('ffffffff')+b''.join(data for _,data in members)
+    first, second = iguana_audio.regions(image)
+    assert first['dean_program']==(len(directory)+4,len(directory)+4+len(program))
+    assert all(wav(preview(image, item, {}))[0]==9450 for item in (first,second))
+    invalid = bytearray(image)
+    invalid[first['dean_program'][0]+12] ^= 0xff
+    assert all(not item['samples'][0]['preview_available'] for item in iguana_audio.regions(invalid))
