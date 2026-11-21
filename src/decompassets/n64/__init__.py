@@ -74,6 +74,8 @@ def regions(image, *, context=None, **kwargs):
         mainfs,
         models,
         mwo_graphics,
+        named_resource_images,
+        named_resource_models,
         native_scene,
         nested_scenes,
         packed_anim,
@@ -130,6 +132,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(paged_textures.regions(image,**kwargs))
     known.extend(paged_lz_models.regions(image,**kwargs))
     known.extend(nested_scenes.regions(image,**kwargs))
+    known.extend(named_resource_images.regions(image,**kwargs))
+    known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
@@ -192,6 +196,8 @@ def preview(data, asset, selection):
         mainfs,
         models,
         mwo_graphics,
+        named_resource_images,
+        named_resource_models,
         nested_scenes,
         packed_anim,
         paged_lz_models,
@@ -230,6 +236,8 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
+    if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)
     if asset.get('layout') in (nested_scenes.IMAGE,nested_scenes.MODEL):return nested_scenes.preview(data,asset,selection)
     if asset.get('layout')==paged_lz_models.LAYOUT:return paged_lz_models.preview(data,asset,selection)
     if asset.get('layout')==paged_models.LAYOUT:return paged_models.preview(data,asset,selection)
