@@ -61,6 +61,7 @@ def regions(image, *, context=None, **kwargs):
         cartridge_scores,
         dean_audio,
         deflate_catalog,
+        deflate_catalog_models,
         dialogue,
         dialogue_links,
         diet_audio,
@@ -133,6 +134,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(deflate_catalog.regions(image,**kwargs))
+    known.extend(deflate_catalog_models.regions(image,**kwargs))
     known.extend(lz_banks.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
@@ -209,6 +211,7 @@ def preview(data, asset, selection):
         cartridge_scores,
         dean_audio,
         deflate_catalog,
+        deflate_catalog_models,
         dialogue,
         diet_audio,
         display_meshes,
@@ -311,6 +314,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog.TEXTURE:return deflate_catalog.preview(data,asset,selection)
+    if asset.get('layout') == deflate_catalog_models.MODEL:return deflate_catalog_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
