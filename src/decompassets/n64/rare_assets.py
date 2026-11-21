@@ -12,6 +12,7 @@ from .rare_models import MAX_ASSETS, MAX_EXPANDED, MAX_MODEL, MODEL, TYPES
 
 TEXTURES = 'rare-directory-textures'
 MESH = 'rare-directory-mesh'
+SEQUEL_MESH = 'rare-directory-f3dex2-mesh'
 
 
 def directories(image,check):
@@ -86,29 +87,39 @@ def _state(word, address):
     return (word == 0x06000000 and address >> 24 == 3) or (word == 0xbd000000 and address == 0)
 
 
-def meshes(model):
-    if model[:4] != MODEL or len(model) < 0x38:
+def _modern_state(word, address):
+    # External engine setup and matrix commands do not supply local vertices.
+    return (word == 0xde000000 and address >> 24 in (3,7)
+            or (word,address) == (0xd8380002,64)
+            or word == 0xda380002 and address >> 24 == 5
+            or word == 0xdb020000)
+
+
+def meshes(model, *, modern=False):
+    if model[:4] != MODEL or len(model) < (0x50 if modern else 0x38):
         return []
     display, vertices = struct.unpack_from('>II', model, 12)
     if not 0x38 <= display <= len(model)-8 or not 0x38 <= vertices <= len(model)-24:
         return []
     count, reserved = struct.unpack_from('>II', model, display)
-    vertex_count = struct.unpack_from('>H', model, vertices+20)[0]
+    vertex_count = struct.unpack_from('>H', model, 0x46 if modern else vertices+20)[0]
     vertex_start = vertices+24
     vertex_end = vertex_start+16*vertex_count
     start, end = display+8, display+8+8*count
+    vertex_command, terminator = (1,0xdf000000) if modern else (4,0xb8000000)
+    state = _modern_state if modern else _state
     if reserved or not 0 < count <= 65536 or end > len(model) or not vertex_count or vertex_end > len(model):
         return []
     results = []
     for command in range(start, end, 8):
         word, address = struct.unpack_from('>II', model, command)
-        if word >> 24 == 4:
-            length = ((word >> 10)&63)*16
+        if word >> 24 == vertex_command:
+            length = ((word >> 12)&255)*16 if modern else ((word >> 10)&63)*16
             if address >> 24 != 1 or (address & 0xffffff)+length > vertex_end-vertex_start:
                 return []
-        if word != 0xb8000000 or address:
+        if word != terminator or address:
             continue
-        parsed = geometry(model, start, command+8, {1: vertex_start}, extra_state=_state)
+        parsed = geometry(model, start, command+8, {1: vertex_start}, extra_state=state)
         if parsed:
             results.append(parsed[1:])
         start = command+8
@@ -116,7 +127,8 @@ def meshes(model):
 
 
 def mesh_preview(model, asset, selection):
-    parts = meshes(model)
+    modern = asset['layout'] == SEQUEL_MESH
+    parts = meshes(model,modern=modern)
     if not parts:
         raise AssetError('The model display lists changed. Scan ROM Explorer again.')
     index = formats.integer(selection.get('mesh',0),'Mesh',0,len(parts)-1)
@@ -126,8 +138,23 @@ def mesh_preview(model, asset, selection):
                 points=sorted({i for face in faces for i in face}), materials=[],
                 surfaces=[dict(indices=face, uv=[[0,0]]*3, colors=[[255,255,255,255]]*3, material=0)
                           for face in faces],
-                details=dict(format='Rare F3DEX model', vertices=len(vertices), triangles=len(faces)),
+                details=dict(format='Rare F3DEX2 model' if modern else 'Rare F3DEX model', vertices=len(vertices), triangles=len(faces)),
                 settings={**asset['preview_settings'], 'mesh':index})
+
+def mesh_region(index, at, end, model, *, modern=False):
+    parts = meshes(model,modern=modern)
+    if not parts:
+        return None
+    return dict(offset=at,size=end-at,kind='3d model',media='model',
+                layout=SEQUEL_MESH if modern else MESH,
+                label=f'Model {index}',confidence='validated',asset_index=index,
+                vertices=sum(len(vertices) for vertices,_ in parts),
+                triangles=sum(len(faces) for _,faces in parts),
+                meshes=[dict(name=f'Mesh {number}',vertices=len(vertices),triangles=len(faces))
+                        for number,(vertices,faces) in enumerate(parts,1)],
+                reason='The model display lists reference bounded local vertices and triangles.',
+                preview_settings=dict(source='rom',format='auto',offset=at))
+
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     results = []
@@ -143,16 +170,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             expanded += len(model)
             if expanded > MAX_EXPANDED:
                 return results
-            parts = meshes(model)
-            if parts:
-                results.append(dict(offset=at,size=end-at,kind='3d model',media='model',layout=MESH,
-                                    label=f'Model {index}',confidence='validated',asset_index=index,
-                                    vertices=sum(len(vertices) for vertices,_ in parts),
-                                    triangles=sum(len(faces) for _,faces in parts),
-                                    meshes=[dict(name=f'Mesh {number}',vertices=len(vertices),triangles=len(faces))
-                                            for number,(vertices,faces) in enumerate(parts,1)],
-                                    reason='The model display lists reference bounded local vertices and triangles.',
-                                    preview_settings=dict(source='rom',format='auto',offset=at)))
+            if mesh := mesh_region(index,at,end,model):
+                results.append(mesh)
             if not (items := textures(model)):
                 continue
             first = items[0]
