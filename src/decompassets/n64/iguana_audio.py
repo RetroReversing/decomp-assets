@@ -4,7 +4,7 @@ import base64
 import re
 import struct
 
-from .. import formats
+from .. import formats, rnc
 from . import audio, compact_midi, compact_midi_render, dean_audio, dean_codec, iguana_archive, uv_sequences
 
 _BANK_REASON = 'The named control and wave files, relocated pointer graph and sample frames agree.'
@@ -69,7 +69,7 @@ def _dean_rows(image, start, end, codebooks, check):
             return []
         rate, frames, length = dean_audio.ROW.unpack_from(image, offset)
         payload_end = offset+12+length
-        cursor = (payload_end+3)&~3
+        cursor = start+((payload_end-start+3)&~3)
         if (not 4000<=rate<=48000 or not 2<=frames<=65536 or not 4<=length<=dean_audio.MAX_ENTRY
                 or cursor>end or any(image[payload_end:cursor])):
             return []
@@ -133,7 +133,21 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
                 if catalog := _sequences(image,*sequence,banks[0],check):
                     assets.append(catalog)
         if commentary := directory.get(b'data/sound/pbpsfx.bin'):
-            assets.extend(_dean_rows(image,*commentary,dean_codec.table_offset(image),check))
+            book = dean_codec.table_offset(image)
+            linked_program = book is None
+            program_span = directory.get(b'code.bin')
+            if book is None and program_span and program_span[1]-program_span[0]<=rnc.MAX_OUTPUT:
+                try:
+                    program = iguana_archive.unpack_program(bytes(image[slice(*program_span)]))
+                except rnc.RncError:
+                    pass
+                else:
+                    book = dean_codec.table_offset(program,linked_program=True)
+            clips = _dean_rows(image,*commentary,book,check)
+            if book is not None and linked_program:
+                for clip in clips:
+                    clip['dean_program'] = program_span
+            assets.extend(clips)
     return assets
 
 
@@ -149,7 +163,15 @@ def preview(image, asset, selection):
         if asset['dean_codebooks'] is None:
             return dict(media='metadata',title='Acclaim DEAN audio',fields={'Playback':'Codebooks unavailable'},
                         settings=settings)
-        return dean_audio.render_clip(image,asset['dean_codebooks'],image[start:start+length],rate,frames,settings)
+        payload = image[start:start+length]
+        source = image
+        if span := asset.get('dean_program'):
+            try:
+                source = iguana_archive.unpack_program(bytes(image[slice(*span)]))
+            except rnc.RncError as exc:
+                raise formats.AssetError('The Iguana program codebooks changed. Rescan ROM Explorer.') from exc
+        return dean_audio.render_clip(source,asset['dean_codebooks'],payload,rate,frames,settings,
+                                      linked_program=bool(span))
     try:
         bank = audio.bank(image,asset['control'],relocation_base=asset['relocation'],control_end=asset['control_end'])
     except audio.BankError as exc:

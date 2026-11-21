@@ -60,14 +60,14 @@ def _book(image, at, bias):
     return nodes, tuple(phrases)
 
 
-def _tables(image, anchor):
+def _tables(image, anchor, *, linked_program=False):
     for padding in (24, 16):
-        if tables := _book_layout(image, anchor, padding):
+        if tables := _book_layout(image, anchor, padding, linked_program):
             return tables
     return None
 
 
-def _book_layout(image, anchor, padding):
+def _book_layout(image, anchor, padding, linked_program):
     # The scale ladder is followed by a fixed bank of book descriptors and
     # four sections. The first section points back to the fourth descriptor.
     scale_at = anchor + len(BAND_SIGNATURE)
@@ -79,7 +79,7 @@ def _book_layout(image, anchor, padding):
     if [(start, size) for _, start, size, _, _ in sections] != [(0, 16), (0, 35), (35, 89), (124, 132)]:
         return None
     bias = sections[0][-1] - (descriptor + 3 * DESCRIPTOR.size)
-    if bias < 0x70000000:
+    if bias < (0 if linked_program else 0x70000000):
         return None
     books = []
     for index, (_, _, _, _, pointer) in enumerate(sections):
@@ -93,10 +93,10 @@ def _book_layout(image, anchor, padding):
     return scales, books
 
 
-def table_offset(image):
+def table_offset(image, *, linked_program=False):
     for match in islice(re.finditer(re.escape(BAND_SIGNATURE), image), 32):
         at = match.start()
-        if at % 4 == 0 and _tables(image, at):
+        if at % 4 == 0 and _tables(image, at, linked_program=linked_program):
             return at
     return None
 
@@ -198,10 +198,10 @@ def _synthesize(coeffs, previous):
     return pcm
 
 
-def decode(image, anchor, payload, frames):
+def decode(image, anchor, payload, frames, *, linked_program=False):
     if not 1 <= frames <= MAX_BLOCKS:
         raise AssetError('The DEAN preview exceeds its frame limit.')
-    tables = _tables(image, anchor) if isinstance(anchor, int) and 0 <= anchor < len(image) else None
+    tables = _tables(image, anchor, linked_program=linked_program) if isinstance(anchor, int) and 0 <= anchor < len(image) else None
     if tables is None:
         raise AssetError('The DEAN codebooks could not be verified. Rescan ROM Explorer.')
     scales, books = tables

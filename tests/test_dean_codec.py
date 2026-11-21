@@ -31,8 +31,7 @@ def _tree(symbols):
     return b''.join(dean_codec.NODE.pack(*node) for node in nodes)
 
 
-def _image(padding=24):
-    bias = 0x80000000
+def _image(padding=24, bias=0x80000000):
     image = bytearray(dean_codec.BAND_SIGNATURE)
     image.extend(struct.pack('>64f', *[1 / 32768] * 64))
     image.extend(bytes(padding))
@@ -50,7 +49,7 @@ def _image(padding=24):
         image.extend(_tree(nodes))
         dean_codec.DESCRIPTOR.pack_into(image, descriptor + i * dean_codec.DESCRIPTOR.size,
                                         -limit, limit, 0, 16, 0, 256 if i < 3 else 129, 0, 0,
-                                        tree + bias - (1 << 32))
+                                        (tree + bias + 2**31)%2**32 - 2**31)
 
     payload = bytes(12) + b'\x80\0' + bytes(2)
     stream = struct.pack('>III', 11025, 2, len(payload)) + payload
