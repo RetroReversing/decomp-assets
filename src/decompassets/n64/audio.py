@@ -163,6 +163,79 @@ def loader_tables(image, context, *, check=lambda: None):
     return result
 
 
+def _copied_tables(image, context, check):
+    """Pair a copied B1 graph with the sample address passed to its relocator."""
+    read = context.get('read_code')
+    if read is None:
+        return {}
+    functions = {}
+    for fn in context.get('functions', ()):
+        check()
+        if (start := fn.get('rom_offset')) is not None and 0 <= start < start+fn['size'] <= len(image):
+            functions.setdefault(fn['vram'], []).append(fn)
+    relocators, transfers = set(), set()
+    for pc, rows in functions.items():
+        if len(rows) != 1 or not 0x70 <= rows[0]['size'] <= 0x280:
+            continue
+        start, size = rows[0]['rom_offset'], rows[0]['size']
+        code = image[start:start+size]
+        words = [word for word, in struct.iter_unpack('>I', code[:len(code)//4*4])]
+        # The B1 guard reads the signature and count before walking the control graph.
+        for signature, magic, _, branch in zip(words, words[1:], words[2:], words[3:]):
+            if (signature & 0xffe0ffff == 0x84800000 and magic & 0xffe0ffff == 0x24004231
+                    and branch >> 26 == 5 and branch >> 21 & 31 == signature >> 16 & 31
+                    and branch >> 16 & 31 == magic >> 16 & 31):
+                if any(word & 0xffe0ffff == 0x84800002 for word in words):
+                    relocators.add(pc)
+                break
+        if all(word in words for word in (
+                0x00809021, 0x00a08821, 0x00c08021, 0xafb00014, 0x02403821, 0xafb10010)):
+            transfers.add(pc)
+    if not relocators or not transfers:
+        return {}
+    needles = [struct.pack('>I', 0x0c000000 | ((pc >> 2) & 0x3ffffff)) for pc in relocators]
+    result = {}
+    for rows in functions.values():
+        check()
+        if len(rows) != 1 or rows[0]['size'] > 0x8000:
+            continue
+        fn = rows[0]
+        start = fn['rom_offset']
+        code = image[start:start+fn['size']]
+        if not any(needle in code for needle in needles):
+            continue
+        events = read(fn['vram'], code, gp=context.get('gp', 0), check=check)['events']
+        loads = {e['instruction']: e for e in events if e['kind'] == 'load' and e['width'] == 4}
+        calls = [e for e in events if e['kind'] == 'call']
+        for copy, link in itertools.pairwise(calls):
+            if (copy['target'] not in transfers or link['target'] not in relocators
+                    or copy['block'] != link['block']
+                    or not 0 < link['instruction']-copy['instruction'] <= 48):
+                continue
+            source, buffer, length = copy['args'][:3]
+            used, table = link['args'][:2]
+            if not (source and source['kind'] == 'constant' and length and length['kind'] == 'constant'
+                    and buffer and used and used['kind'] == 'memory' and table and table['kind'] == 'constant'):
+                continue
+            control, base = source['value']-0xb0000000, table['value']-0xb0000000
+            size = length['value']
+            if not (0 <= control < control+size <= len(image) and 0 <= base < len(image)
+                    and image[control:control+2] == b'B1'):
+                continue
+            load = loads.get(used['value'])
+            place = load and load['place']
+            if not place or place['kind'] != 'constant' or not copy['instruction'] < load['instruction'] < link['instruction']:
+                continue
+            if not any(e['place']['kind'] == 'constant' and e['place']['value'] == place['value']
+                       and all(e['value'].get(k) == buffer.get(k) for k in ('kind', 'value', 'offset'))
+                       for e in copy.get('memory', ())):
+                continue
+            result.setdefault(control, {}).setdefault(base, []).append(dict(
+                function=fn['name'], instruction=link['instruction'], control_size=size,
+                role='sample-table argument', reason='The B1 relocator receives the copied controls and the sample-table address.'))
+    return result
+
+
 def _fits(image, info, base, budget, check):
     """Validate every frame selector, not a statistical sample of high-entropy bytes."""
     for sample in info['samples']:
@@ -230,6 +303,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
+    copied = _copied_tables(image, context, check) if any(not relocated for _, relocated in candidates) else {}
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
         sample_only = False
@@ -249,6 +323,10 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             sample_only = True
         except BankError:
             continue
+        matched = {base:[ref for ref in refs if ref['control_size'] >= info['size']]
+                   for base,refs in copied.get(offset, {}).items()}
+        matched = {base:refs for base,refs in matched.items() if refs}
+        loader_refs = tables | matched
         adjacent=(offset+info['size']+15)//16*16
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
@@ -271,10 +349,10 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         elif sample_only:
             bases = [adjacent]
         else:
-            bases=sorted(tables,key=lambda at:(at!=adjacent,at))[:MAX_TABLE_PROBES] if tables else [adjacent]
+            bases=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES] if loader_refs else [adjacent]
         fits=[]
         for base in bases:
-            info['corroborated']=bool(uv) or base in tables
+            info['corroborated']=bool(uv) or base in loader_refs
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
             if sample_only:
@@ -285,15 +363,16 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                                 media='audio',audio_kind='unresolved bank',sample_count=len(info['samples']),samples=[],
                                 preview_settings=dict(format='auto',source='rom',offset=offset)))
             continue
-        base=fits[0];confidence='validated' if uv or base in tables else 'tentative'
+        base=fits[0];confidence='validated' if uv or base in loader_refs else 'tentative'
         reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
+                 'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A named alBnkfNew call supplies the sample-table base.' if base in tables else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
-        common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=tables.get(base,[]),table_offset=base)
+        common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=loader_refs.get(base,[]),table_offset=base)
         results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                             reason=reason,preview_settings=dict(format='auto',source='rom',offset=offset),samples=samples,**common))
         seen=set()
