@@ -70,6 +70,15 @@ def unpack(data, *, order='big', limit=1<<20, check=lambda: None):
         steps += 1
         index = decode(cumulative)
         value = symbols[index]
+        # The model halves frequencies before updating the just-decoded
+        # symbol. Large control banks reach this limit; short streams never do.
+        if cumulative[0] >= 0x7fff:
+            total = 0
+            for i in range(len(counts)-1, 0, -1):
+                cumulative[i] = total
+                counts[i] = (counts[i]+1)//2
+                total += counts[i]
+            cumulative[0] = total
         place = index
         while counts[place] == counts[place-1]:
             place -= 1

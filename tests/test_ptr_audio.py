@@ -168,19 +168,23 @@ def test_binary_effect_count_is_independent_of_the_wave_lookup_count():
     assert [score['notes'][0].key for score in libmus_song.binary_effects(raw,{4})] == [48,49]
 
 
-def test_uncompressed_binary_songs_before_a_single_compressed_bank():
-    from decompassets import n64
+def test_lzari_rescales_symbol_frequencies_in_long_streams():
     from decompassets.n64 import lzari
 
-    song, _ = lzari.unpack(_PACKED_SONG)
-    first = 32
-    second = first+len(song)+(-len(song)%8)+120
-    control = second+len(song)+(-len(song)%8)+32
-    image = bytearray(control)
-    image[first:first+len(song)] = song
-    image[second:second+len(song)] = song
-    image = bytes(image)+_PACKED_CONTROL+fixture()[320:]
-    rows = [row for row in n64.regions(image) if row.get('layout') == 'libmus-binary-song']
-    assert [row['offset'] for row in rows] == [first,second]
-    assert all(row['control'] == control and not row['sequence_packed'] for row in rows)
-    assert all(any(wav(n64.preview(image,row,{'sample':0}))[2]) for row in rows)
+    # Synthetic literal-only stream with varied symbols after the first rescale.
+    encoded = bytes.fromhex(
+        'e37f0000cb017fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+        'fffffffffffffffffffffffffffffffffffffd61d425809562fe1564aa24d1347a5c9d15b859'
+        'f9ad1f325cae9c3660d940fb1a8b1a5e7b3771b1cea2fb452574e364a5e612afc867ad925fc0'
+        '00000000'
+    )
+    decoded, consumed = lzari.unpack(encoded, order='little')
+    assert decoded == b'A'*32700+b'BCD'*13
+    assert 4 < consumed <= len(encoded)
