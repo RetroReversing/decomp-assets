@@ -511,6 +511,57 @@ def _archived_songs(image, banks, check):
                    reason='Every indexed song resolves to the same unique sample bank.',
                    preview_settings=dict(format='auto', source='rom', offset=offset))
 
+
+def _contiguous_raw_songs(image, banks, check):
+    """Find runs of two-byte-aligned binary songs tied to one validated bank."""
+    banks = [bank for bank in banks if not bank.get('compressed_control')
+             and bank.get('table_offset') is not None]
+    if not banks:
+        return []
+    assets = []
+    cursor = 0
+    for match in re.finditer(rb'\0\0\x02\x15', image):
+        start = match.start()
+        if start < cursor or start % 2:
+            continue
+        check()
+        matches = []
+        for bank in banks:
+            waves = {sample['instrument'] for sample in bank['samples']}
+            songs, at = [], start
+            for _ in range(128):
+                check()
+                if image[at:at+4] != b'\0\0\x02\x15':
+                    break
+                score = binary_song(image[at:at+_MAX_BYTES], waves)
+                if score is None:
+                    break
+                end = at+score['extent']
+                if end > len(image) or binary_song(image[at:end], waves) is None:
+                    break
+                songs.append((at,score))
+                at = (end+1)&~1
+            if len(songs) >= 3:
+                matches.append((bank,songs))
+        if len(matches) != 1:
+            continue
+        bank, songs = matches[0]
+        for index,(offset,score) in enumerate(songs,1):
+            size = score['extent']
+            assets.append(dict(offset=offset, size=size, kind='music sequence', media='audio',
+                               audio_kind='indexed sample directory', control=bank['offset'],
+                               table_offset=bank['table_offset'], sequence_packed=False,
+                               layout='libmus-binary-song', confidence='validated',
+                               label=f'libmus song {index}', channels=score['channels'],
+                               notes=len(score['notes']), loops=score['loops'],
+                               samples=[dict(offset=offset, size=size, codec='Nintendo libmus',
+                                             label=f'Song {index}', preview_available=True)],
+                               reason='A contiguous run of complete songs resolves to one validated wave bank.',
+                               preview_settings=dict(format='auto', source='rom', offset=offset)))
+        cursor = songs[-1][0]+songs[-1][1]['extent']
+    return assets
+
+
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
     assets = _binary_regions(image,resolved,check)
@@ -521,6 +572,8 @@ def regions(image, banks, *, check=lambda: None):
     raw = [bank for bank in resolved if not bank.get('compressed_control')]
     assets.extend(_split_raw_sequences(image, raw, check))
     assets.extend(sequence for bank in raw if (sequence := _raw_control_sequence(image,bank)) is not None)
+    existing = {asset['offset'] for asset in assets}
+    assets.extend(asset for asset in _contiguous_raw_songs(image, raw, check) if asset['offset'] not in existing)
     if len(raw) != 1:
         return assets
     bank = raw[0]
