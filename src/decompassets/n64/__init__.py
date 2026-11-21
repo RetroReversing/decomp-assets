@@ -7,6 +7,7 @@
 - fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
 - rare_models.py: model textures in a deflated asset table.
+- zlib_meshes.py: packed vertex batches and triangles in checked zlib members.
 - zlib_textures.py: RGBA sprites and textures with dimensions recorded inside zlib members.
 - gzip_meshes.py: geometry in paired gzip vertex and Fast3D display-list members.
 - blast_textures.py: textures packed with a demolition game's own codecs, listed in its texture table.
@@ -96,6 +97,7 @@ def regions(image, *, context=None, **kwargs):
         uv_sequences,
         uv_textures,
         yay0_atlases,
+        zlib_meshes,
         zlib_textures,
     )
     display_meshes = []
@@ -122,6 +124,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(paged_models.regions(image,**kwargs))
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
+    known.extend(zlib_meshes.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
@@ -205,6 +208,7 @@ def preview(data, asset, selection):
         uv_sequences,
         uv_textures,
         yay0_atlases,
+        zlib_meshes,
         zlib_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
@@ -228,6 +232,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
+    if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
