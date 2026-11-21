@@ -86,6 +86,7 @@ def regions(image, *, context=None, **kwargs):
         uv_models,
         uv_sequences,
         uv_textures,
+        yay0_atlases,
     )
     display_meshes = []
     sound_banks = audio.regions(image,context=context,**kwargs)
@@ -103,6 +104,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(arithmetic_descriptors.regions(image,context=context,**kwargs))
     known.extend(relative_materials.regions(image,**kwargs))
     known.extend(relative_meshes.regions(image,**kwargs))
+    known.extend(yay0_atlases.regions(image,context=context,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
@@ -178,6 +180,7 @@ def preview(data, asset, selection):
         uv_models,
         uv_sequences,
         uv_textures,
+        yay0_atlases,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
         return eurocom.preview(data,asset,selection)
@@ -204,6 +207,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (bolt.TEXTURE,bolt.MODEL,'bolt-vox'):return bolt.preview(data,asset,selection)
     if asset.get('layout')==arithmetic_assets.TEXTURES:return arithmetic_assets.preview(data,asset,selection)
     if asset.get('layout')==arithmetic_descriptors.LAYOUT:return arithmetic_descriptors.preview(data,asset,selection)
+    if asset.get('layout')==yay0_atlases.LAYOUT:return yay0_atlases.preview(data,asset,selection)
     if asset.get('layout') in (mwo_graphics.TEXTURES,mwo_graphics.MODELS):return mwo_graphics.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
