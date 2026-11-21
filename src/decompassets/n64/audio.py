@@ -2,7 +2,7 @@
 
 Control pointers are B1-relative or relocated by a checked wrapper. Sample offsets
 are relative to a separate table.
-ADPCM headers alone cannot locate that table. Named loader arguments corroborate it;
+ADPCM headers alone cannot locate that table. Verified loader arguments corroborate it;
 a unique adjacent structural candidate stays explicitly tentative without that evidence.
 """
 from __future__ import annotations
@@ -135,7 +135,7 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
 
 
 def loader_tables(image, context, *, check=lambda: None):
-    """Read explicit constant table arguments; never execute or patch the game's code.
+    """Read constant arguments to named or structurally verified B1 relocators.
 
     Finding them needs a reader of MIPS code, which this library doesn't have: the caller passes one as
     `context['read_code']` (decompdecomp's `arch.mips_assets.read`). Without one, no loader evidence is used.
@@ -145,6 +145,14 @@ def loader_tables(image, context, *, check=lambda: None):
     functions=context.get('functions',[])
     targets={f['vram'] for f in functions if f['name'].lstrip('_')=='alBnkfNew'}
     targets.update(s['address'] for s in context.get('symbols',[]) if s['name'].lstrip('_')=='alBnkfNew')
+    named = targets.copy()
+    for f in functions:
+        check()
+        offset, size = f.get('rom_offset'), f['size']
+        if offset is not None and 0x70 <= size <= 0x280 and not size % 4 and 0 <= offset <= len(image)-size:
+            words = [word for word, in struct.iter_unpack('>I', image[offset:offset+size])]
+            if _guards_b1(words):
+                targets.add(f['vram'])
     if not targets:return {}
     needles=[struct.pack('>I',3<<26 | (target>>2)&0x3ffffff) for target in targets]
     result={}
@@ -158,9 +166,13 @@ def loader_tables(image, context, *, check=lambda: None):
             value=event['args'][1]
             if not value or value['kind']!='constant':continue
             base=value['value']
+            # The audio DMA callback can accept an uncached cartridge address.
+            if 0xb0000000<=base<0xb0000000+len(image):
+                base-=0xb0000000
             if not 0<=base<len(image):continue
             result.setdefault(base,[]).append(dict(function=f['name'],instruction=event['instruction'],role='sample-table argument',
-                                                   reason='Named alBnkfNew call supplies a constant sample-table argument; runtime execution is not established.'))
+                                                   adjacent_control=event['target'] not in named,
+                                                   reason='The B1 relocator receives a constant sample-table argument.'))
     return result
 
 
@@ -398,8 +410,15 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         matched = {base:[ref for ref in refs if ref['control_size'] >= info['size']]
                    for base,refs in copied.get(offset, {}).items()}
         matched = {base:refs for base,refs in matched.items() if refs}
-        loader_refs = tables | matched
         adjacent=(offset+info['size']+15)//16*16
+        # An unnamed relocator call provides a wave address, but does not on
+        # its own identify which bank supplied the controls. Require a nearby
+        # control extent unless the copy analysis actually links both arguments.
+        loader_refs = {base: refs for base, refs in tables.items()
+                       if adjacent <= base <= adjacent+16
+                       or not refs or any(not ref.get('adjacent_control') for ref in refs)}
+        static_refs = loader_refs.copy()
+        loader_refs.update(matched)
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
             control_end, wave, wave_end, _, _ = uv
@@ -440,7 +459,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
-                 'A named alBnkfNew call supplies the sample-table base.' if base in tables else
+                 'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]

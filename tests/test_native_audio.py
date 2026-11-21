@@ -313,3 +313,28 @@ def test_sparse_effects_bank_accepts_more_than_256_instrument_slots():
     struct.pack_into('>H', control, header, audio.MAX_INSTRUMENTS + 1)
     with pytest.raises(audio.BankError, match='bank header'):
         audio.bank(control, 0)
+
+
+def test_unnamed_guarded_b1_loader_resolves_kseg1_sample_table():
+    data, context, base = fixture(raw=True)
+    image = bytearray(data[:64] + bytes(128) + data[128:])
+    # The synthetic relocator validates the B1 magic and reads the bank count.
+    body = words(0x84820000, 0x24034231, 0x14430002, 0, 0x84820002) + bytes(0x70 - 20)
+    image[64:64+len(body)] = body
+    context['functions'][1].update(name='func_80000040', size=len(body))
+    rom_base = base + 64
+    struct.pack_into('>IIBBxxII', image, 192+256, 0, 18, 0, 0, 0, 320)
+    image[rom_base:rom_base+18] = (bytes([0]) + bytes([0x11])*8)*2
+    call = words(lui(5, 0xb000), addiu(5, 5, rom_base), jal(0x80000040), 0)
+    image[:len(call)] = call
+
+    def read(*args, **kwargs):
+        return {'events': [dict(kind='call', target=0x80000040, instruction=8,
+                                args=[None, dict(kind='constant', value=0xb0000000 + rom_base)])]}
+
+    context['read_code'] = read
+    bank = audio.regions(image, context=context)[0]
+    assert bank['table_offset'] == rom_base
+    assert wav(audio.preview(image, bank, {'sample': 1}))[1]
+    image[64:68] = bytes(4)
+    assert audio.regions(image, context=context)[0]['audio_kind'] == 'unresolved bank'
