@@ -351,6 +351,42 @@ def _candidates(image):
         yield offset,relocated
 
 
+def _parallel_tables(image, candidates, check):
+    """Find matching arrays of control starts, control ends, and wave starts."""
+    controls = {offset for offset, relocated in candidates if not relocated}
+    if len(controls) < 2:
+        return {}
+    references = {}
+    limit = min(len(image), 0x100000)
+    for offset in sorted(controls):
+        marker = struct.pack('>I', offset)
+        position = 0
+        for _ in range(64):
+            position = image.find(marker, position, limit)
+            if position < 0:
+                break
+            check()
+            start = position
+            position += 4
+            if start % 4 or start >= offset:
+                continue
+            words = min(48, (min(offset, limit) - start) // 4)
+            values = struct.unpack_from(f'>{words}I', image, start)
+            for count in range(2, min(16, words // 3) + 1):
+                origins = values[:count]
+                ends = values[count:count * 2]
+                waves = values[count * 2:count * 3]
+                if not (set(origins) <= controls and tuple(sorted(set(origins))) == origins
+                        and ends == (*origins[1:], waves[0]) and origins[-1] < waves[0]
+                        and tuple(sorted(set(waves))) == waves
+                        and not any(base % 16 or base >= len(image) for base in waves)):
+                    continue
+                limits = (*waves[1:], len(image))
+                for control, end, base, wave_end in zip(origins, ends, waves, limits):
+                    references.setdefault(control, set()).add((end, base, wave_end))
+    return {control: next(iter(spans)) for control, spans in references.items() if len(spans) == 1}
+
+
 def _uv_tables(image, check):
     """Read a B1 control and wave table paired by their UV sound FORM."""
     tables = {}
@@ -387,6 +423,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
+    parallel = _parallel_tables(image, candidates, check)
     copied = _copied_tables(image, context, check) if any(not relocated for _, relocated in candidates) else {}
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
@@ -419,11 +456,18 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                        or not refs or any(not ref.get('adjacent_control') for ref in refs)}
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
+        partition = parallel.get(offset)
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
             control_end, wave, wave_end, _, _ = uv
             if (offset+info['size'] > control_end
                     or any(s['relative_offset']+s['size'] > wave_end-wave for s in info['samples'])):
+                continue
+            bases = [wave]
+        elif partition:
+            control_end, wave, wave_end = partition
+            if (offset + info['size'] > control_end
+                    or any(s['relative_offset'] + s['size'] > wave_end - wave for s in info['samples'])):
                 continue
             bases = [wave]
         elif relocated:
@@ -443,7 +487,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             bases=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES] if loader_refs else [adjacent]
         fits=[]
         for base in bases:
-            info['corroborated']=bool(uv) or base in loader_refs
+            info['corroborated']=bool(uv or partition) or base in loader_refs
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
             if sample_only:
@@ -454,10 +498,11 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                                 media='audio',audio_kind='unresolved bank',sample_count=len(info['samples']),samples=[],
                                 preview_settings=dict(format='auto',source='rom',offset=offset)))
             continue
-        base=fits[0];confidence='validated' if uv or base in loader_refs else 'tentative'
+        base=fits[0];confidence='validated' if uv or partition or base in loader_refs else 'tentative'
         reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
+                 'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
