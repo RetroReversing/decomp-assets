@@ -37,7 +37,7 @@ def regions(image, rows, *, check=lambda: None, progress=lambda _: None):
             codec = f'Borg PCM{width*8}'
             result.append(dict(offset=offset, size=stored, kind='audio', media='audio', layout='borg-audio',
                                audio_kind='indexed sample directory', confidence='validated', label=f'Borg sample {index}',
-                               expanded_size=expanded, compression=compression,
+                               expanded_size=expanded, compression=compression, borg_index=index,
                                samples=[dict(offset=offset, size=stored, rate=_RATE, samples=frames,
                                              codec=codec, preview_available=True)],
                                preview_settings=dict(format='auto', source='rom', offset=offset),
