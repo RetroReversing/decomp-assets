@@ -155,6 +155,21 @@ def _method1_header(data, max_output):
     return size, packed
 
 
+def unpack_at(image, offset, *, max_output=MAX_OUTPUT, max_packed=MAX_OUTPUT):
+    """Validate one standard RNC block and return its decoded bytes and stored size."""
+    if not 0 <= offset <= len(image)-HEADER_BYTES:
+        raise RncError("truncated RNC header")
+    magic = image[offset:offset+4]
+    if magic not in (b"RNC\1", b"RNC\2"):
+        raise RncError("not an RNC block")
+    size, packed = struct.unpack_from(">II", image, offset+4)
+    extent = HEADER_BYTES+packed
+    if not 0 < size <= max_output or not 0 < packed <= max_packed or offset+extent > len(image):
+        raise RncError("invalid RNC sizes")
+    decoder = unpack if magic == b"RNC\1" else unpack_m2
+    return decoder(image[offset:offset+extent], max_output=max_output), extent
+
+
 def unpack_sum32(data: bytes, *, max_output: int = MAX_OUTPUT) -> bytes:
     """Decode the method-1 variant with a big-endian sum of the output bytes."""
     size, packed = _method1_header(data, max_output)

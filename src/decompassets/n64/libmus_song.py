@@ -6,7 +6,7 @@ import re
 import struct
 from dataclasses import dataclass, replace
 
-from .. import formats
+from .. import formats, rnc
 from . import audio, compact_midi_render, lzari, ptr_audio
 from .compact_midi import Event
 
@@ -276,7 +276,7 @@ def _wave_tail_songs(image, bank, waves, check):
 
 
 def _binary_regions(image, banks, check):
-    packed_banks = sorted((bank for bank in banks if bank.get('compressed_control')),
+    packed_banks = sorted((bank for bank in banks if bank.get('compressed_control') and bank.get('control_codec') != 'rnc'),
                           key=lambda bank:bank['offset'])
     if not packed_banks:
         return []
@@ -329,6 +329,55 @@ def _binary_regions(image, banks, check):
     return assets
 
 
+def _rnc_regions(image, bank, check):
+    waves = {sample['instrument'] for sample in bank['samples']}
+    control = bank['offset']
+    end = control+bank['size']
+    table = bank['table_offset']
+    found = []
+    # Each following sequence starts at the next eight-byte alignment.
+    for _ in range(128):
+        check()
+        start = (end+7)&~7
+        if start >= table or any(image[end:start]):
+            break
+        try:
+            data, size = rnc.unpack_at(image, start, max_output=_MAX_BYTES)
+        except rnc.RncError:
+            break
+        if start+size > table or not (score := binary_song(data,waves)):
+            break
+        found.append((start,size,[score],False))
+        end = start+size
+    for match in ptr_audio.RNC_HEADER.finditer(image,max(0,control-_MAX_BYTES),control):
+        check()
+        start = match.start()
+        if start%8 or start+18 > control:
+            continue
+        size = 18+int.from_bytes(image[start+8:start+12],'big')
+        if (start+size+7)&~7 != control or any(image[start+size:control]):
+            continue
+        try:
+            data, _ = rnc.unpack_at(image, start, max_output=_MAX_BYTES)
+        except rnc.RncError:
+            continue
+        if scores := binary_effects(data,waves):
+            found.append((start,size,scores,True))
+    for start,size,scores,effects in found:
+        kind = 'audio sequence' if effects else 'music sequence'
+        layout = 'libmus-binary-effects' if effects else 'libmus-binary-song'
+        label = 'libmus sequenced effects' if effects else 'libmus binary song'
+        yield dict(offset=start,size=size,kind=kind,media='audio',audio_kind='indexed sample directory',
+                   control=control,compressed_control=bank['compressed_control'],control_codec='rnc',
+                   table_offset=table,sequence_codec='rnc',layout=layout,confidence='validated',label=label,
+                   samples=[dict(label=f'Effect {index}' if effects else 'Song', codec='Nintendo libmus')
+                            for index in range(1,len(scores)+1)],
+                   channels=max(score['channels'] for score in scores),
+                   notes=sum(len(score['notes']) for score in scores),loops=sum(score['loops'] for score in scores),
+                   reason='The aligned RNC sequence resolves every instrument to the validated wave bank.',
+                   preview_settings=dict(format='auto',source='rom',offset=start))
+
+
 def _raw_control_sequence(image, bank):
     if bank.get('table_confidence') != 'adjacent wave and control pair':
         return None
@@ -365,6 +414,9 @@ def _raw_control_sequence(image, bank):
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
     assets = _binary_regions(image,resolved,check)
+    for bank in resolved:
+        if bank.get('control_codec') == 'rnc':
+            assets.extend(_rnc_regions(image,bank,check))
     raw = [bank for bank in resolved if not bank.get('compressed_control')]
     assets.extend(sequence for bank in raw if (sequence := _raw_control_sequence(image,bank)) is not None)
     if len(raw) != 1:
@@ -403,11 +455,11 @@ def _play(image, asset, selection):
     try:
         if span := asset.get('compressed_control'):
             start, size = span
-            books, _ = lzari.unpack(image[start:start+size],order=asset.get('control_byte_order','big'),limit=ptr_audio.MAX_CONTROL)
+            books = ptr_audio.decoded_control(image, asset)
             bank = {**ptr_audio.bank(books, 0), 'offset':start, 'size':size}
         else:
             bank = ptr_audio.bank(image, asset['control'])
-    except (audio.BankError, lzari.LzariError) as exc:
+    except (audio.BankError, lzari.LzariError, rnc.RncError) as exc:
         raise formats.AssetError('The libmus wave bank changed. Rescan ROM Explorer.') from exc
     if (image[base:base+len(ptr_audio.WAVES)] != ptr_audio.WAVES
             or not ptr_audio.fits(image, bank, base, [ptr_audio.MAX_FRAME_CHECKS], lambda: None)):
@@ -421,7 +473,11 @@ def _play(image, asset, selection):
             score = song(raw,waves)
         else:
             try:
-                if asset.get('sequence_packed',True):
+                if asset.get('sequence_codec') == 'rnc':
+                    raw, extent = rnc.unpack_at(raw, 0, max_output=_MAX_BYTES)
+                    if extent != size:
+                        raise rnc.RncError('changed packed sequence size')
+                elif asset.get('sequence_packed',True):
                     raw, _ = lzari.unpack(raw,order=asset.get('sequence_byte_order','big'),limit=_MAX_BYTES)
                 if asset['layout'] == 'libmus-binary-effects':
                     scores = binary_effects(raw,set(waves))
@@ -429,7 +485,7 @@ def _play(image, asset, selection):
                         score = scores[index]
                 else:
                     score = binary_song(raw,set(waves))
-            except lzari.LzariError:
+            except (lzari.LzariError, rnc.RncError):
                 pass
     if score is None:
         raise formats.AssetError('The libmus channel data changed. Rescan ROM Explorer.')
