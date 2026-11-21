@@ -4,10 +4,13 @@ import re
 import struct
 from dataclasses import dataclass
 
+from .. import formats
+
 _END = re.compile(rb'\xdf\0{7}')
 _HEADER = struct.Struct('>4H2I')
 _FORMATS = {(0, 2): 'rgba5551-be', (2, 0): 'ci4', (2, 1): 'ci8', (3, 1): 'ia8'}
 _SIZE = _HEADER.size+8
+LAYOUT = 'inline-rdp-tile'
 
 
 @dataclass(frozen=True)
@@ -58,7 +61,14 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         if next_tile and tile.displacement == next_tile.displacement and not any(image[tile.end:following]):
             verified.update((offset, following))
     return [dict(offset=tile.start, size=tile.end-tile.start, kind='image', media='image',
-                 layout='inline-rdp-tile', confidence='validated', label='Inline RDP tile',
+                 layout=LAYOUT, confidence='validated', label='Inline RDP tile',
                  reason='Adjacent headers agree on the loaded-bank mapping, pixel extent and RDP tile format.',
                  preview_settings=dict(source='rom', **tile.settings))
             for offset in sorted(verified) for tile in (tiles[offset],)]
+
+
+
+def preview(image, asset, selection):
+    result = formats.preview(image, asset['preview_settings'])
+    result['settings'] = asset['preview_settings']
+    return result

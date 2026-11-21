@@ -160,6 +160,7 @@ def preview(data, asset, selection):
         iguana_audio,
         iguana_models,
         iguana_textures,
+        inline_tiles,
         libmus_song,
         mainfs,
         models,
@@ -217,6 +218,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
     if asset.get('layout')=='borg-texture':return borg.preview(data,asset,selection)
     if asset.get('layout')=='uv-model':return uv_models.preview(data,asset,selection)
+    if asset.get('layout')==inline_tiles.LAYOUT:return inline_tiles.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)

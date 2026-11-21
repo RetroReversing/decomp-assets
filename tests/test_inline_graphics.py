@@ -1,6 +1,6 @@
 import struct
 
-from decompassets import formats, n64
+from decompassets import n64
 from decompassets.n64 import inline_meshes, inline_tiles
 
 _BASE = 0x80100000
@@ -16,7 +16,7 @@ def test_adjacent_tiles_validate_pixels_and_palette():
     tiles = inline_tiles.regions(image)
     assert [a['offset'] for a in tiles] == [24, 56]
     for asset in tiles:
-        result = formats.preview(image, asset['preview_settings'])
+        result = n64.preview(image, asset, {})
         assert result['data_url'].startswith('data:image/png;base64,')
     struct.pack_into('>I', image, 44, _BASE+64)
     assert inline_tiles.regions(image) == []
