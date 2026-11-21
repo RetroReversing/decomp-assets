@@ -1,4 +1,4 @@
-"""Local meshes from closed F3DEX lists with corroborated ROM address mappings."""
+"""Local meshes from closed F3DEX and F3DEX2 lists with corroborated ROM address mappings."""
 
 import struct
 
@@ -7,27 +7,39 @@ from .. import formats
 _VERTEX = struct.Struct('>3hH2h4B')
 _COMMAND = struct.Struct('>II')
 _MAX_COMMANDS = 4096
-_STATE = frozenset((0xb6, 0xb7, 0xb9, 0xba, 0xbb, 0xbc)) | frozenset(range(0xe6, 0x100))
+_STATE = frozenset((0xb6, 0xb7, 0xb9, 0xba, 0xbb, 0xbc, 0xd7, 0xd9, 0xe2, 0xe3)) | frozenset(range(0xe6, 0x100))
 
 
 def geometry(image, offset, end, displacements):
-    from .display_lists import _space
+    from .display_lists import _space, _vertex_count
 
     if not 0 <= offset < end or offset % 8:
         return None
 
-    cache, vertices, lookup, faces = [None]*32, [], {}, []
+    cache, vertices, lookup, faces = [None]*64, [], {}, []
+    dialect = None
     for at in range(offset, min(end, offset+_MAX_COMMANDS*8), 8):
         if at+8 > len(image):
             return None
         w0, w1 = _COMMAND.unpack_from(image, at)
         cmd = w0 >> 24
-        if cmd == 0xb8 and not (w0 & 0xffffff or w1):
+        if cmd == (0xdf if dialect == 2 else 0xb8) and not (w0 & 0xffffff or w1):
             return (at+8, vertices, faces) if faces else None
-        if cmd == 4:
-            count, dest = (w0 >> 10)&63, (w0 >> 17)&127
+        if cmd in (1, 4):
+            variant = 2 if cmd == 1 else 1
+            if dialect is not None and dialect != variant:
+                return None
+            dialect = variant
+            if dialect == 2:
+                count = _vertex_count(w0)
+                dest = ((w0 >> 1)&127)-count
+            else:
+                count, dest = (w0 >> 10)&63, (w0 >> 17)&127
+                if w0 & 0x10000 or (w0 & 1023) != count*16-1:
+                    return None
+            limit = 64 if dialect == 2 else 32
             mapping = displacements.get(_space(w1))
-            if mapping is None or not count or count+dest > len(cache) or w0 & 0x10000 or (w0 & 1023) != count*16-1:
+            if mapping is None or not count or not 0 <= dest < dest+count <= limit:
                 return None
             start = mapping+(w1 & 0xffffff)
             if start < 0 or start%8 or start+count*_VERTEX.size > len(image):
@@ -40,10 +52,12 @@ def geometry(image, offset, end, displacements):
                     lookup[pointer] = len(vertices)
                     vertices.append((x, y, z))
                 cache[slot] = lookup[pointer]
-        elif cmd in (0xbf, 0xb1):
-            if w1 >> 24 or cmd == 0xbf and w0 & 0xffffff:
+        elif cmd in (0xbf, 0xb1, 5, 6, 7):
+            modern = cmd in (5, 6, 7)
+            if dialect != (2 if modern else 1) or w1 >> 24 or cmd == 0xbf and w0 & 0xffffff or cmd == 5 and w1:
                 return None
-            for word in (w1,) if cmd == 0xbf else (w0, w1):
+            words = (w0,) if cmd == 5 else (w1,) if cmd == 0xbf else (w0, w1)
+            for word in words:
                 slots = tuple((word >> shift)&255 for shift in (16, 8, 0))
                 if any(slot%2 or slot//2 >= len(cache) or cache[slot//2] is None for slot in slots):
                     return None
@@ -69,7 +83,8 @@ def regions(image, group, displacements, pointers, check):
             continue
         end, vertices, faces = parsed
         accepted_end = end
-        result.append(dict(offset=offset, size=end-offset, label='F3DEX display-list mesh', kind='3d model',
+        format_name = 'F3DEX2' if image[end-8] == 0xdf else 'F3DEX'
+        result.append(dict(offset=offset, size=end-offset, label=f'{format_name} display-list mesh', kind='3d model',
                            confidence='inferred', media='model', layout='f3dex-mesh', vertices=len(vertices),
                            triangles=len(faces), address_maps=sorted(displacements.items()),
                            reason='Stored list pointers corroborate the ROM mapping. Vertex loads and triangle slots resolve before the list ends.',
@@ -88,6 +103,6 @@ def preview(image, asset, selection):
                 points=sorted({i for face in faces for i in face}),
                 surfaces=[dict(indices=face, uv=[[0,0]]*3, colors=[[255,255,255,255]]*3, material=0)
                           for face in faces],
-                materials=[], details=dict(format='F3DEX display-list mesh', vertices=len(vertices), triangles=len(faces)),
+                materials=[], details=dict(format=asset['label'], vertices=len(vertices), triangles=len(faces)),
                 note='Local geometry from one display list. Scene transforms and materials are separate.',
                 settings=asset['preview_settings'])
