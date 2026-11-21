@@ -66,6 +66,7 @@ def regions(image, *, context=None, **kwargs):
         uso_models,
         uso_textures,
         uv_models,
+        uv_sequences,
         uv_textures,
     )
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,**kwargs)
@@ -77,6 +78,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uso_textures.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
+    known.extend(uv_sequences.regions(image,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
@@ -115,6 +117,7 @@ def preview(data, asset, selection):
         uso_models,
         uso_textures,
         uv_models,
+        uv_sequences,
         uv_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
@@ -128,6 +131,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
+    if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
     if asset.get('layout')=='uv-model':return uv_models.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
