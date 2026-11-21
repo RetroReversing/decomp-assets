@@ -62,6 +62,7 @@ def regions(image, *, context=None, **kwargs):
         mainfs,
         models,
         native_scene,
+        paired_audio,
         ptr_audio,
         rare_models,
         reloc_files,
@@ -81,7 +82,7 @@ def regions(image, *, context=None, **kwargs):
     pointer_banks = ptr_audio.regions(image,**kwargs)
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,models=display_meshes,**kwargs)
            +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
-           +sound_banks
+           +sound_banks+paired_audio.regions(image,**kwargs)
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(display_meshes)
@@ -132,6 +133,7 @@ def preview(data, asset, selection):
         libmus_song,
         mainfs,
         models,
+        paired_audio,
         ptr_audio,
         rare_models,
         reloc_files,
@@ -158,6 +160,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
