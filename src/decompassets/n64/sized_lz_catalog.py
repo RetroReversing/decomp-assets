@@ -72,14 +72,19 @@ def unpack(image, start, end, check=lambda: None):
         return cursor - start, data
 
 
-def textures(data):
+def member_spans(data):
     first = int.from_bytes(data[:4], 'big')
     if not 8 <= first <= min(len(data), 4 * 257) or first % 4 or any(data[first - 4:first]):
         return []
     offsets = struct.unpack_from(f'>{first // 4 - 1}I', data)
+    spans = list(pairwise((*offsets, len(data))))
+    return spans if all(start % 4 == 0 and start < end for start, end in spans) else []
+
+
+def textures(data):
     result = []
-    for start, end in pairwise((*offsets, len(data))):
-        if not first <= start <= end - _TEXTURE.size or start % 4:
+    for start, end in member_spans(data):
+        if end - start < _TEXTURE.size:
             return []
         width, height, packing, colors, *reserved = _TEXTURE.unpack_from(data, start)
         if not (packing in (1, 2) and 0 < width <= 512 and 0 < height <= 512 and width % packing == 0):
