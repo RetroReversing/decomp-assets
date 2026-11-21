@@ -171,6 +171,7 @@ def song(data, waves):
 
 _BINARY_HEADER = struct.Struct('>10I')
 # Fixed initial arithmetic bits of the binary song magic and track count.
+_BINARY_RAW = re.compile(rb'\0\0\x02\x15\0\0\0[\x01-\x20]')
 _BINARY_PACKED = re.compile(rb'\xff\xff\xfb\x9d\x19\xff')
 
 
@@ -275,6 +276,22 @@ def _wave_tail_songs(image, bank, waves, check):
 
 
 
+def _bank_prefix_songs(image, end, waves, check):
+    """Find aligned raw tracks in the resource area preceding the sole wave bank."""
+    start = max(0, end-1024*1024)
+    previous_end = start
+    for index, match in enumerate(_BINARY_RAW.finditer(image, start, end)):
+        if index == 128:
+            break
+        at = match.start()
+        if at % 8 or at < previous_end:
+            continue
+        check()
+        if score := binary_song(image[at:min(end, at+_MAX_BYTES)], waves):
+            previous_end = at+score['extent']
+            yield at,score['extent'],score
+
+
 def _binary_regions(image, banks, check):
     packed_banks = sorted((bank for bank in banks if bank.get('compressed_control')),
                           key=lambda bank:bank['offset'])
@@ -310,9 +327,11 @@ def _binary_regions(image, banks, check):
             adjacent.append((start,size,score))
             end = start
         raw = list(_wave_tail_songs(image,bank,waves,check))
-        songs = [(start,size,score,True) for start,size,score in reversed(adjacent)]
-        songs.extend((start,size,score,False) for start,size,score in raw)
-        for start,size,score,packed in songs:
+        prefix = _bank_prefix_songs(image,end,waves,check) if len(banks) == 1 else ()
+        songs = [(start,size,score,False,'following') for start,size,score in prefix]
+        songs.extend((start,size,score,True,'following') for start,size,score in reversed(adjacent))
+        songs.extend((start,size,score,False,'preceding') for start,size,score in raw)
+        for start,size,score,packed,bank_position in songs:
             song_number += 1
             assets.append(dict(offset=start, size=size, kind='music sequence', media='audio',
                                audio_kind='indexed sample directory', control=bank['offset'],
@@ -322,7 +341,7 @@ def _binary_regions(image, banks, check):
                                layout='libmus-binary-song', confidence='validated', label=f'libmus binary song {song_number}',
                                channels=score['channels'], notes=len(score['notes']), loops=score['loops'],
                                reason=('Adjacent LZARI song streams resolve to the following control bank.' if packed else
-                                       'Aligned song streams resolve to the preceding wave bank.'),
+                                       f'Aligned song streams resolve to the {bank_position} wave bank.'),
                                preview_settings=dict(format='auto', source='rom', offset=start)))
         if effects := _effects_region(image,bank,waves,check):
             assets.append(effects)
