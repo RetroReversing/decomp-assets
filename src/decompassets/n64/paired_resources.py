@@ -2,10 +2,12 @@
 
 import re
 import struct
+import zlib
 
 _PAIR = struct.Struct('>2I')
 _CANDIDATE = re.compile(rb'\x00(...)\x80\1', re.DOTALL)
 _LIMIT = 4 * 1024 * 1024
+_ZLIB_HEADER = re.compile(rb"\x80[\x00-\x3f]..\x78[\x01\x5e\x9c\xda]", re.DOTALL)
 
 
 def unpack(image, offset, size):
@@ -49,6 +51,28 @@ def unpack(image, offset, size):
                 return None
             output.extend(bytes([value]) * count)
     return output or None
+
+
+
+def unpack_zlib(image, offset, size):
+    """Check a flagged length prefix and decode only the declared zlib stream."""
+    if not 0 <= offset <= len(image) - size or not 10 <= size <= _LIMIT:
+        return None
+    header, = struct.unpack_from('>I', image, offset)
+    if header != 0x80000000 | size:
+        return None
+    decoder = zlib.decompressobj()
+    try:
+        data = decoder.decompress(image[offset + 4:offset + size], _LIMIT + 1)
+    except zlib.error:
+        return None
+    if data and len(data) <= _LIMIT and decoder.eof and not decoder.unused_data:
+        return data
+
+
+def unpack_asset(image, asset):
+    decode = unpack_zlib if asset.get('codec') == 'zlib' else unpack
+    return decode(image, asset['offset'], asset['size'])
 
 
 def directories(image, check):
@@ -95,4 +119,17 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 result.append(paired_resource_textures.asset(offset, size, directory, index, items))
             if entries := paired_resource_models.meshes(decoded):
                 result.append(paired_resource_models.asset(offset, size, directory, entries))
+    for index, match in enumerate(_ZLIB_HEADER.finditer(image)):
+        if index % 128 == 0:
+            check()
+        offset = match.start()
+        if offset % 2:
+            continue
+        size = struct.unpack_from('>I', image, offset)[0] & 0x7fffffff
+        if not (decoded := unpack_zlib(image, offset, size)):
+            continue
+        if items := paired_resource_textures.textures(decoded):
+            result.append(paired_resource_textures.asset(offset, size, None, f"at 0x{offset:X}", items) | {'codec': 'zlib'})
+        if entries := paired_resource_models.meshes(decoded):
+            result.append(paired_resource_models.asset(offset, size, None, entries) | {'codec': 'zlib'})
     return result

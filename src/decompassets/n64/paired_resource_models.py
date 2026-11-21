@@ -36,8 +36,7 @@ def asset(offset, size, directory, entries):
 
 
 def preview(image, asset, selection):
-    offset, size = asset['offset'], asset['size']
-    decoded = paired_resources.unpack(image, offset, size)
+    decoded = paired_resources.unpack_asset(image, asset)
     if not decoded:
         raise formats.AssetError('The compressed model resource changed. Rescan ROM Explorer.')
     entries = asset['meshes']
