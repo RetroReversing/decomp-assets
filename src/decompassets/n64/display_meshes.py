@@ -10,7 +10,7 @@ _MAX_COMMANDS = 4096
 _STATE = frozenset((0xb6, 0xb7, 0xb9, 0xba, 0xbb, 0xbc, 0xd7, 0xd9, 0xe2, 0xe3)) | frozenset(range(0xe6, 0x100))
 
 
-def geometry(image, offset, end, displacements):
+def geometry(image, offset, end, displacements, *, extra_state=None):
     from .display_lists import _space, _vertex_count
 
     if not 0 <= offset < end or offset % 8:
@@ -25,6 +25,8 @@ def geometry(image, offset, end, displacements):
         cmd = w0 >> 24
         if cmd == (0xdf if dialect == 2 else 0xb8) and not (w0 & 0xffffff or w1):
             return (at+8, vertices, faces) if faces else None
+        if extra_state and extra_state(w0, w1):
+            continue
         if cmd in (1, 4):
             variant = 2 if cmd == 1 else 1
             if dialect is not None and dialect != variant:

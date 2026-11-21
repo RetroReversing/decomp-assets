@@ -66,6 +66,7 @@ def regions(image, *, context=None, **kwargs):
         native_scene,
         paired_audio,
         ptr_audio,
+        rare_assets,
         rare_models,
         reloc_files,
         resources,
@@ -83,7 +84,7 @@ def regions(image, *, context=None, **kwargs):
     sound_banks = audio.regions(image,context=context,**kwargs)
     pointer_banks = ptr_audio.regions(image,**kwargs)
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,models=display_meshes,**kwargs)
-           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
+           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+rare_assets.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +sound_banks+paired_audio.regions(image,**kwargs)
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
@@ -142,6 +143,7 @@ def preview(data, asset, selection):
         models,
         paired_audio,
         ptr_audio,
+        rare_assets,
         rare_models,
         reloc_files,
         resources,
@@ -188,6 +190,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uv-model':return uv_models.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
+    if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)
     if asset.get('layout')=='rare-model':return rare_models.preview(data,asset,selection)
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
