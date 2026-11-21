@@ -25,3 +25,16 @@ def test_dcm_checks_sample_links_loops_and_command_bounds():
     assert borg_dcm.decode(_sequence(bytes.fromhex('02')), {20: 15}) is None
     assert borg_dcm.decode(_sequence(bytes.fromhex('0a 01')), {20: 16}) is None
     assert borg_dcm.decode(_sequence(bytes.fromhex('42 00')), {20: 16}) is None
+
+
+def test_dcm_render_starts_and_stops_panned_pcm():
+    from decompassets.n64 import borg_dcm_render
+
+    data = _sequence(bytes.fromhex('72 10 40 ff 00 01 80'), channels=1)
+    instruments, events = borg_dcm.decode(data, {20: 16})
+    pcm, details = borg_dcm_render.render(instruments, events, {20: [2000]*16})
+    stereo = list(struct.iter_unpack('<hh', pcm))
+    assert stereo[0][0] > 0
+    assert not any(right for _, right in stereo)
+    assert all(left == 0 for left, _ in stereo[441:])
+    assert details['voice_starts'] == 1
