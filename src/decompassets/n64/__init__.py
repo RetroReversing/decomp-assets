@@ -139,7 +139,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(tagged_deflate.regions(image,**kwargs))
     known.extend(striped_images.regions(image,**kwargs))
-    known.extend(rnc_tiled_images.regions(image,**kwargs))
+    compressed_meshes = []
+    known.extend(rnc_tiled_images.regions(image,models=compressed_meshes,**kwargs))
+    known.extend(compressed_meshes)
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
@@ -215,6 +217,7 @@ def preview(data, asset, selection):
         rare_models,
         reloc_files,
         resources,
+        rnc_display_models,
         rnc_meshes,
         rnc_textures,
         rnc_tiled_images,
@@ -246,7 +249,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
-    if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK):return rnc_tiled_images.preview(data,asset,selection)
+    if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK,rnc_display_models.LAYOUT):return rnc_tiled_images.preview(data,asset,selection)
     if asset.get('layout')==striped_images.LAYOUT:return striped_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)

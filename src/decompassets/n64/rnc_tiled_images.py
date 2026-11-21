@@ -4,6 +4,7 @@ import re
 import struct
 
 from .. import formats, rnc
+from . import rnc_display_models
 
 LAYOUT = 'rnc-tiled-ci8'
 BANK = 'rnc-ci4-bank'
@@ -28,14 +29,15 @@ def layout(data):
     return columns, rows
 
 
-def _decode(image, start):
+def _decode(image, start, *, models=False):
     if start+18 > len(image) or image[start:start+4] not in (b'RNC\1', b'RNC\2'):
         return None
     unpacked, packed = struct.unpack_from('>II', image, start+4)
     end = start+18+packed
     grid_size = _PIXELS < unpacked <= _PIXELS+376*286 and (unpacked-_PIXELS)%16 == 0
     bank_size = _BANK_PIXELS < unpacked <= _BANK_PIXELS+16*2048 and (unpacked-_BANK_PIXELS)%512 == 0
-    if not (grid_size or bank_size) or not 0 < packed <= formats.MAX_BYTES or end > len(image):
+    model_size = models and 128 <= unpacked <= formats.MAX_BYTES and unpacked%8 == 0
+    if not (grid_size or bank_size or model_size) or not 0 < packed <= formats.MAX_BYTES or end > len(image):
         return None
     decoder = rnc.unpack if image[start+3] == 1 else rnc.unpack_m2
     try:
@@ -63,12 +65,12 @@ def _bank(data):
     return textures if cursor == len(data) and textures else None
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
+def regions(image, *, models=None, check=lambda: None, progress=lambda _: None):
     assets = []
     for magic in _MAGIC.finditer(image):
         check()
         start = magic.start()
-        decoded = _decode(image, start)
+        decoded = _decode(image, start, models=models is not None)
         if decoded is None:
             continue
         data, end = decoded
@@ -88,6 +90,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 reason='Every typed slot fits the decoded bank and shares its palette table.',
                 preview_settings=dict(format='auto', source='rom', offset=start),
             ))
+        elif models is not None and (scene := rnc_display_models.asset(data, start, end, check)):
+            models.append(scene)
     return assets
 
 
@@ -109,10 +113,12 @@ def _raster(data, columns, rows):
 
 
 def preview(image, asset, selection):
-    decoded = _decode(image, asset['offset'])
+    decoded = _decode(image, asset['offset'], models=asset['layout'] == rnc_display_models.LAYOUT)
     if decoded is None:
         raise formats.AssetError('The compressed image layout changed. Rescan ROM Explorer.')
     data = decoded[0]
+    if asset['layout'] == rnc_display_models.LAYOUT:
+        return rnc_display_models.preview(data, asset, selection)
     if asset['layout'] == BANK and (textures := _bank(data)):
         texture = formats.integer(selection.get('texture', 0), 'Texture', 0, len(textures)-1)
         palette = formats.integer(selection.get('palette', 0), 'Palette', 0, 15)
