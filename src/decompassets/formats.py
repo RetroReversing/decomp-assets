@@ -41,6 +41,12 @@ def _take(data,offset,size):
 
 def unpack(data):
     """Expand a supported stream under input/output caps, returning bytes and its codec."""
+    result, codec, _ = unpack_extent(data)
+    return result, codec
+
+
+def unpack_extent(data):
+    """Expand a stream and report the last input byte consumed."""
     data=data[:MAX_BYTES]
     if data.startswith(b'\x1f\x8b\x08') or len(data)>=2 and data[0]==0x78 and int.from_bytes(data[:2],'big')%31==0:
         codec='gzip' if data.startswith(b'\x1f\x8b') else 'zlib'
@@ -49,7 +55,7 @@ def unpack(data):
             result=decoder.decompress(data,MAX_BYTES+1)
         except zlib.error as exc:raise AssetError('This compressed stream could not be validated. Select ROM bytes or check the block offset.') from exc
         if len(result)>MAX_BYTES or not decoder.eof:raise AssetError('The compressed block is incomplete or expands beyond the 4 MiB preview limit.')
-        return result,codec
+        return result,codec,len(data)-len(decoder.unused_data)
     if data[:4] not in (b'Yaz0',b'MIO0',b'Yay0'):
         raise AssetError('No supported compressed header here. Choose ROM bytes, or a gzip, zlib, Yaz0, MIO0 or Yay0 block.')
     codec=data[:4].decode();size=int.from_bytes(_take(data,4,4),'big')
@@ -75,7 +81,7 @@ def unpack(data):
             else:length=_take(data,cursor,1)[0]+0x12;cursor+=1
             if distance>len(out) or len(out)+length>size:raise AssetError('The compressed block contains an invalid back-reference or output length.')
             for _ in range(length):out.append(out[-distance])
-    return bytes(out),codec
+    return bytes(out),codec,cursor if codec=='Yaz0' else max(cursor,links,mask_at)
 
 
 def _png(width,height,pixels):
