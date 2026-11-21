@@ -74,6 +74,8 @@ def texture_list(model):
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     """One region per model asset whose texture list checks out, holding all its textures."""
+    from .rare_assets import mesh_region
+
     results, expanded = [], 0
     for start, base, entries in tables(image, check):
         for index, (entry, following) in enumerate(zip(entries, entries[1:])):
@@ -86,10 +88,13 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 if head.decompress(image[offset+2:end], 4) != MODEL:continue
             except zlib.error:continue
             model = _inflate(image[offset:end], MAX_MODEL)
-            items = model and texture_list(model)
-            if not items:continue
+            if not model:continue
             expanded += len(model)
             if expanded > MAX_EXPANDED:return results
+            if mesh := mesh_region(index,offset,end,model,modern=True):
+                results.append(mesh)
+            items = texture_list(model)
+            if not items:continue
             first = items[0]['preview_settings']
             results.append(dict(offset=offset, size=end-offset, kind='image', confidence='validated', layout='rare-model',
                                 label=f'Model {index} · {len(items)} texture(s)', asset_index=index, textures=items,
@@ -103,6 +108,10 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
 def preview(image, asset, selection):
     """Inflate the model again and show the chosen texture's first level."""
     model = _inflate(image[asset['offset']:asset['offset']+asset['size']], MAX_MODEL)
+    from .rare_assets import SEQUEL_MESH, mesh_preview
+
+    if model and asset['layout'] == SEQUEL_MESH:
+        return mesh_preview(model,asset,selection)
     items = model and texture_list(model)
     if not items:raise AssetError('The model asset changed. Rescan the ROM.')
     texture = asset_formats.integer(selection.get('texture', 0), 'Texture', 0, len(items)-1)
