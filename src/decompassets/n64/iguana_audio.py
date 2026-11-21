@@ -69,9 +69,9 @@ def _dean_rows(image, start, end, codebooks, check):
             return []
         rate, frames, length = dean_audio.ROW.unpack_from(image, offset)
         payload_end = offset+12+length
-        cursor = start+((payload_end-start+3)&~3)
+        cursor = min(end,start+((payload_end-start+3)&~3))
         if (not 4000<=rate<=48000 or not 2<=frames<=65536 or not 4<=length<=dean_audio.MAX_ENTRY
-                or cursor>end or any(image[payload_end:cursor])):
+                or payload_end>end or any(image[payload_end:cursor])):
             return []
         sample = dict(offset=offset+12,size=length,codec='Acclaim DEAN',rate=rate,label=f'Clip {index+1}',
                       samples=(frames-1)*dean_codec.BLOCK_SAMPLES,preview_available=codebooks is not None)

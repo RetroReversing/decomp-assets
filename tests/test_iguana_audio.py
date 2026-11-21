@@ -77,3 +77,19 @@ def test_packed_directory_recovers_codebooks_from_verified_program_output():
     invalid = bytearray(image)
     invalid[first['dean_program'][0]+12] ^= 0xff
     assert all(not item['samples'][0]['preview_available'] for item in iguana_audio.regions(invalid))
+
+
+def test_packed_names_allow_aligned_payload_and_unpadded_last_clip():
+    code = aligned(literal_block(_image(padding=16,bias=0x100000)))
+    payload = bytes.fromhex('00000000000000000000000080000000')+bytes(1)
+    clip = struct.pack('>III',9450,2,len(payload))+payload
+    samples = struct.pack('>III',2,12,12+len(aligned(clip)))+aligned(clip)+clip
+    members = [(b'CODE.BIN',code),(b'data/sound/pbpsfx.bin',samples),(b'extra.bin',b'abcd'),
+               (b'extra22.bin',b'xyz')]
+    directory = b''.join(struct.pack('>I',len(data))+name+bytes(1) for name,data in members)
+    prefix = directory+bytes.fromhex('ffffffff')
+    assert len(prefix)%4
+    image = aligned(prefix)+b''.join(data for _,data in members)
+    assets = iguana_audio.regions(image)
+    assert len(assets)==2
+    assert all(wav(preview(image, asset, {}))[0]==9450 for asset in assets)

@@ -22,6 +22,8 @@ def _directory(image, start, *, aligned):
                 if image[payload:payload+4] != b'make':
                     return None
                 payload += 4
+            elif image[payload:payload+4] != b'RNC\x01':
+                payload = (payload+3)&~3
             break
         if cursor+8 > len(image):
             return None
