@@ -109,6 +109,7 @@ def regions(image, *, context=None, **kwargs):
         siff_models,
         sized_lz_catalog,
         sn64,
+        stage_banks,
         striped_images,
         tagged_deflate,
         texture_packs,
@@ -141,6 +142,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(raw_deflate_lists.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
+    known.extend(stage_banks.regions(image,**kwargs))
     known.extend(lz_banks.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
@@ -267,6 +269,7 @@ def preview(data, asset, selection):
         siff_models,
         sized_lz_catalog,
         sn64,
+        stage_banks,
         striped_images,
         tagged_deflate,
         texture_packs,
@@ -327,6 +330,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (raw_deflate_lists.TEXTURE, raw_deflate_lists.MODEL):
         return raw_deflate_lists.preview(data,asset,selection)
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
+    if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
