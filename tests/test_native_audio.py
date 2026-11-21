@@ -296,3 +296,20 @@ def test_pi_wrapper_forwards_b1_control_and_wave_table(matching_buffer):
         assert wav(audio.preview(bytes(image), bank, {}))[0] == 22050
     else:
         assert bank['audio_kind'] == 'unresolved bank'
+
+
+def test_sparse_effects_bank_accepts_more_than_256_instrument_slots():
+    image, _, wave_start = fixture()
+    control = bytearray(image[128:wave_start])
+    header = len(control)
+    slots = 398
+    control[:8] = b'B1' + struct.pack('>HI', 1, header)
+    control.extend(struct.pack('>HBBII', slots, 0, 0, 22050, 0))
+    control.extend(bytes(4 * (slots - 1)) + struct.pack('>I', 64))
+    bank = audio.bank(control, 0)
+    assert len(bank['samples']) == 2
+    assert (0, slots - 1) in bank['programs']
+    assert (0, 0) not in bank['programs']
+    struct.pack_into('>H', control, header, audio.MAX_INSTRUMENTS + 1)
+    with pytest.raises(audio.BankError, match='bank header'):
+        audio.bank(control, 0)
