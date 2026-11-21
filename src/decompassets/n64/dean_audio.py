@@ -97,8 +97,12 @@ def preview(image, asset, selection):
                     fields={'Sample rate (Hz)': rate, 'Encoded bytes': size, 'Playback': 'Codebooks unavailable'},
                     settings=settings)
 
-    count = min(frames - 1, dean_codec.MAX_BLOCKS)
-    raw = dean_codec.decode(image, asset['dean_codebooks'], image[offset + 20:offset + 20 + size], count)
+    return render_clip(image, asset['dean_codebooks'], image[offset+20:offset+20+size], rate, frames, settings)
+
+
+def render_clip(image, codebooks, payload, rate, frames, settings):
+    count = min(frames-1, dean_codec.MAX_BLOCKS, rate*30//dean_codec.BLOCK_SAMPLES)
+    raw = dean_codec.decode(image, codebooks, payload, count)
     wav, details = pcm(raw, dict(format='pcm-s16le', channels=1, rate=rate, length=len(raw)))
     details.pop('note')
     details['format'] = 'Acclaim DEAN'
