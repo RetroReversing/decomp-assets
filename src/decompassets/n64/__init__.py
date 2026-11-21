@@ -95,6 +95,7 @@ def regions(image, *, context=None, **kwargs):
         paged_textures,
         paired_audio,
         paired_resources,
+        parallel_midi,
         ptr_audio,
         rare_assets,
         rare_audio,
@@ -195,6 +196,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
+    known.extend(parallel_midi.regions(image, **kwargs))
     known.extend(lz_standard_midi.regions(image,sound_banks=sound_banks,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
@@ -256,6 +258,7 @@ def preview(data, asset, selection):
         paired_audio,
         paired_resource_models,
         paired_resource_textures,
+        parallel_midi,
         ptr_audio,
         rare_assets,
         rare_models,
@@ -340,6 +343,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
+    if asset.get('layout')==parallel_midi.LAYOUT:return parallel_midi.preview(data,asset,selection)
     if asset.get('layout')==lz_standard_midi.LAYOUT:return lz_standard_midi.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
     if asset.get('layout') in ('libmus-raw-song','libmus-binary-song','libmus-binary-effects'):return libmus_song.preview(data,asset,selection)
