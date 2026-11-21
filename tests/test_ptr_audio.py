@@ -83,3 +83,58 @@ def test_raw_song_preview_mixes_wave_bank_and_validates_table():
     broken = image[:asset['table_offset']]+b'X'+image[asset['table_offset']+1:]
     with pytest.raises(AssetError, match='failed sample validation'):
         libmus_song.preview(broken, asset, dict(sample=0))
+
+
+# Arithmetic-coded literals produced from the homemade control graph.
+_PACKED_CONTROL = bytes.fromhex(
+        '000000f4c0437af8c1cfa2dfb61d888b4cf1859b3bc457ffe74b65f4074794a97b'
+        '3fffffff89c5fc8de7f0bd2f9a177d6d17dde0bfffffffdb713fffd8385fc67ff'
+        'fffffffffffffffffff8e3c9188ffff862dffcbd3e973ffffffffffffffffffff'
+        'ffffffffffffffb757fb80b633fc0000')
+
+
+def test_lzari_controls_use_the_decoded_predictor_books():
+    from decompassets.n64 import lzari
+
+    packed = _PACKED_CONTROL
+    raw, consumed = lzari.unpack(packed)
+    assert raw == fixture()[64:308] and consumed == len(packed)
+    image = bytes(32)+packed+fixture()[320:]
+    bank, first, second = ptr_audio.regions(image)
+    assert bank['compressed_control'] == (32, len(packed))
+    assert bank['table_offset'] == 32+len(packed)
+    for row, options in ((bank, {'sample':1}), (first, {}), (second, {})):
+        assert any(wav(ptr_audio.preview(image,row,options))[2])
+    with pytest.raises(lzari.LzariError, match='Truncated'):
+        lzari.unpack(packed[:-5])
+    with pytest.raises(lzari.LzariError, match='size'):
+        lzari.unpack(packed, limit=len(raw)-1)
+
+
+def test_binary_lzari_song_maps_instruments_and_renders_with_its_adjacent_bank():
+    from decompassets import n64
+
+    # Synthetic binary header, master tempo and two note tracks.
+    song = bytes.fromhex(
+        '00000067fffffb9d19ffff7e7fff37afe53effa100fdb417e8cfbf9fa3d4d8feccb'
+        '7ffffffffffffc09ce399bffffffffffe35dfe51a3462b5126d2778240d4de41cf9acf2a00000')
+    image = bytes(32)+bytes.fromhex('00000001')+song+_PACKED_CONTROL+fixture()[320:]
+    asset, = [row for row in n64.regions(image) if row.get('layout') == 'libmus-binary-song']
+    assert asset['channels'] == 2 and asset['notes'] == 3
+    assert asset['control'] == 36+len(song)
+    rendered = n64.preview(image, asset, {'sample':0})
+    assert rendered['details']['mixed_notes'] == 2
+    assert any(wav(rendered)[2])
+    detached = image[:asset['control']]+bytes(36)+image[asset['control']:]
+    assert not any(row.get('layout') == 'libmus-binary-song' for row in n64.regions(detached))
+
+
+def test_binary_effects_validate_the_track_directory_and_map_wave_ids():
+    from decompassets.n64 import libmus_song
+
+    track = bytes.fromhex('81 00 30 18 80')
+    raw = struct.pack('>8I', 1,1,1,0,0,32+len(track),32,100)+track+struct.pack('>H',4)
+    scores = libmus_song.binary_effects(raw,{4})
+    assert [(note.wave,note.key,note.duration) for note in scores[0]['notes']] == [(4,48,24)]
+    assert libmus_song.binary_effects(raw,{0}) is None
+    assert libmus_song.binary_effects(raw[:-1],{4}) is None

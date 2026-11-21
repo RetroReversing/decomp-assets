@@ -305,7 +305,7 @@ def vadpcm(raw, coefficients, predictors, limit, *, check=lambda: None, bits=4):
     return struct.pack('<'+str(min(limit,len(out)))+'h',*out[:limit])
 
 
-def preview(image, asset, selection):
+def preview(image, asset, selection, *, book_image=None):
     if not asset.get('samples'):raise AssetError('The bank descriptors are valid, but sample-table placement is unresolved. Reimport with loader symbols or record the table evidence before previewing.')
     index=integer(selection.get('sample',0),'Sample',0,len(asset['samples'])-1);sample=asset['samples'][index]
     offset=sample['offset'];length=sample['size'];rate=sample['rate']
