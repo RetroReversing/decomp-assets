@@ -7,6 +7,7 @@
 - fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
 - rare_models.py: model textures in a deflated asset table.
+- gzip_meshes.py: geometry in paired gzip vertex and Fast3D display-list members.
 - blast_textures.py: textures packed with a demolition game's own codecs, listed in its texture table.
 - mainfs.py: image packs and model bitmaps in a party-game series' main filesystem (three packings).
 - sno.py: sno unpacking and its texture sheets, read where a caller knows a stream's start and size.
@@ -61,6 +62,7 @@ def regions(image, *, context=None, **kwargs):
         ffs,
         fla2,
         fonts,
+        gzip_meshes,
         iguana_audio,
         iguana_textures,
         inline_meshes,
@@ -114,6 +116,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(sn64.regions(image,**kwargs))
     known.extend(packed_anim.regions(image,**kwargs))
     known.extend(paged_models.regions(image,**kwargs))
+    known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
@@ -163,6 +166,7 @@ def preview(data, asset, selection):
         ffs,
         fla2,
         fonts,
+        gzip_meshes,
         iguana_audio,
         iguana_models,
         iguana_textures,
@@ -216,6 +220,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
+    if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
