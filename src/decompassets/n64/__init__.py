@@ -93,6 +93,7 @@ def regions(image, *, context=None, **kwargs):
         resources,
         rnx,
         sn64,
+        striped_images,
         tagged_deflate,
         texture_packs,
         textures,
@@ -136,6 +137,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(named_resource_images.regions(image,**kwargs))
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(tagged_deflate.regions(image,**kwargs))
+    known.extend(striped_images.regions(image,**kwargs))
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
