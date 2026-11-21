@@ -93,6 +93,7 @@ def regions(image, *, context=None, **kwargs):
         resources,
         rnx,
         sn64,
+        tagged_deflate,
         texture_packs,
         textures,
         uso_audio,
@@ -134,6 +135,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(nested_scenes.regions(image,**kwargs))
     known.extend(named_resource_images.regions(image,**kwargs))
     known.extend(named_resource_models.regions(image,**kwargs))
+    known.extend(tagged_deflate.regions(image,**kwargs))
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
@@ -215,6 +217,7 @@ def preview(data, asset, selection):
         rnx_atlas,
         scene_records,
         sn64,
+        tagged_deflate,
         texture_packs,
         textures,
         uso_audio,
@@ -236,6 +239,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)
     if asset.get('layout') in (nested_scenes.IMAGE,nested_scenes.MODEL):return nested_scenes.preview(data,asset,selection)
