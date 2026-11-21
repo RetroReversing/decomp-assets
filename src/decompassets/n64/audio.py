@@ -30,7 +30,11 @@ class BankError(ValueError):
     pass
 
 
-def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, check=lambda: None):
+class KeyMapError(BankError):
+    """A bank has sample controls but no usable MIDI note mapping."""
+
+
+def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, sample_only=False, check=lambda: None):
     """Check relocation flags, pointer graphs, predictor books and record extents."""
     if relocated and (offset < len(B1_WRAPPER) or image[offset-len(B1_WRAPPER):offset] != B1_WRAPPER):
         raise BankError('Missing relocated B1 wrapper.')
@@ -51,6 +55,8 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
         return image[offset+at:offset+at+size]
 
     def pointer(at):return resolve(int.from_bytes(take(at,4),'big'))
+
+    unmapped = set()
 
     def instrument(at, rate, bank_index, instrument_index):
         nonlocal sounds
@@ -74,9 +80,14 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
             if data[12]>127 or data[13]>127 or data[14]!=expected_flag:raise BankError('Invalid sound flags or gain.')
             env=take(envelope,16);keys=take(keymap,6,2)
             if any(value < -1 for value in struct.unpack_from('>iii',env)) or env[12]>127 or env[13]>127:raise BankError('Invalid envelope.')
-            if keys[0]>keys[1] or keys[2]>keys[3] or max(keys[:5])>127:raise BankError('Invalid key map.')
+            playable = keys[0] <= keys[1] and keys[2] <= keys[3] and max(keys[:5]) <= 127
+            if not playable:
+                if not sample_only:
+                    raise KeyMapError('Invalid key map.')
+                unmapped.add(keymap)
             sample_key = wavetable, rate
-            voices.append(dict(sample_key=sample_key, velocity_range=tuple(keys[:2]), key_range=tuple(keys[2:4]),
+            if playable and not sample_only:
+                voices.append(dict(sample_key=sample_key, velocity_range=tuple(keys[:2]), key_range=tuple(keys[2:4]),
                                key_base=keys[4], detune=keys[5] if keys[5] < 128 else keys[5]-256,
                                volume=data[13]*head[0]/127**2, pan=max(0, min(127, data[12]+head[1]-64))))
             if sample_key in samples:continue
@@ -114,6 +125,8 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
         instrument(resolve(percussion),rate,index,'percussion')
         for number in range(instruments):instrument(pointer(at+12+number*4),rate,index,number)
     if not samples:raise BankError('Bank has no supported samples.')
+    if sample_only and len(unmapped) < 2:
+        raise KeyMapError('A single invalid key map does not establish a sample-only bank.')
     for voices in visited.values():
         for voice in voices:
             voice['sample'] = samples[voice.pop('sample_key')]
@@ -219,8 +232,23 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
-        try:info=bank(image,offset,relocated=relocated,check=check)
-        except BankError:continue
+        sample_only = False
+        try:
+            info = bank(image, offset, relocated=relocated, check=check)
+        except KeyMapError:
+            if relocated:
+                continue
+            # Some sample banks leave MIDI key maps unset. Require independently
+            # validated adjacent ADPCM data before advertising these as audio.
+            try:
+                info = bank(image, offset, sample_only=True, check=check)
+            except BankError:
+                continue
+            if any(sample['codec'] != 'N64 VADPCM' for sample in info['samples']):
+                continue
+            sample_only = True
+        except BankError:
+            continue
         adjacent=(offset+info['size']+15)//16*16
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
@@ -240,6 +268,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             info['size']+=len(B1_WRAPPER)
             offset=info['offset']
             bases=[adjacent]
+        elif sample_only:
+            bases = [adjacent]
         else:
             bases=sorted(tables,key=lambda at:(at!=adjacent,at))[:MAX_TABLE_PROBES] if tables else [adjacent]
         fits=[]
@@ -247,6 +277,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             info['corroborated']=bool(uv) or base in tables
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
+            if sample_only:
+                continue
             # The control graph is useful even when table placement is unresolved.
             results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                                 reason='B1 control graph, envelopes, key maps, sample extents and predictor books passed. Sample-table placement is unresolved; no sample bytes are classified.',

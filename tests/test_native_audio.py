@@ -199,3 +199,16 @@ def test_bank_preserves_keymaps_when_programs_share_a_wavetable():
     assert second['key_range'] == (70, 90)
     assert second['key_base'] == 74 and second['detune'] == -3
     assert bank['programs'][0, 0] is bank['programs'][0, 1]
+
+
+def test_sample_bank_with_unset_midi_keys_requires_valid_adjacent_frames():
+    image, _, base = fixture()
+    broken = bytearray(image)
+    broken[128+224] = broken[128+232] = 255
+    with pytest.raises(audio.KeyMapError):
+        audio.bank(broken, 128)
+    found = audio.regions(broken)
+    assert len(found[0]['samples']) == 2
+    assert wav(audio.preview(broken, found[0], {}))[0] == 22050
+    broken[base] = 15
+    assert not audio.regions(broken)
