@@ -71,6 +71,7 @@ def regions(image, *, context=None, **kwargs):
         mwo_graphics,
         native_scene,
         packed_anim,
+        paged_models,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -112,6 +113,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(inline_tiles.regions(image,**kwargs))
     known.extend(sn64.regions(image,**kwargs))
     known.extend(packed_anim.regions(image,**kwargs))
+    known.extend(paged_models.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
@@ -170,6 +172,7 @@ def preview(data, asset, selection):
         models,
         mwo_graphics,
         packed_anim,
+        paged_models,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -200,6 +203,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout')==paged_models.LAYOUT:return paged_models.preview(data,asset,selection)
     if asset.get('layout')==packed_anim.LAYOUT:return packed_anim.preview(data,asset,selection)
     if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
