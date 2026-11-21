@@ -56,6 +56,7 @@ def regions(image, *, context=None, **kwargs):
         ffs,
         fla2,
         fonts,
+        iguana_audio,
         iguana_textures,
         libmus_song,
         mainfs,
@@ -96,6 +97,7 @@ def regions(image, *, context=None, **kwargs):
     iguana_models = []
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
+    known.extend(iguana_audio.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
@@ -124,6 +126,7 @@ def preview(data, asset, selection):
         ffs,
         fla2,
         fonts,
+        iguana_audio,
         iguana_models,
         iguana_textures,
         libmus_song,
@@ -154,6 +157,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-music':return uso_audio.music_preview(data,asset,selection)
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
+    if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)

@@ -30,19 +30,19 @@ class BankError(ValueError):
     pass
 
 
-def bank(image, offset, *, relocated=False, check=lambda: None):
+def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, check=lambda: None):
     """Check relocation flags, pointer graphs, predictor books and record extents."""
     if relocated and (offset < len(B1_WRAPPER) or image[offset-len(B1_WRAPPER):offset] != B1_WRAPPER):
         raise BankError('Missing relocated B1 wrapper.')
     end = offset+8
-    expected_flag = int(relocated)
+    if relocated:
+        relocation_base = RELOCATED_BASE+len(B1_WRAPPER)
+    expected_flag = int(relocation_base is not None)
 
     def resolve(value):
-        if not value or not relocated:
-            return value
-        return value - RELOCATED_BASE - len(B1_WRAPPER)
+        return value-relocation_base if value and relocation_base is not None else value
     samples = {}; sounds = 0; visited = {}; programs = {}
-    limit = min(len(image),offset+MAX_CONTROL)
+    limit = min(len(image),offset+MAX_CONTROL,control_end if control_end is not None else len(image))
 
     def take(at, size, alignment=4):
         nonlocal end

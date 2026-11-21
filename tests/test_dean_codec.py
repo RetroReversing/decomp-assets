@@ -31,11 +31,11 @@ def _tree(symbols):
     return b''.join(dean_codec.NODE.pack(*node) for node in nodes)
 
 
-def _image():
+def _image(padding=24):
     bias = 0x80000000
     image = bytearray(dean_codec.BAND_SIGNATURE)
     image.extend(struct.pack('>64f', *[1 / 32768] * 64))
-    image.extend(bytes(24))
+    image.extend(bytes(padding))
     descriptor = len(image)
     section = descriptor + 4 * dean_codec.DESCRIPTOR.size + 4
     image.extend(bytes(section - descriptor))

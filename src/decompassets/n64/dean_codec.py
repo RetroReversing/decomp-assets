@@ -61,10 +61,17 @@ def _book(image, at, bias):
 
 
 def _tables(image, anchor):
+    for padding in (24, 16):
+        if tables := _book_layout(image, anchor, padding):
+            return tables
+    return None
+
+
+def _book_layout(image, anchor, padding):
     # The scale ladder is followed by a fixed bank of book descriptors and
     # four sections. The first section points back to the fourth descriptor.
     scale_at = anchor + len(BAND_SIGNATURE)
-    descriptor = scale_at + SCALE_COUNT * 4 + 24
+    descriptor = scale_at + SCALE_COUNT * 4 + padding
     section = descriptor + 4 * DESCRIPTOR.size + 4
     if section + 4 * SECTION.size > len(image):
         return None
