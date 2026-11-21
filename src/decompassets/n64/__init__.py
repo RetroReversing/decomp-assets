@@ -99,6 +99,7 @@ def regions(image, *, context=None, **kwargs):
         uv_sequences,
         uv_textures,
         yay0_atlases,
+        yay0_scenes,
         zlib_meshes,
         zlib_textures,
     )
@@ -120,6 +121,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(relative_materials.regions(image,**kwargs))
     known.extend(relative_meshes.regions(image,**kwargs))
     known.extend(yay0_atlases.regions(image,context=context,**kwargs))
+    known.extend(yay0_scenes.regions(image,**kwargs))
     known.extend(inline_tiles.regions(image,**kwargs))
     known.extend(sn64.regions(image,**kwargs))
     known.extend(packed_anim.regions(image,**kwargs))
@@ -214,6 +216,7 @@ def preview(data, asset, selection):
         uv_sequences,
         uv_textures,
         yay0_atlases,
+        yay0_scenes,
         zlib_meshes,
         zlib_textures,
     )
@@ -251,6 +254,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (bolt.TEXTURE,bolt.MODEL,'bolt-vox'):return bolt.preview(data,asset,selection)
     if asset.get('layout')==arithmetic_assets.TEXTURES:return arithmetic_assets.preview(data,asset,selection)
     if asset.get('layout')==arithmetic_descriptors.LAYOUT:return arithmetic_descriptors.preview(data,asset,selection)
+    if asset.get('layout') in (yay0_scenes.IMAGE,yay0_scenes.MODEL):return yay0_scenes.preview(data,asset,selection)
     if asset.get('layout')==yay0_atlases.LAYOUT:return yay0_atlases.preview(data,asset,selection)
     if asset.get('layout') in (mwo_graphics.TEXTURES,mwo_graphics.MODELS):return mwo_graphics.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
