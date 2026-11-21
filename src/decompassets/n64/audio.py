@@ -171,15 +171,55 @@ def _candidates(image):
         yield offset,relocated
 
 
+def _uv_tables(image, check):
+    """Read a B1 control and wave table paired by their UV sound FORM."""
+    tables = {}
+    matches = re.finditer(rb'FORM.{4}UV(?:SX|MB)', image, re.S)
+    for match in itertools.islice(matches, MAX_CANDIDATES):
+        check()
+        offset = match.start()
+        end = offset+8+int.from_bytes(image[offset+4:offset+8], 'big')
+        if offset%4 or not offset+12 <= end <= len(image):
+            continue
+        at = offset+12
+        chunks = []
+        for _ in range(32):
+            if at+8 > end:
+                break
+            tag, size = struct.unpack_from('>4sI', image, at)
+            start = at+8
+            at = start+size
+            if at > end:
+                break
+            if tag != b'PAD ':
+                chunks.append((tag, start, at))
+            if len(chunks) > 2:
+                break
+        if at == end and [tag for tag, *_ in chunks] == [b'.CTL', b'.TBL']:
+            _, control, control_end = chunks[0]
+            _, wave, wave_end = chunks[1]
+            if image[control:control+2] == b'B1':
+                tables[control] = control_end, wave, wave_end
+    return tables
+
+
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
+    uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
         try:info=bank(image,offset,relocated=relocated,check=check)
         except BankError:continue
         adjacent=(offset+info['size']+15)//16*16
-        if relocated:
+        uv = uv_tables.get(offset) if not relocated else None
+        if uv:
+            control_end, wave, wave_end = uv
+            if (offset+info['size'] > control_end
+                    or any(s['relative_offset']+s['size'] > wave_end-wave for s in info['samples'])):
+                continue
+            bases = [wave]
+        elif relocated:
             # The wrapper relocates control pointers, while the sample offsets stay relative
             # to a separate, aligned table following the control graph.
             if min(sample['relative_offset'] for sample in info['samples']) != 0:
@@ -194,7 +234,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             bases=sorted(tables,key=lambda at:(at!=adjacent,at))[:MAX_TABLE_PROBES] if tables else [adjacent]
         fits=[]
         for base in bases:
-            info['corroborated']=base in tables
+            info['corroborated']=bool(uv) or base in tables
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
             # The control graph is useful even when table placement is unresolved.
@@ -203,10 +243,11 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                                 media='audio',audio_kind='unresolved bank',sample_count=len(info['samples']),samples=[],
                                 preview_settings=dict(format='auto',source='rom',offset=offset)))
             continue
-        base=fits[0];confidence='validated' if base in tables else 'tentative'
+        base=fits[0];confidence='validated' if uv or base in tables else 'tentative'
         reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
                  'B1 control graph and every ADPCM frame selector passed. ')+
-                ('A named alBnkfNew call supplies the sample-table base.' if base in tables else
+                ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
+                 'A named alBnkfNew call supplies the sample-table base.' if base in tables else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
