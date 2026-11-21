@@ -313,9 +313,10 @@ def preview(image, asset, selection, *, book_image=None):
     limit=min(sample['samples'],rate*MAX_SECONDS,(MAX_BYTES-44)//2)
     raw=image[offset:offset+sample.get('encoded_size',length)]
     if sample['codec'] in ('N64 VADPCM', 'N64 VADPCM (2-bit)'):
+        books=image if book_image is None else book_image
         at=sample['book_offset'];count=sample['predictors']*16
-        if not 0<=at<at+count*2<=len(image):raise AssetError('The ADPCM predictor book exceeds the current image.')
-        coefficients=struct.unpack_from('>'+str(count)+'h',image,at)
+        if not 0<=at<at+count*2<=len(books):raise AssetError('The ADPCM predictor book exceeds the current image.')
+        coefficients=struct.unpack_from('>'+str(count)+'h',books,at)
         pcm=vadpcm(raw,coefficients,sample['predictors'],limit,bits=sample.get('bits',4))
     else:pcm=b''.join(raw[i:i+2][::-1] for i in range(0,limit*2,2))
     output=io.BytesIO()

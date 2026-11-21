@@ -1,6 +1,6 @@
 [project]
 name = "decompassets"
-version = "0.44.0"
+version = "0.45.0"
 description = "Find and preview game assets (textures, audio banks, models, fonts) inside cartridge and disc images by their structure, with no per-game offsets."
 readme = "README.md"
 license = "AGPL-3.0-only"
