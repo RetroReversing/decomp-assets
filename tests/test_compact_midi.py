@@ -70,7 +70,8 @@ def test_music_form_uses_adjacent_named_bank_for_stereo_preview(sequence_first):
     assert result['details']['skipped_notes'] == 0
 
 
-def test_standalone_music_directory_follows_sample_extent():
+@pytest.mark.parametrize('padding', [2, 6])
+def test_standalone_music_directory_follows_sample_extent(padding):
     from decompassets.n64 import audio
 
     from .test_native_audio import fixture
@@ -79,12 +80,14 @@ def test_standalone_music_directory_follows_sample_extent():
     song = _sequence(bytes.fromhex('00 90 3c 60 18 00 ff 2f'))
     sequence = b'S1'+struct.pack('>HII', 1, 12, len(song))+song
     # Trim unused fixture tail to the sample's exact extent, then align.
-    rom = image[:base+58]+bytes(2)+sequence
+    rom = image[:base+58]+bytes(padding)+sequence
     asset, = uv_sequences.regions(rom, sound_banks=audio.regions(rom))
     assert asset['table_offset'] == base
     assert uv_sequences.preview(rom, asset, {'sample': 0})['details']['mixed_notes'] == 1
-    shifted = image[:base+58]+bytes(6)+sequence
+    shifted = image[:base+58]+bytes(10)+sequence
     assert not uv_sequences.regions(shifted, sound_banks=audio.regions(shifted))
+    damaged = image[:base+58]+b'\x01'+bytes(padding - 1)+sequence
+    assert not uv_sequences.regions(damaged, sound_banks=audio.regions(damaged))
 
 
 def test_detached_music_directory_uses_the_complete_instrument_map():
