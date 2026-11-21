@@ -12,19 +12,23 @@ def models(data):
     if len(data) < 24:
         return []
     _, _, count, table, _, vertices = struct.unpack_from('>6I', data)
-    if not 1 <= count <= 4096 or table < 24 or table + count * 16 != vertices or vertices > len(data):
+    if not 1 <= count <= 512 or table < 24 or table + count * 16 != vertices or vertices > len(data):
         return []
     found = []
     for number in range(count):
         _, length, _, batches = struct.unpack_from('>4I', data, table + number * 16)
         count_batches = length >> 16
-        if not 1 <= count_batches <= 1024 or not 0 < batches <= table - count_batches * 8:
+        if not 1 <= count_batches <= 256 or not 0 < batches <= table - count_batches * 8:
             continue
         pieces = []
         patched = bytearray(data)
+        commands = 0
         for index in range(count_batches):
             size, start = struct.unpack_from('>II', data, batches + index * 8)
             if size & 0xff or not 1 <= size >> 8 <= 4096:
+                break
+            commands += size >> 8
+            if commands > 8192:
                 break
             end = start + (size >> 8) * 8
             if start % 8 or not 24 <= start < end <= batches:
