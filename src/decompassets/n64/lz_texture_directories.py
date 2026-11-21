@@ -186,9 +186,10 @@ def textures(data, bank):
     return result
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
+def regions(image, *, models=None, check=lambda: None, progress=lambda _: None):
+    from . import lz_directory_models
     for directory in _directory(image, check):
-        assets, valid, decoded = [], 0, 0
+        assets, model_assets, valid, decoded = [], [], 0, 0
         for offset, end in directory:
             check()
             if decoded >= 32 * 1024 * 1024:
@@ -201,6 +202,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             if (directory_entry := layout(data)) is None:
                 continue
             valid += 1
+            if models is not None and (entries := lz_directory_models.meshes(data, directory_entry, check)):
+                model_assets.append(lz_directory_models.asset(offset, used, entries))
             if not (items := textures(data, directory_entry)):
                 continue
             settings = dict(items[0]['preview_settings'], source='rom', offset=offset)
@@ -209,6 +212,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                                frames=1, palettes=items[0]['palettes'], preview_settings=settings,
                                reason='The cartridge directory bounds the LZ stream and its named RDP texture records.'))
         if valid >= 8:
+            if models is not None:
+                models.extend(model_assets)
             return assets
     return []
 
