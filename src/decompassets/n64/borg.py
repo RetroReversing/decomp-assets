@@ -4,6 +4,7 @@ import re
 import struct
 
 from .. import formats
+from . import borg_lzb
 
 _HEADER = struct.Struct('>II')
 _ROW = struct.Struct('>HHIII')
@@ -70,16 +71,32 @@ def _texture(data, kind):
     return settings
 
 
+def member(image, offset, stored, expanded, compression):
+    if not 0 <= offset < offset+stored <= len(image) or not 0 < expanded <= formats.MAX_BYTES:
+        raise formats.AssetError('The Borg member exceeds its recorded extent.')
+    data = image[offset:offset+stored]
+    if compression == 2:
+        return borg_lzb.unpack(data, expanded)
+    if compression == 0 and stored == expanded:
+        return data
+    raise formats.AssetError('The Borg member uses an unsupported encoding.')
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     result = []
-    for index, (kind, compression, stored, _, offset) in enumerate(entries(image, check)):
-        if kind not in (1, 8) or compression:
+    for index, (kind, compression, stored, expanded, offset) in enumerate(entries(image, check)):
+        if kind not in (1, 8) or compression not in (0, 2):
             continue
         check()
-        settings = _texture(image[offset:offset+stored], kind)
+        try:
+            data = member(image, offset, stored, expanded, compression)
+        except formats.AssetError:
+            continue
+        settings = _texture(data, kind)
         if settings:
             result.append(dict(offset=offset, size=stored, kind='image', layout='borg-texture',
                                confidence='validated', label=f'Borg texture {index}', borg_type=kind,
+                               compression=compression, expanded_size=expanded,
                                preview_settings=dict(format='auto', source='rom', offset=offset, display_format=settings['format']),
                                width=settings['width'], height=settings['height'], frames=1,
                                palettes=int('palette_offset' in settings),
@@ -90,7 +107,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
 
 def preview(image, asset, selection):
     offset = asset['offset']
-    data = image[offset:offset+asset['size']]
+    data = member(image, offset, asset['size'], asset.get('expanded_size', asset['size']), asset.get('compression', 0))
     settings = _texture(data, asset['borg_type'])
     if settings is None:
         raise formats.AssetError('The Borg image changed. Rescan ROM Explorer.')
