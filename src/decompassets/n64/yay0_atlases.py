@@ -43,7 +43,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     context = context or {}
     read = context.get('read_code')
     segments = context.get('segments', ())
-    if not read or not segments or b'Yay0\x00\x00\x10\x00' not in image:
+    if not read or not segments or image.find(b'Yay0\x00\x00\x10\x00') < 0:
         return []
     drawing = []
     loaders = []
