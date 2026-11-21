@@ -194,14 +194,14 @@ def binary_song(data, waves):
     events, tempos, loops = [], [], 0
     try:
         for start, end in zip((master,*tracks), (*tracks,len(data))):
-            _, notes, changes, repeats = _track(data,start,end,waves,instruments=lookup,
+            extent, notes, changes, repeats = _track(data,start,end,waves,instruments=lookup,
                                                drums=data[drum:master])
             events.extend(notes)
             tempos.extend(changes)
             loops += repeats
     except ValueError:
         return None
-    return dict(notes=events, tempos=tempos, loops=loops, channels=count) if events else None
+    return dict(notes=events, tempos=tempos, loops=loops, channels=count, extent=extent) if events else None
 
 
 def binary_effects(data, waves):
@@ -209,10 +209,10 @@ def binary_effects(data, waves):
         return None
     count, second, third, reserved, drum, instruments = _HEADER.unpack_from(data)
     start = 24+count*8
-    if (not 1 <= count <= 256 or count != second or count != third or reserved or drum
-            or not start < instruments < len(data) or len(data)-instruments != count*2):
+    if (not 1 <= third <= second <= count <= 256 or reserved or drum
+            or not start < instruments < len(data) or len(data)-instruments != third*2):
         return None
-    lookup = struct.unpack_from(f'>{count}H', data, instruments)
+    lookup = struct.unpack_from(f'>{third}H', data, instruments)
     if not set(lookup) <= waves:
         return None
     tracks = [offset for offset,_ in struct.iter_unpack('>2I', data[24:start])]
@@ -232,12 +232,17 @@ def binary_effects(data, waves):
 
 def _effects_region(image, bank, waves, check):
     end = bank['offset']+bank['size']
-    for start in range((end+7)&~3, min(end+32,len(image)-8), 4):
-        if image[start-4:start] != b'\0\0\0\1':
+    order = bank.get('control_byte_order','big')
+    # Arithmetic renormalization can read one lookahead byte from a
+    # following section. Confirm little-endian effects against both neighbors.
+    for start in range((end+2)&~3, min(end+32,len(image)-8), 4):
+        if order == 'big' and image[start-4:start] != b'\0\0\0\1':
             continue
         try:
-            data, size = lzari.unpack(image[start:start+_MAX_BYTES],limit=_MAX_BYTES,check=check)
+            data, size = lzari.unpack(image[start:start+_MAX_BYTES],order=order,limit=_MAX_BYTES,check=check)
         except lzari.LzariError:
+            continue
+        if order == 'little' and not 0 <= bank['table_offset']-start-size <= 8:
             continue
         scores = binary_effects(data,waves)
         if scores is None:
@@ -245,12 +250,29 @@ def _effects_region(image, bank, waves, check):
         return dict(offset=start, size=size, kind='audio sequence', media='audio',
                     audio_kind='indexed sample directory', control=bank['offset'],
                     compressed_control=bank['compressed_control'], table_offset=bank['table_offset'],
+                    control_byte_order=order, sequence_byte_order=order,
                     samples=[dict(label=f'Effect {i}',codec='Nintendo libmus') for i in range(1,len(scores)+1)],
                     layout='libmus-binary-effects', confidence='validated', label='libmus sequenced effects',
                     channels=1, notes=sum(len(score['notes']) for score in scores), loops=0,
                     reason='The adjacent LZARI effects directory resolves its tracks to the preceding verified wave bank.',
                     preview_settings=dict(format='auto', source='rom', offset=start))
     return None
+
+
+def _wave_tail_songs(image, bank, waves, check):
+    """Walk eight-byte-aligned songs immediately after a bank's wave table."""
+    end = max(sample['offset']+sample['size'] for sample in bank['samples'])
+    start = (end+7)&~7
+    for _ in range(128):
+        check()
+        if image[start:start+4] != b'\0\0\x02\x15':
+            break
+        score = binary_song(image[start:start+_MAX_BYTES],waves)
+        if score is None:
+            break
+        yield start,score['extent'],score
+        start = (start+score['extent']+7)&~7
+
 
 
 def _binary_regions(image, banks, check):
@@ -272,6 +294,7 @@ def _binary_regions(image, banks, check):
             continue
         matches.append((start,size,data))
     assets = []
+    song_number = 0
     for bank in packed_banks:
         end = bank['offset']
         waves = {sample['instrument'] for sample in bank['samples']}
@@ -286,15 +309,20 @@ def _binary_regions(image, banks, check):
                 break
             adjacent.append((start,size,score))
             end = start
-        for start,size,score in reversed(adjacent):
-            number = len(assets)+1
+        raw = list(_wave_tail_songs(image,bank,waves,check))
+        songs = [(start,size,score,True) for start,size,score in reversed(adjacent)]
+        songs.extend((start,size,score,False) for start,size,score in raw)
+        for start,size,score,packed in songs:
+            song_number += 1
             assets.append(dict(offset=start, size=size, kind='music sequence', media='audio',
                                audio_kind='indexed sample directory', control=bank['offset'],
                                compressed_control=bank['compressed_control'], table_offset=bank['table_offset'],
-                               samples=[dict(offset=start, size=size, codec='Nintendo libmus', label=f'Song {number}')],
-                               layout='libmus-binary-song', confidence='validated', label=f'libmus binary song {number}',
+                               control_byte_order=bank.get('control_byte_order','big'), sequence_packed=packed,
+                               samples=[dict(offset=start, size=size, codec='Nintendo libmus', label=f'Song {song_number}')],
+                               layout='libmus-binary-song', confidence='validated', label=f'libmus binary song {song_number}',
                                channels=score['channels'], notes=len(score['notes']), loops=score['loops'],
-                               reason='Adjacent LZARI song streams resolve all channels and instruments to the following verified bank.',
+                               reason=('Adjacent LZARI song streams resolve to the following control bank.' if packed else
+                                       'Aligned song streams resolve to the preceding wave bank.'),
                                preview_settings=dict(format='auto', source='rom', offset=start)))
         if effects := _effects_region(image,bank,waves,check):
             assets.append(effects)
@@ -341,7 +369,7 @@ def _play(image, asset, selection):
     try:
         if span := asset.get('compressed_control'):
             start, size = span
-            books, _ = lzari.unpack(image[start:start+size],limit=ptr_audio.MAX_CONTROL)
+            books, _ = lzari.unpack(image[start:start+size],order=asset.get('control_byte_order','big'),limit=ptr_audio.MAX_CONTROL)
             bank = {**ptr_audio.bank(books, 0), 'offset':start, 'size':size}
         else:
             bank = ptr_audio.bank(image, asset['control'])
@@ -358,7 +386,9 @@ def _play(image, asset, selection):
             score = song(image[start:start+size], waves)
         else:
             try:
-                raw, _ = lzari.unpack(image[start:start+size],limit=_MAX_BYTES)
+                raw = image[start:start+size]
+                if asset.get('sequence_packed',True):
+                    raw, _ = lzari.unpack(raw,order=asset.get('sequence_byte_order','big'),limit=_MAX_BYTES)
                 if asset['layout'] == 'libmus-binary-effects':
                     scores = binary_effects(raw,set(waves))
                     if scores and index < len(scores):
