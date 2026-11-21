@@ -82,9 +82,9 @@ def member(image, offset, stored, expanded, compression):
     raise formats.AssetError('The Borg member uses an unsupported encoding.')
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
+def regions(image, *, check=lambda: None, progress=lambda _: None, rows=None):
     result = []
-    for index, (kind, compression, stored, expanded, offset) in enumerate(entries(image, check)):
+    for index, (kind, compression, stored, expanded, offset) in enumerate(entries(image, check) if rows is None else rows):
         if kind not in (1, 8) or compression not in (0, 2):
             continue
         check()
