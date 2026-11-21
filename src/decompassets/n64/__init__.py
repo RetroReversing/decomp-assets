@@ -68,6 +68,7 @@ def regions(image, *, context=None, **kwargs):
         inline_meshes,
         inline_tiles,
         libmus_song,
+        lz_banks,
         mainfs,
         models,
         mwo_graphics,
@@ -106,6 +107,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
+    known.extend(lz_banks.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
     known.extend(arithmetic_descriptors.regions(image,context=context,**kwargs))
@@ -172,6 +174,7 @@ def preview(data, asset, selection):
         iguana_textures,
         inline_tiles,
         libmus_song,
+        lz_banks,
         mainfs,
         models,
         mwo_graphics,
@@ -220,6 +223,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
+    if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
