@@ -72,6 +72,7 @@ def regions(image, *, context=None, **kwargs):
         rare_assets,
         rare_audio,
         rare_models,
+        relative_materials,
         reloc_files,
         resources,
         rnx,
@@ -97,6 +98,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
+    known.extend(relative_materials.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
