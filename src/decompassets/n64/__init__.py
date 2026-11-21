@@ -219,6 +219,7 @@ def preview(data, asset, selection):
         rnx_atlas,
         scene_records,
         sn64,
+        striped_images,
         tagged_deflate,
         texture_packs,
         textures,
@@ -242,6 +243,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
+    if asset.get('layout')==striped_images.LAYOUT:return striped_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)
     if asset.get('layout') in (nested_scenes.IMAGE,nested_scenes.MODEL):return nested_scenes.preview(data,asset,selection)
