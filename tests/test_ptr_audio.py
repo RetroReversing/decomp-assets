@@ -269,3 +269,26 @@ def test_split_raw_sequences_pair_music_and_effects_with_their_wave_banks():
     ambiguous = dict(effects, samples=[*effects['samples'], *music['samples']])
     assert not libmus_song._split_raw_sequences(image, [music, ambiguous], lambda: None)
     assert not libmus_song._split_raw_sequences(image, [music, dict(effects, table_offset=320)], lambda: None)
+
+
+def test_contiguous_raw_songs_use_the_unique_wave_bank():
+    from decompassets.n64 import libmus_song, lzari
+
+    song, _ = lzari.unpack(_PACKED_SONG)
+    image = bytearray(fixture(pcm=True,loop=True) + bytes(64))
+    if len(image)%2:
+        image.append(0)
+    offsets = []
+    for _ in range(3):
+        offsets.append(len(image))
+        image.extend(song)
+        if len(image)%2:
+            image.append(0x7f)  # the original alignment byte need not be zero
+    banks = [bank for bank in ptr_audio.regions(image) if bank.get('samples')]
+    rows = libmus_song._contiguous_raw_songs(image,banks,lambda:None)
+    assert [row['offset'] for row in rows]==offsets
+    assert all(any(wav(libmus_song.preview(image,row,{'sample':0}))[2]) for row in rows)
+    assert not libmus_song._contiguous_raw_songs(image,[banks[0],dict(banks[0],offset=999)],lambda:None)
+    broken=bytearray(image)
+    broken[offsets[1]+4:offsets[1]+8]=bytes(4)
+    assert not libmus_song._contiguous_raw_songs(broken,banks,lambda:None)
