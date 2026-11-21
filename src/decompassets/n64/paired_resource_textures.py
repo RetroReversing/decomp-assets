@@ -81,22 +81,14 @@ def textures(data):
     return list(found.values())
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
-    result = []
-    for directory, members in paired_resources.directories(image, check):
-        for index, (offset, size) in enumerate(members, 1):
-            check()
-            decoded = paired_resources.unpack(image, offset, size)
-            if not decoded or not (items := textures(decoded)):
-                continue
-            first = items[0]
-            result.append(dict(offset=offset, size=size, kind='image', layout=LAYOUT, confidence='validated',
-                               directory=directory, label=f'Resource {index} · {len(items)} textures',
-                               textures=items, texture_count=len(items), frames=1, palettes=first['palettes'],
-                               levels=first['levels'],
-                               preview_settings=dict(first['preview_settings'], offset=offset, source='rom'),
-                               reason='Local RDP commands give the format, row pitch, dimensions and palette.'))
-    return result
+def asset(offset, size, directory, index, items):
+    first = items[0]
+    return dict(offset=offset, size=size, kind='image', layout=LAYOUT, confidence='validated',
+                directory=directory, label=f'Resource {index} · {len(items)} textures',
+                textures=items, texture_count=len(items), frames=1, palettes=first['palettes'],
+                levels=first['levels'],
+                preview_settings=dict(first['preview_settings'], offset=offset, source='rom'),
+                reason='Local RDP commands give the format, row pitch, dimensions and palette.')
 
 
 def preview(image, asset, selection):

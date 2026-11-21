@@ -4,7 +4,7 @@ import base64
 import struct
 import zlib
 
-from decompassets.n64 import paired_resource_textures, paired_resources, preview
+from decompassets.n64 import paired_resources, preview
 
 
 def _packed(data):
@@ -45,7 +45,7 @@ def test_paired_resources_reject_truncated_tokens_and_invalid_history():
 
 
 def test_paired_texture_preview_uses_the_render_tile_and_local_palette():
-    asset, = paired_resource_textures.regions(image := _directory(_texture()))
+    asset, = paired_resources.regions(image := _directory(_texture()))
     row, = asset['textures']
     assert row['preview_settings'] == dict(format='ci4', width=16, height=2, offset=0,
                                           palette_offset=16, palette_format='rgba5551-be')
@@ -59,7 +59,24 @@ def test_paired_texture_preview_uses_the_render_tile_and_local_palette():
 
     invalid = bytearray(_texture())
     invalid[48 + 7 * 8 + 4] = 9
-    assert not paired_resource_textures.regions(_directory(invalid))
+    assert not paired_resources.regions(_directory(invalid))
     changed = bytearray(image)
     changed[11] ^= 2
-    assert not paired_resource_textures.regions(changed)
+    assert not paired_resources.regions(changed)
+
+
+def test_paired_scene_previews_local_display_list_meshes():
+    vertices = b''.join(struct.pack('>3hH2h4B', x, y, 0, 0, 0, 0, 255, 255, 255, 255)
+                        for x, y in ((0, 0), (8, 0), (0, 8)))
+    head = struct.pack('>2I', 0x01003006, 0x06000000)
+    end = struct.pack('>2I', 0xdf000000, 0)
+    first = head + struct.pack('>2I', 0x05000204, 0) + end
+    second = head + struct.pack('>2I', 0x05000402, 0) + end
+    image = _directory(vertices + first + second)
+    asset, = paired_resources.regions(image)
+    assert len(asset['meshes']) == 2
+    result = preview(image, asset, {'mesh': 1})
+    assert result['vertices'] == [(0, 0, 0), (8, 0, 0), (0, 8, 0)]
+    assert result['surfaces'][0]['indices'] == (0, 2, 1)
+    assert result['settings']['mesh'] == 1
+    assert not paired_resources.regions(_directory(vertices + first[:-8]))
