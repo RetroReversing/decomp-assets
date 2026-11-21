@@ -37,19 +37,16 @@ def textures(data):
     return items if position == len(data) else []
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
-    result = []
-    for offset, size, data in iain.members(image, check):
-        if not (items := textures(data)):
-            continue
-        first = items[0]
-        label = first['label'] if len(items) == 1 else f"{first['label']} · {len(items)} textures"
-        settings = dict(first['preview_settings'], offset=offset, source='rom')
-        result.append(dict(offset=offset, size=size, kind='image', layout=LAYOUT, confidence='validated',
-                           label=label, textures=items, texture_count=len(items), frames=1, palettes=0,
-                           levels=first['levels'], preview_settings=settings,
-                           reason='The archive expands to a complete table of named textures with exact pixel spans.'))
-    return result
+def asset(offset, size, data):
+    if not (items := textures(data)):
+        return None
+    first = items[0]
+    label = first['label'] if len(items) == 1 else f"{first['label']} · {len(items)} textures"
+    settings = dict(first['preview_settings'], offset=offset, source='rom')
+    return dict(offset=offset, size=size, kind='image', layout=LAYOUT, confidence='validated',
+                label=label, textures=items, texture_count=len(items), frames=1, palettes=0,
+                levels=first['levels'], preview_settings=settings,
+                reason='The archive expands to a complete table of named textures with exact pixel spans.')
 
 
 def preview(image, asset, selection):
