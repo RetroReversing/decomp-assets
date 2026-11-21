@@ -73,7 +73,9 @@ def layout(data):
     return items
 
 
-def regions(image, *, check=lambda:None, progress=lambda _:None):
+def regions(image, *, models=None, check=lambda:None, progress=lambda _:None):
+    from . import iguana_models
+
     assets = []
     expanded = 0
     for hit in re.finditer(re.escape(_MAGIC), image):
@@ -91,6 +93,8 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             data, extent = unpack(image, offset, check=check)
         except rnc.RncError:
             continue
+        if models is not None and (model := iguana_models.asset(image,data,offset,extent,check=check)):
+            models.append(model)
         items = layout(data)
         if items:
             first = items[0]['preview_settings']
