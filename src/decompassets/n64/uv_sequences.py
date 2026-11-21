@@ -15,7 +15,7 @@ def directories(image, *, check=lambda: None):
     for match in islice(re.finditer(rb'FORM.{4}UVMS', image, re.S), 128):
         offset = match.start()
         end = offset+8+int.from_bytes(image[offset+4:offset+8], 'big')
-        if offset%4 or not offset+12 <= end <= len(image):
+        if offset%2 or not offset+12 <= end <= len(image):
             continue
         at = offset+12
         for _ in range(16):
@@ -81,8 +81,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None, sound_banks=(
     banks = audio._uv_tables(image, check)
     result = []
     for offset, end, rows in directories(image, check=check):
-        music = [control for control, (_, _, wave_end, tag) in banks.items()
-                 if wave_end == offset and tag == b'UVMB']
+        music = [control for control, (_, _, wave_end, tag, bank_start) in banks.items()
+                 if tag == b'UVMB' and (wave_end == offset or bank_start == end)]
         result.append(_asset(offset, end, rows, 'UV music directory',
                              'The indexed sequences fit the named ROM chunk and decode as compact MIDI.',
                              music[0] if len(music) == 1 else None))
@@ -173,8 +173,9 @@ def _play(image, asset, selection):
         bounds = audio._uv_tables(image, lambda: None).get(control)
         if not bounds:
             raise formats.AssetError('The UV music bank changed. Rescan ROM Explorer.')
-        control_end, base, wave_end, tag = bounds
-        if (tag != b'UVMB' or control+bank['size'] > control_end or wave_end != asset['offset']
+        control_end, base, wave_end, tag, bank_start = bounds
+        if (tag != b'UVMB' or control+bank['size'] > control_end
+                or (wave_end != asset['offset'] and bank_start != asset['offset']+asset['size'])
                 or _sample_end(bank['samples'], base) > wave_end):
             raise formats.AssetError('The UV music bank exceeds its named chunks. Rescan ROM Explorer.')
         bank['corroborated'] = True

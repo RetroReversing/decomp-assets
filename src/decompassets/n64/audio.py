@@ -346,7 +346,7 @@ def _uv_tables(image, check):
         check()
         offset = match.start()
         end = offset+8+int.from_bytes(image[offset+4:offset+8], 'big')
-        if offset%4 or not offset+12 <= end <= len(image):
+        if offset%2 or not offset+12 <= end <= len(image):
             continue
         at = offset+12
         chunks = []
@@ -366,7 +366,7 @@ def _uv_tables(image, check):
             _, control, control_end = chunks[0]
             _, wave, wave_end = chunks[1]
             if image[control:control+2] == b'B1':
-                tables[control] = control_end, wave, wave_end, image[offset+8:offset+12]
+                tables[control] = control_end, wave, wave_end, image[offset+8:offset+12], offset
     return tables
 
 
@@ -401,7 +401,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         adjacent=(offset+info['size']+15)//16*16
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
-            control_end, wave, wave_end, _ = uv
+            control_end, wave, wave_end, _, _ = uv
             if (offset+info['size'] > control_end
                     or any(s['relative_offset']+s['size'] > wave_end-wave for s in info['samples'])):
                 continue
