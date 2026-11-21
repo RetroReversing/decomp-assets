@@ -181,6 +181,10 @@ def _play(image, asset, selection):
         bank['corroborated'] = True
     if not audio._fits(image, bank, base, [audio.MAX_HEADER_CHECKS], lambda: None):
         raise formats.AssetError('The UV music bank failed sample validation. Rescan ROM Explorer.')
+    return render_sequence(image, asset, index, bank, base)
+
+
+def render_sequence(image, asset, index, bank, base, *, book_image=None):
     row = asset['sequences'][index]
     start, size = row['offset'], row['size']
     end = asset['offset']+asset['size']
@@ -188,7 +192,8 @@ def _play(image, asset, selection):
     if score is None:
         raise formats.AssetError('The compact MIDI sequence changed. Rescan ROM Explorer.')
     division, events = score
-    pcm, stats = compact_midi_render.render(image, base, division, events, note_voices(events, bank['programs']))
+    pcm, stats = compact_midi_render.render(image, base, division, events, note_voices(events, bank['programs']),
+                                            book_image=book_image)
     payload, details = formats.pcm(pcm, dict(format='pcm-s16le', channels=2,
                                               rate=compact_midi_render.RATE, length=len(pcm)))
     details.update(stats, format='Nintendo compact MIDI', sample=index,
