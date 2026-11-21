@@ -10,12 +10,13 @@ _MAX_COMMANDS = 4096
 _STATE = frozenset((0xb6, 0xb7, 0xb9, 0xba, 0xbb, 0xbc, 0xd7, 0xd9, 0xe2, 0xe3)) | frozenset(range(0xe6, 0x100))
 
 
-def geometry(image, offset, end, displacements, *, extra_state=None):
+def geometry(image, offset, end, displacements, *, extra_state=None, vertex_end=None):
     from .display_lists import _space, _vertex_count
 
     if not 0 <= offset < end or offset % 8:
         return None
 
+    vertex_end = len(image) if vertex_end is None else min(vertex_end,len(image))
     cache, vertices, lookup, faces = [None]*64, [], {}, []
     dialect = None
     for at in range(offset, min(end, offset+_MAX_COMMANDS*8), 8):
@@ -47,7 +48,7 @@ def geometry(image, offset, end, displacements, *, extra_state=None):
             if mapping is None or not count or not 0 <= dest < dest+count <= limit:
                 return None
             start = mapping+(w1 & 0xffffff)
-            if start < 0 or start%8 or start+count*_VERTEX.size > len(image):
+            if start < 0 or start%8 or start+count*_VERTEX.size > vertex_end:
                 return None
             for slot, pointer in enumerate(range(start, start+count*_VERTEX.size, _VERTEX.size), dest):
                 if pointer not in lookup:
@@ -99,7 +100,8 @@ def regions(image, group, displacements, pointers, check):
 
 def preview(image, asset, selection):
     offset = asset['offset']
-    parsed = geometry(image, offset, offset+asset['size'], dict(asset['address_maps']))
+    parsed = geometry(image, offset, offset+asset['size'], dict(asset['address_maps']),
+                      vertex_end=asset.get('vertex_end'))
     if parsed is None:
         raise formats.AssetError('The F3DEX list changed. Rescan ROM Explorer.')
     _, vertices, faces = parsed

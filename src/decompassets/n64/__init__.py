@@ -63,6 +63,8 @@ def regions(image, *, context=None, **kwargs):
         fonts,
         iguana_audio,
         iguana_textures,
+        inline_meshes,
+        inline_tiles,
         libmus_song,
         mainfs,
         models,
@@ -105,6 +107,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(relative_materials.regions(image,**kwargs))
     known.extend(relative_meshes.regions(image,**kwargs))
     known.extend(yay0_atlases.regions(image,context=context,**kwargs))
+    known.extend(inline_tiles.regions(image,**kwargs))
+    known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
