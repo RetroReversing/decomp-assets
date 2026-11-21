@@ -93,7 +93,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(borg_dcm.regions(image,borg_rows,borg_samples,**kwargs))
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
-    known.extend(iguana_textures.regions(image,**kwargs))
+    iguana_models = []
+    known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
+    known.extend(iguana_models)
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
@@ -122,6 +124,7 @@ def preview(data, asset, selection):
         ffs,
         fla2,
         fonts,
+        iguana_models,
         iguana_textures,
         libmus_song,
         mainfs,
@@ -151,6 +154,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-music':return uso_audio.music_preview(data,asset,selection)
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
+    if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
