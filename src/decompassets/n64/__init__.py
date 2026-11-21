@@ -43,6 +43,7 @@ def regions(image, *, context=None, **kwargs):
         archived_models,
         audio,
         blast_textures,
+        borg,
         dean_audio,
         dialogue,
         dialogue_links,
@@ -77,6 +78,7 @@ def regions(image, *, context=None, **kwargs):
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(display_meshes)
+    known.extend(borg.regions(image,**kwargs))
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
@@ -96,6 +98,7 @@ def preview(data, asset, selection):
         archived_models,
         audio,
         blast_textures,
+        borg,
         dean_audio,
         dialogue,
         display_meshes,
@@ -137,6 +140,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
+    if asset.get('layout')=='borg-texture':return borg.preview(data,asset,selection)
     if asset.get('layout')=='uv-model':return uv_models.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
