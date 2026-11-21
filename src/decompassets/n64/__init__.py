@@ -96,6 +96,7 @@ def regions(image, *, context=None, **kwargs):
         paired_audio,
         paired_resources,
         parallel_midi,
+        prefixed_texture_catalog,
         ptr_audio,
         rare_assets,
         rare_audio,
@@ -148,6 +149,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rzip_catalog.regions(image,**kwargs))
     known.extend(rzip_models.regions(image,**kwargs))
     known.extend(rzip_audio.regions(image,**kwargs))
+    known.extend(prefixed_texture_catalog.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
@@ -265,6 +267,7 @@ def preview(data, asset, selection):
         paired_resource_models,
         paired_resource_textures,
         parallel_midi,
+        prefixed_texture_catalog,
         ptr_audio,
         rare_assets,
         rare_models,
@@ -348,6 +351,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == rzip_catalog.TEXTURE:return rzip_catalog.preview(data,asset,selection)
     if asset.get('layout') == rzip_models.MODEL:return rzip_models.preview(data,asset,selection)
     if asset.get('layout') == rzip_audio.LAYOUT:return rzip_audio.preview(data,asset,selection)
+    if asset.get('layout') == prefixed_texture_catalog.LAYOUT:return prefixed_texture_catalog.preview(data,asset,selection)
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
