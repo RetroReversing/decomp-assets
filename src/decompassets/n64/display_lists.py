@@ -254,16 +254,16 @@ def _textures(image, group):
             touched.add(number)
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
-    """Textures named by uncompressed display lists, in files whose load address can be worked out."""
+def mapped_files(image, *, check=lambda: None, progress=lambda _: None):
+    """Yield clusters with independently corroborated address displacements."""
     progress(dict(phase='Reading display lists', done=0, total=3))
     vertices, loads = _commands(image, check)
     files = _files(vertices, loads)
-    if not files:return []
+    if not files:return
     progress(dict(phase='Reading display lists', done=1, total=3))
     evidence = _Evidence(image, check)
     progress(dict(phase='Placing display-list files', done=2, total=3))
-    known, textures = {}, {}
+    known = {}
     for index, group in enumerate(files):
         check()
         progress(dict(phase='Placing display-list files', done=index, total=len(files)))
@@ -274,6 +274,18 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             displacements[space] = displacement
             known.setdefault(space, [])
             if displacement not in known[space]:known[space].insert(0, displacement)
+        if displacements:
+            yield group, displacements, evidence.words
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None, models=None):
+    """Textures named by uncompressed display lists with a resolved placement."""
+    textures = {}
+    for group, displacements, pointers in mapped_files(image, check=check, progress=progress):
+        if models is not None:
+            from .display_meshes import regions as meshes
+
+            models.extend(meshes(image, group, displacements, pointers, check))
         for found in _textures(image, group):
             if found['space'] not in displacements:continue
             offset = found['address'] + displacements[found['space']]
