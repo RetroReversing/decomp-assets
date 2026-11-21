@@ -17,6 +17,7 @@
 - uv_models.py: local geometry from UVMD models.
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - rnx.py: chained byte-sum pages and checked resource payloads.
+- lz_directory_models.py: local F3DEX2 geometry and LODs in indexed LZ object banks.
 - lz_texture_directories.py: named textures and RDP strips inside indexed LZ banks.
 - packed_tim.py: TIM sprites in adaptive Huffman-compressed BAM3 banks.
 - dialogue.py: scene headings, cue text and speaker keys in indexed RAW! scripts.
@@ -141,7 +142,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(nested_scenes.regions(image,**kwargs))
     known.extend(named_resource_images.regions(image,**kwargs))
     known.extend(packed_tim.regions(image,**kwargs))
-    known.extend(lz_texture_directories.regions(image,**kwargs))
+    indexed_models = []
+    known.extend(lz_texture_directories.regions(image,models=indexed_models,**kwargs))
+    known.extend(indexed_models)
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(tagged_deflate.regions(image,**kwargs))
     known.extend(striped_images.regions(image,**kwargs))
@@ -207,6 +210,7 @@ def preview(data, asset, selection):
         inline_tiles,
         libmus_song,
         lz_banks,
+        lz_directory_models,
         lz_texture_directories,
         mainfs,
         models,
@@ -262,6 +266,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==packed_tim.LAYOUT:return packed_tim.preview(data,asset,selection)
     if asset.get('layout')==lz_texture_directories.LAYOUT:return lz_texture_directories.preview(data,asset,selection)
+    if asset.get('layout')==lz_directory_models.LAYOUT:return lz_directory_models.preview(data,asset,selection)
     if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)
     if asset.get('layout') in (nested_scenes.IMAGE,nested_scenes.MODEL):return nested_scenes.preview(data,asset,selection)
     if asset.get('layout')==paged_lz_models.LAYOUT:return paged_lz_models.preview(data,asset,selection)
