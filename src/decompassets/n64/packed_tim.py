@@ -277,7 +277,10 @@ def preview(image, asset, selection):
     texture = textures[formats.integer(selection.get('texture', 0), 'Texture', 0, len(textures) - 1)]
     palette = formats.integer(selection.get('palette', 0), 'Palette', 0, max(0, texture['palettes'] - 1))
     offset = asset['offset']
-    bank, _ = _unpack(memoryview(image)[offset + 4:offset + asset['size']], asset['expanded_size'], lambda: None)
+    # The app closes its mapped ROM as soon as this call returns. A frame
+    # retained by tracing or an exception must not keep that mapping exported.
+    packed = formats._take(image, offset + 4, asset['size'] - 4)
+    bank, _ = _unpack(packed, asset['expanded_size'], lambda: None)
     data = memoryview(bank)[texture['member_start']:texture['member_end']]
     native = asset.get('native_tim', False)
     info = _tim(data, native)

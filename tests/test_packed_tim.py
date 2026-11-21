@@ -65,3 +65,14 @@ def test_native_tim_crops_only_uniform_extra_rows():
     pixels = struct.pack('>I4H', 76, 0, 0, 1, 30) + bytes(60) + bytes([33])*4
     assert packed_tim._tim(header + pixels, native=True)['height'] == 30
     assert packed_tim._tim(header + pixels[:-1] + b'\x00', native=True) is None
+
+
+def test_corrupt_bank_reports_decode_error_with_mapped_rom(tmp_path):
+    import mmap
+
+    asset, = packed_tim.regions(_BANK)
+    path = tmp_path / 'image.bin'
+    path.write_bytes(_BANK[:-5])
+    with pytest.raises(AssetError, match='truncated'):
+        with path.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
+            preview(image, asset, {})
