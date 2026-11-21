@@ -25,3 +25,19 @@ def test_rnc_tiled_image_preview_stitches_tiles():
     assert pixels(png) == top*32 + bottom*2
     assert not rnc_tiled_images.regions(image[:-1])
     assert not rnc_tiled_images.regions(literal_block(raw+b'\0'*16))
+
+
+def test_rnc_ci4_bank_validates_texture_slots_and_palette_selection():
+    directory = struct.pack('>16i', 5, -1, 6, *([3]*13))
+    red, blue = b'\xff\0\0\xff', b'\0\0\xff\xff'
+    palette = struct.pack('>HH', 0xf801, 0x003f) + bytes(28)
+    raw = directory + bytes(96) + palette + bytes(384) + bytes(1024) + b'\x11'*1024
+    image = literal_block(raw)
+    asset, = [a for a in n64.regions(image) if a.get('layout') == rnc_tiled_images.BANK]
+    assert [(t['width'], t['height']) for t in asset['textures']] == [(64, 32), (32, 64)]
+    for index, color in enumerate((red, blue)):
+        result = n64.preview(image, asset, dict(texture=index, palette=3))
+        png = base64.b64decode(result['data_url'].split(',')[1])
+        assert pixels(png) == color*2048
+        assert result['settings']['palette'] == 3
+    assert not rnc_tiled_images.regions(literal_block(raw+b'\0'*512))

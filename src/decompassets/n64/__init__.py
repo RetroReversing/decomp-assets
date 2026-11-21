@@ -246,7 +246,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
-    if asset.get('layout')==rnc_tiled_images.LAYOUT:return rnc_tiled_images.preview(data,asset,selection)
+    if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK):return rnc_tiled_images.preview(data,asset,selection)
     if asset.get('layout')==striped_images.LAYOUT:return striped_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==named_resource_models.LAYOUT:return named_resource_models.preview(data,asset,selection)
