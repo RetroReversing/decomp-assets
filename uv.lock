@@ -51,7 +51,7 @@ wheels = [
 
 [[package]]
 name = "decompassets"
-version = "0.66.1"
+version = "0.67.0"
 source = { editable = "." }
 
 [package.dev-dependencies]
