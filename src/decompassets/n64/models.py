@@ -11,7 +11,7 @@ import struct
 
 from .. import rnc
 from ..formats import AssetError, integer
-from . import rnc_meshes, scene_records, textures
+from . import packed_models, rnc_meshes, scene_records, textures
 
 MAX_BYTES = 4*1024*1024
 MAX_EXPANDED = 64*1024*1024
@@ -118,7 +118,10 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             if not 32<=extent<=MAX_BYTES or offset+extent>len(image):continue
             data=image[offset:offset+extent]
         try:found=layout(data)
-        except ModelError:continue
+        except ModelError:
+            if compressed and (asset := packed_models.asset(data, offset, extent)):
+                result.append(asset)
+            continue
         settings=dict(format='auto',source='decoded' if compressed else 'rom',offset=0 if compressed else offset)
         if compressed:settings['block_offset']=offset
         result.append(dict(offset=offset,size=extent,kind='3d model',media='model',label='Indexed model geometry',confidence='validated',
@@ -129,6 +132,8 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
 
 
 def preview(data,asset,selection):
+    if asset.get('layout') == packed_models.LAYOUT:
+        return packed_models.preview(data,asset,selection)
     start=0 if asset['preview_settings']['source']=='decoded' else asset['offset']
     # Recheck the container rather than trusting browser-supplied layout metadata.
     try:
