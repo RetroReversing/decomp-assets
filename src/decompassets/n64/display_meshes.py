@@ -28,6 +28,15 @@ def geometry(image, offset, end, displacements, *, extra_state=None, vertex_end=
             return (at+8, vertices, faces) if faces else None
         if extra_state and extra_state(w0, w1):
             continue
+        # F3DEX lists can load viewport/lights and pop a matrix around
+        # their geometry. The preview uses the local vertex coordinates.
+        legacy_move = (w0 & 0xff01ffff == 0x03000010 and 0x80 <= (w0 >> 16) & 0xff <= 0x9e
+                       and _space(w1) is not None)
+        if legacy_move or (w0, w1) == (0xbd000000, 0):
+            if dialect == 2:
+                return None
+            dialect = 1
+            continue
         if cmd in (1, 4):
             variant = 2 if cmd == 1 else 1
             if dialect is not None and dialect != variant:

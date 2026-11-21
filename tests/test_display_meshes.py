@@ -37,3 +37,16 @@ def test_f3dex2_nonzero_cache_base_single_double_and_quad_commands():
         broken = bytearray(image)
         struct.pack_into('>I', broken, at, replacement)
         assert not display_meshes.regions(broken, group, mappings, starts, lambda: None)
+
+
+def test_f3dex_lighting_and_matrix_pop_allow_a_closed_local_mesh():
+    image = bytearray(112)
+    for index, (x, y) in enumerate(((0, 0), (1, 0), (0, 1))):
+        struct.pack_into('>3h', image, 16 * index, x, y, 0)
+    struct.pack_into('>10I', image, 64, 0x03860010, 0x01000030,
+                     0x04000c2f, 0x01000000, 0xbf000000, 0x00000204, 0xbd000000, 0, 0xb8000000, 0)
+    group = dict(start=72, end=104)
+    asset, = display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
+    assert display_meshes.preview(image, asset, {})['surfaces'][0]['indices'] == (0, 1, 2)
+    struct.pack_into('>I', image, 64, 0x03870010)
+    assert not display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
