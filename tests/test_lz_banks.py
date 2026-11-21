@@ -40,6 +40,8 @@ def test_adjacent_controls_samples_and_sequence_preview():
     assert effects['offset'] == len(bank)
     assert songs['offset'] == 2*len(bank)
     assert wav(preview(image, effects, {'sample': 1}))[0] == 22050
+    table = preview(image, songs, {})['table']
+    assert table['total'] == 1 and table['rows'][0]['index'] == 0
     result = preview(image, songs, {'sample': 0})
     assert result['details']['mixed_notes'] == 1
     assert any(wav(result)[1])
