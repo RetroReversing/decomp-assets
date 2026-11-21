@@ -25,3 +25,15 @@ def test_uv_music_directory_checks_sequence_bounds():
     (_, _, rows), = uv_sequences.directories(image)
     assert rows[0]['notes'] == 1 and rows[0]['division'] == 48
     assert not list(uv_sequences.directories(image[:-1]))
+
+
+def test_voice_selection_uses_channel_controllers_and_bank_keymap():
+    sample = {'relative_offset': 0}
+    voice = dict(sample=sample, key_range=(60, 65), velocity_range=(20, 127),
+                 key_base=60, detune=0, volume=1, pan=64)
+    note = compact_midi.Event(1, 0x92, (62, 127), 10)
+    events = [compact_midi.Event(0, 0xc2, (4,)), compact_midi.Event(0, 0xb2, (10, 0)),
+              compact_midi.Event(0, 0xb2, (7, 64)), note, compact_midi.Event(2, 0x92, (59, 127), 10)]
+    matched, missing = uv_sequences.note_voices(events, {(0, 4): [voice]})
+    assert matched == (note, dict(sample=sample, pitch=2, gain=64/127, pan=0))
+    assert missing[1] is None

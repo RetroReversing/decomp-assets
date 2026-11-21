@@ -41,7 +41,7 @@ def bank(image, offset, *, relocated=False, check=lambda: None):
         if not value or not relocated:
             return value
         return value - RELOCATED_BASE - len(B1_WRAPPER)
-    samples = {}; sounds = 0; visited = set()
+    samples = {}; sounds = 0; visited = {}; programs = {}
     limit = min(len(image),offset+MAX_CONTROL)
 
     def take(at, size, alignment=4):
@@ -56,8 +56,11 @@ def bank(image, offset, *, relocated=False, check=lambda: None):
         nonlocal sounds
         if not at:return
         key=(at,rate)
-        if key in visited:return
-        visited.add(key)
+        if key in visited:
+            programs[bank_index,instrument_index] = visited[key]
+            return
+        voices = []
+        visited[key] = programs[bank_index,instrument_index] = voices
         head=take(at,16);count=int.from_bytes(head[14:16],'big')
         if head[0]>127 or head[1]>127 or head[3]!=expected_flag or not 1<=count<=MAX_SOUNDS:raise BankError('Invalid instrument.')
         take(at,16+count*4)
@@ -72,7 +75,11 @@ def bank(image, offset, *, relocated=False, check=lambda: None):
             env=take(envelope,16);keys=take(keymap,6,2)
             if any(value < -1 for value in struct.unpack_from('>iii',env)) or env[12]>127 or env[13]>127:raise BankError('Invalid envelope.')
             if keys[0]>keys[1] or keys[2]>keys[3] or max(keys[:5])>127:raise BankError('Invalid key map.')
-            if (wavetable,rate) in samples:continue
+            sample_key = wavetable, rate
+            voices.append(dict(sample_key=sample_key, velocity_range=tuple(keys[:2]), key_range=tuple(keys[2:4]),
+                               key_base=keys[4], detune=keys[5] if keys[5] < 128 else keys[5]-256,
+                               volume=data[13]*head[0]/127**2, pan=max(0, min(127, data[12]+head[1]-64))))
+            if sample_key in samples:continue
             data=take(wavetable,20);base,length=struct.unpack_from('>II',data);codec,flags=data[8:10]
             loop,book=map(resolve,struct.unpack_from('>II',data,12))
             if codec not in (0,1) or flags!=expected_flag or not 0<length<=MAX_BYTES:raise BankError('Invalid wavetable.')
@@ -92,7 +99,7 @@ def bank(image, offset, *, relocated=False, check=lambda: None):
                 start,finish,count=struct.unpack_from('>III',take(loop,44 if codec==0 else 12))
                 if not start<=finish<=sample['samples']:raise BankError('Loop exceeds sample extent.')
                 sample['loop']=dict(start=start,end=finish,count=count)
-            samples[wavetable,rate]=sample
+            samples[sample_key]=sample
             if len(samples)>MAX_SAMPLES:raise BankError('Bank sample limit reached.')
 
     if offset+8>len(image) or image[offset:offset+2]!=b'B1':raise BankError('Not a B1 bank.')
@@ -107,7 +114,10 @@ def bank(image, offset, *, relocated=False, check=lambda: None):
         instrument(resolve(percussion),rate,index,'percussion')
         for number in range(instruments):instrument(pointer(at+12+number*4),rate,index,number)
     if not samples:raise BankError('Bank has no supported samples.')
-    return dict(offset=offset,size=end-offset,samples=list(samples.values()),sound_count=sounds)
+    for voices in visited.values():
+        for voice in voices:
+            voice['sample'] = samples[voice.pop('sample_key')]
+    return dict(offset=offset,size=end-offset,samples=list(samples.values()),sound_count=sounds,programs=programs)
 
 
 def loader_tables(image, context, *, check=lambda: None):

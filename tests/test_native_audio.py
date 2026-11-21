@@ -182,3 +182,20 @@ def test_uv_form_pairs_named_control_and_wave_chunks():
     # Valid trailing ROM bytes cannot compensate for a truncated wave chunk.
     short = chunk(b'FORM', b'UVSX'+chunk(b'.CTL', control)+chunk(b'.TBL', table[:-1]))+table[-1:]
     assert not audio.regions(short)
+
+
+def test_bank_preserves_keymaps_when_programs_share_a_wavetable():
+    image, _, _ = fixture()
+    image = bytearray(image)
+    struct.pack_into('>H', image, 128+32, 2)
+    struct.pack_into('>I', image, 128+48, 64)
+    struct.pack_into('>I', image, 128+144+8, 256)
+    image[128+232:128+238] = bytes([10, 100, 70, 90, 74, 253])
+    bank = audio.bank(image, 128)
+    assert len(bank['samples']) == 1
+    first, second = bank['programs'][0, 1]
+    assert first['sample'] is second['sample']
+    assert second['velocity_range'] == (10, 100)
+    assert second['key_range'] == (70, 90)
+    assert second['key_base'] == 74 and second['detune'] == -3
+    assert bank['programs'][0, 0] is bank['programs'][0, 1]

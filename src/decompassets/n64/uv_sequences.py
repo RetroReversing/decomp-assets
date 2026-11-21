@@ -73,3 +73,36 @@ def preview(image, asset, selection):
                 table=table(asset['label'], ['index', 'offset', 'size', 'division', 'notes'], len(rows),
                             lambda i: dict(index=i, **rows[i]), selection),
                 settings=asset['preview_settings'])
+
+
+def note_voices(events, programs, bank=0):
+    """Resolve Compact MIDI notes in event order with per-channel controls."""
+    program, volume, expression, pan, bend = ([0]*16, [127]*16, [127]*16, [64]*16, [8192]*16)
+    for event in events:
+        channel, command = event.status & 15, event.status & 0xf0
+        if command == 0xc0:
+            program[channel] = event.data[0]
+        elif command == 0xb0:
+            control, value = event.data
+            if control == 7:
+                volume[channel] = value
+            elif control == 10:
+                pan[channel] = value
+            elif control == 11:
+                expression[channel] = value
+        elif command == 0xe0:
+            low, high = event.data
+            bend[channel] = low+128*high
+        elif command == 0x90 and event.duration and event.data[1]:
+            key, velocity = event.data
+            index = 'percussion' if channel == 9 and (bank, 'percussion') in programs else program[channel]
+            voice = next((voice for voice in programs.get((bank, index), ())
+                          if voice['key_range'][0] <= key <= voice['key_range'][1]
+                          and voice['velocity_range'][0] <= velocity <= voice['velocity_range'][1]), None)
+            if voice is None:
+                yield event, None
+                continue
+            pitch = key-voice['key_base']+voice['detune']/100+2*(bend[channel]-8192)/8192
+            gain = voice['volume']*velocity*volume[channel]*expression[channel]/127**3
+            stereo = max(0, min(127, voice['pan']+pan[channel]-64))
+            yield event, dict(sample=voice['sample'], pitch=pitch, gain=gain, pan=stereo)
