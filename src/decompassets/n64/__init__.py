@@ -42,6 +42,7 @@ def regions(image, *, context=None, **kwargs):
     from . import (
         archived_models,
         arithmetic_assets,
+        arithmetic_descriptors,
         audio,
         bind,
         blast_textures,
@@ -99,6 +100,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
+    known.extend(arithmetic_descriptors.regions(image,context=context,**kwargs))
     known.extend(relative_materials.regions(image,**kwargs))
     known.extend(relative_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
@@ -131,6 +133,7 @@ def preview(data, asset, selection):
     from . import (
         archived_models,
         arithmetic_assets,
+        arithmetic_descriptors,
         audio,
         bind_models,
         bind_textures,
@@ -200,6 +203,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
     if asset.get('layout') in (bolt.TEXTURE,bolt.MODEL,'bolt-vox'):return bolt.preview(data,asset,selection)
     if asset.get('layout')==arithmetic_assets.TEXTURES:return arithmetic_assets.preview(data,asset,selection)
+    if asset.get('layout')==arithmetic_descriptors.LAYOUT:return arithmetic_descriptors.preview(data,asset,selection)
     if asset.get('layout') in (mwo_graphics.TEXTURES,mwo_graphics.MODELS):return mwo_graphics.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
