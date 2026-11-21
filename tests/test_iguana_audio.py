@@ -1,6 +1,6 @@
 import struct
 
-from decompassets.n64 import audio, dean_codec, iguana_archive, iguana_audio, preview
+from decompassets.n64 import audio, dean_codec, iguana_archive, iguana_audio, preview, regions
 
 from .test_compact_midi import _sequence
 from .test_dean_codec import _image
@@ -54,3 +54,7 @@ def test_iguana_dean_directory_keeps_original_rate_and_requires_exact_extents():
         rate, samples=wav(preview(image,item,{}))
         assert rate==9450 and len(samples)==256 and any(samples)
     assert not iguana_audio._dean_rows(image,start,len(image)-1,table,lambda:None)
+    rom=archive([(b'CODE.BIN',aligned(literal_block(b'code'))),(b'data/sound/pbpsfx.bin',directory),
+                 (b'extra.bin',b'data'),(b'books.bin',aligned(codebooks))])
+    reported=[asset for asset in regions(rom) if asset.get('layout')=='iguana-dean']
+    assert len(reported)==2 and all(asset['table_offset'] for asset in reported)

@@ -78,6 +78,7 @@ def _dean_rows(image, start, end, codebooks, check):
         result.append(dict(offset=offset,size=cursor-offset,kind='audio',media='audio',
                            audio_kind='dean stream',layout='iguana-dean',label=f'Iguana commentary clip {index+1}',
                            confidence='validated',reason=_DEAN_REASON,samples=[sample],dean_codebooks=codebooks,
+                           table_offset=start,table_confidence='Verified resource directory',
                            preview_settings=dict(format='auto',source='rom',offset=offset)))
     return result if cursor==end else []
 
