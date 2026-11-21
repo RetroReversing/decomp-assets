@@ -8,6 +8,7 @@ from __future__ import annotations
 import itertools
 import re
 import struct
+from bisect import bisect_left
 
 from ..formats import MAX_BYTES, AssetError, integer
 from . import audio, lzari
@@ -115,12 +116,25 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
     results=[];budget=[MAX_FRAME_CHECKS]
     for index,info in enumerate(_controls(image,check=check)):
         check();progress(dict(phase='Recognizing libmus audio banks',done=index))
-        fitting=[base for base in tables if fits(image,info,base,budget,check)]
+        preceding = bisect_left(tables,info['offset'])-1
+        paired = None
+        if preceding >= 0 and not info.get('compressed_control'):
+            base = tables[preceding]
+            finish = max(base+s['relative_offset']+s['size'] for s in info['samples'])
+            # Some resource streams store one wave table, its eight-byte
+            # terminator/alignment, then the matching raw control graph.
+            if (((finish+7)&~7)+8 == info['offset'] and not any(image[finish:info['offset']])
+                    and fits(image,info,base,budget,check)):
+                paired = base
+        fitting = [paired] if paired is not None else [base for base in tables if fits(image,info,base,budget,check)]
         resolved=len(fitting)==1 and budget[0]>0
         base=fitting[0] if resolved else None
         samples=[{**s,'offset':base+s['relative_offset']} for s in info['samples']] if resolved else []
         reason='PtrTablesV2 control graph, tuning arrays, sample extents, loops and predictor books checked. '+('Exactly one marked WaveTables candidate fits every sample and ADPCM frame selector; table placement remains a static inference.' if resolved else 'Wave-table placement is ambiguous or unresolved; sample bytes are not classified.')+' The bank stores no rate: 22050 Hz is an editable preview default. Pitch, mixing, sequences and loop playback are not recreated.'
-        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence='unique marked table (static inference)' if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
+        if paired is not None:
+            reason = 'A marked WaveTables block ends at the zero padding before this validated control graph. '
+            reason += 'The bank stores no rate. 22050 Hz is an editable preview default.'
+        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('adjacent wave and control pair' if paired is not None else 'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
         if 'compressed_control' in info:
             common.update(compressed_control=info['compressed_control'], control_byte_order=info['control_byte_order'])
         results.append(dict(offset=info['offset'],size=info['size'],kind='audio',label='libmus '+info['name'],confidence='validated',samples=samples,sample_count=len(info['samples']),preview_settings=dict(format='auto',source='rom',offset=info['offset']),**common))
