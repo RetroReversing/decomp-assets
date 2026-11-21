@@ -17,6 +17,7 @@
 - uv_models.py: local geometry from UVMD models.
 - uv_textures.py: textures in a UV filesystem of FORM files, drawn by each file's own display list.
 - rnx.py: chained byte-sum pages and checked resource payloads.
+- lz_standard_midi.py: S1 song directories of LZ-packed Standard MIDI files.
 - lz_directory_models.py: local F3DEX2 geometry and LODs in indexed LZ object banks.
 - lz_texture_directories.py: named textures and RDP strips inside indexed LZ banks.
 - packed_tim.py: TIM sprites in adaptive Huffman-compressed BAM3 banks.
@@ -74,6 +75,7 @@ def regions(image, *, context=None, **kwargs):
         inline_tiles,
         libmus_song,
         lz_banks,
+        lz_standard_midi,
         lz_texture_directories,
         mainfs,
         models,
@@ -172,6 +174,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
+    known.extend(lz_standard_midi.regions(image,sound_banks=sound_banks,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
@@ -211,6 +214,7 @@ def preview(data, asset, selection):
         libmus_song,
         lz_banks,
         lz_directory_models,
+        lz_standard_midi,
         lz_texture_directories,
         mainfs,
         models,
@@ -290,6 +294,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
+    if asset.get('layout')==lz_standard_midi.LAYOUT:return lz_standard_midi.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
     if asset.get('layout') in ('libmus-raw-song','libmus-binary-song','libmus-binary-effects'):return libmus_song.preview(data,asset,selection)
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
