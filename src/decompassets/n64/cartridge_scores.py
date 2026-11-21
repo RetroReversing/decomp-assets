@@ -26,11 +26,13 @@ def _signed(value):
     return value if value < 128 else value - 256
 
 
-def _offsets(data):
+def _offsets(data, count=None):
     start = int.from_bytes(data[:2], 'big')
     if start % 2 or not 2 <= start <= 40 or start >= len(data):
         return ()
-    starts = struct.unpack_from(f'>{start // 2}H', data)
+    if count is not None and count not in (start // 2, start // 2 - 2):
+        return ()
+    starts = struct.unpack_from(f'>{count or start // 2}H', data)
     if starts == tuple(sorted(set(starts))) and starts[-1] < len(data):
         return starts
     return ()
@@ -153,8 +155,8 @@ def _track(data, start, end, bank, programs, patches, budget):
     return None
 
 
-def _score(data, bank, programs, patches, budget):
-    offsets = _offsets(data)
+def _score(data, bank, programs, patches, budget, count=None):
+    offsets = _offsets(data, count)
     if not offsets:
         return None
     voices = []
@@ -170,7 +172,7 @@ def _entries(image, start, anchor):
     starts = []
     position = start
     expected = anchor
-    while position + 4 <= len(image) and len(starts) < 128:
+    while position + 4 <= len(image) and len(starts) < 256:
         offset, = struct.unpack_from('>I', image, position)
         if offset != expected:
             break
@@ -222,6 +224,21 @@ def _programs(image, banks):
     return maps, tuple(counts)
 
 
+
+def _metadata(image, start, end, scores):
+    # The first track offset is the complete header size. Extended scores
+    # leave two additional words before the tracks beyond their active offsets.
+    for extra in (0, 2):
+        counts = [int.from_bytes(score[:2], 'big') // 2 - extra for score in scores]
+        if not all(1 <= count <= 20 and _offsets(score, count) for score, count in zip(scores, counts)):
+            continue
+        groups = rb'[\0-\x02]' if extra else rb'[\0\x01]'
+        signature = b''.join(re.escape(bytes([count])) + groups for count in counts)
+        matches = list(re.compile(signature).finditer(image, start, end))
+        if len(matches) == 1:
+            return list(struct.iter_unpack('BB', matches[0][0]))
+    return []
+
 def regions(image, sound_banks, *, check=lambda: None, progress=lambda _: None):
     banks = sorted((asset['offset'], asset) for asset in sound_banks
                    if asset.get('table_confidence') == 'validated' and len(asset.get('samples', ())) > 1
@@ -248,13 +265,9 @@ def regions(image, sound_banks, *, check=lambda: None, progress=lambda _: None):
             data.append(member)
         if len(data) != len(entries):
             continue
-        counts = [len(_offsets(member)) for member in data]
-        if not all(counts):
-            continue
         directory_end = index + len(entries) * 8
-        signature = b''.join(re.escape(bytes([count])) + rb'[\0\x01]' for count in counts)
-        metadata = list(re.compile(signature).finditer(image, directory_end, banks[0][0]))
-        if len(metadata) != 1:
+        metadata = _metadata(image, directory_end, banks[0][0], data)
+        if not metadata:
             continue
         source = [(offset, asset['table_offset']) for offset, asset in banks]
         programs, counts = _programs(image, source)
@@ -262,15 +275,14 @@ def regions(image, sound_banks, *, check=lambda: None, progress=lambda _: None):
         if patch_offset is None:
             continue
         rows = []
-        groups = metadata[0][0][1::2]
         budget = [600_000]
-        for number, ((offset, end), member, group) in enumerate(zip(entries, data, groups), 1):
+        for number, ((offset, end), member, (tracks, group)) in enumerate(zip(entries, data, metadata), 1):
             check()
-            notes = _score(member, group, programs, patches, budget)
+            notes = _score(member, group, programs, patches, budget, tracks)
             if notes is None:
                 break
             rows.append(dict(offset=offset, size=end - offset, channel_group=group, label=f'Sequence {number}',
-                             codec='Cartridge score', preview_available=bool(notes), notes=len(notes)))
+                             tracks=tracks, codec='Cartridge score', preview_available=bool(notes), notes=len(notes)))
         else:
             return [dict(offset=anchor, size=entries[-1][1] - anchor, samples=rows, layout=LAYOUT,
                          kind='music sequence', media='audio', audio_kind='indexed sample directory',
@@ -295,7 +307,7 @@ def preview(image, asset, selection):
     patch_offset, patches = _patches(image, asset['patch_offset'], counts)
     if not data or len(data) > _MAX_SCORE or patch_offset != asset['patch_offset']:
         raise formats.AssetError('The cartridge score changed. Rescan ROM Explorer.')
-    voices = _score(data, row['channel_group'], programs, patches, [100_000])
+    voices = _score(data, row['channel_group'], programs, patches, [100_000], row.get('tracks'))
     if not voices:
         raise formats.AssetError('The cartridge score has no playable notes.')
     tempo = [Event(0, 0xff, tuple((500_000).to_bytes(4, 'big')))]
