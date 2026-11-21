@@ -107,6 +107,7 @@ def regions(image, *, context=None, **kwargs):
         resources,
         rnc_tiled_images,
         rnx,
+        rzip_catalog,
         siff_models,
         sized_lz_catalog,
         sn64,
@@ -142,6 +143,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(deflate_catalog.regions(image,**kwargs))
     known.extend(deflate_catalog_models.regions(image,**kwargs))
     known.extend(raw_deflate_lists.regions(image,**kwargs))
+    known.extend(rzip_catalog.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
@@ -271,6 +273,7 @@ def preview(data, asset, selection):
         rnc_tiled_images,
         rnx,
         rnx_atlas,
+        rzip_catalog,
         scene_records,
         siff_models,
         sized_lz_catalog,
@@ -336,6 +339,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == deflate_catalog_models.MODEL:return deflate_catalog_models.preview(data,asset,selection)
     if asset.get('layout') in (raw_deflate_lists.TEXTURE, raw_deflate_lists.MODEL):
         return raw_deflate_lists.preview(data,asset,selection)
+    if asset.get('layout') == rzip_catalog.TEXTURE:return rzip_catalog.preview(data,asset,selection)
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
