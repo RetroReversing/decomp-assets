@@ -85,3 +85,33 @@ def test_standalone_music_directory_follows_sample_extent():
     assert uv_sequences.preview(rom, asset, {'sample': 0})['details']['mixed_notes'] == 1
     shifted = image[:base+58]+bytes(6)+sequence
     assert not uv_sequences.regions(shifted, sound_banks=audio.regions(shifted))
+
+
+def test_detached_music_directory_uses_the_complete_instrument_map():
+    from .test_native_audio import fixture
+
+    song = _sequence(bytes.fromhex('00 90 3c 60 18 00 ff 2f'))
+    other_program = _sequence(bytes.fromhex('00 c0 7f 00 90 3c 60 18 00 ff 2f'))
+    image, _, base = fixture()
+    table_end = (base+58+15)&~15
+    clip = image[:base+58]+bytes(table_end-base-58)
+    index = 24
+
+    def rom_with(songs):
+        rows = [(sum(map(len, songs[:i])), len(content)) for i, content in enumerate(songs)]
+        directory = b''.join(struct.pack('>II', *row) for row in rows)
+        return clip[:index]+directory+clip[index+len(directory):]+b''.join(songs)
+
+    rom = rom_with([song, song, song])
+    bank = dict(audio.regions(rom)[0], table_confidence='validated')
+    asset, = uv_sequences.regions(rom, sound_banks=[bank])
+    assert asset['detached_index'] == index
+    assert len(asset['sequences']) == 3
+    result = uv_sequences.preview(rom, asset, {'sample': 0})
+    assert result['details']['mixed_notes'] == 1
+    assert not uv_sequences.regions(rom[:-1], sound_banks=[bank])
+
+    unmapped = rom_with([song, other_program, song])
+    asset, = uv_sequences.regions(unmapped, sound_banks=[bank])
+    assert asset['media'] == 'metadata'
+    assert 'control' not in asset
