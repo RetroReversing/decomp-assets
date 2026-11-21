@@ -93,10 +93,14 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             continue
         items = layout(data)
         if items:
+            first = items[0]['preview_settings']
+            display_format = ' / '.join(sorted({item['preview_settings']['format'].upper() for item in items}))
             assets.append(dict(offset=offset, size=extent, kind='image', media='image',
                                label='Iguana indexed bitmap set', confidence='validated', reason=_REASON,
                                layout='iguana-indexed-bitmaps', textures=items, frames=1, palettes=1,
-                               preview_settings=dict(format='auto', source='rom', offset=offset)))
+                               preview_settings=dict(format='auto', source='rom', offset=offset,
+                                                     display_format=display_format,
+                                                     width=first['width'], height=first['height'])))
     return assets
 
 
