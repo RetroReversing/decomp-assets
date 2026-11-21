@@ -212,3 +212,40 @@ def test_sample_bank_with_unset_midi_keys_requires_valid_adjacent_frames():
     assert wav(audio.preview(broken, found[0], {}))[0] == 22050
     broken[base] = 15
     assert not audio.regions(broken)
+
+
+@pytest.mark.parametrize('same_buffer',[True,False])
+def test_unnamed_b1_relocator_pairs_the_copied_control_with_its_sample_table(same_buffer):
+    original,_,base = fixture(raw=True)
+    control, wave_at = 128, 1024
+    image = bytearray(original[:base] + bytes(wave_at-base) + original[base:])
+    copy_pc, link_pc = 0x80000300, 0x80000380
+    image[:4] = words(jal(link_pc))
+    image[512:536] = words(0x00809021,0x00a08821,0x00c08021,0xafb00014,0x02403821,0xafb10010)
+    image[640:660] = words(0x848e0000,0x24014231,0x00808025,0x15c1002e,0x848f0002)
+    functions = [dict(name='caller',vram=0x80000000,rom_offset=0,size=48),
+                 dict(name='copy',vram=copy_pc,rom_offset=512,size=0x70),
+                 dict(name='link',vram=link_pc,rom_offset=640,size=0x70)]
+    def constant(value):
+        return dict(kind='constant',value=value,offset=0)
+
+    def read(vram, code, **kwargs):
+        pointer = constant(0x80200000)
+        location = constant(0x80100000)
+        written = location if same_buffer else constant(0x80100010)
+        return dict(events=[
+            dict(kind='call', target=copy_pc, instruction=vram, block=0,
+                 args=[constant(0xb0000000+control),pointer,constant(base-control)],
+                 memory=[dict(place=written,value=pointer)]),
+            dict(kind='load', width=4, instruction=vram+8, place=location),
+            dict(kind='call', target=link_pc, instruction=vram+16, block=0,
+                 args=[dict(kind='memory',value=vram+8),constant(0xb0000000+wave_at)]),
+        ])
+
+    banks = audio.regions(bytes(image), context=dict(functions=functions,read_code=read))
+    bank = banks[0]
+    if same_buffer:
+        assert bank['table_offset']==wave_at and bank['table_confidence']=='validated'
+        assert len(bank['samples'])==2 and wav(audio.preview(bytes(image),bank,{}))[0]==22050
+    else:
+        assert bank['audio_kind']=='unresolved bank'
