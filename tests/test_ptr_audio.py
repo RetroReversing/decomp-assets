@@ -244,3 +244,28 @@ def test_rnc_controls_pair_with_aligned_song_effects_and_marked_waves():
     bad = bytearray(image)
     bad[len(first)+14] ^= 1  # packed control CRC
     assert not any(a.get('control_codec') == 'rnc' for a in n64.regions(bad))
+
+
+def test_split_raw_sequences_pair_music_and_effects_with_their_wave_banks():
+    from decompassets.n64 import libmus_song, lzari
+
+    song, _ = lzari.unpack(_PACKED_SONG)
+    track = bytes.fromhex('81 00 30 18 80')
+    effect = struct.pack('>8I', 1, 1, 1, 0, 0, 32 + len(track), 32, 100) + track + struct.pack('>H', 4)
+    image = bytearray(768)
+    image[192:192 + len(effect)] = effect
+    image[192 + len(effect)] = 1
+    image[448:448 + len(song)] = song
+    image[576:576 + len(song)] = song
+    music = dict(offset=128, size=32, table_offset=64, samples=[{'instrument': 0}, {'instrument': 1}])
+    effects = dict(offset=384, size=48, table_offset=256, samples=[{'instrument': 4}])
+
+    assets = libmus_song._split_raw_sequences(image, [music, effects], lambda: None)
+    assert [(asset['offset'], asset['control'], asset['table_offset']) for asset in assets] == [
+        (192, 384, 256), (448, 128, 64), (576, 128, 64),
+    ]
+    assert assets[0]['layout'] == 'libmus-binary-effects'
+
+    ambiguous = dict(effects, samples=[*effects['samples'], *music['samples']])
+    assert not libmus_song._split_raw_sequences(image, [music, ambiguous], lambda: None)
+    assert not libmus_song._split_raw_sequences(image, [music, dict(effects, table_offset=320)], lambda: None)

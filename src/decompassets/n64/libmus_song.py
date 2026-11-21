@@ -411,6 +411,71 @@ def _raw_control_sequence(image, bank):
                 preview_settings=dict(format='auto',source='rom',offset=start))
 
 
+def _split_raw_sequences(image, banks, check):
+    """Read the split music/effects layout with 64-byte cartridge alignment."""
+    if len(banks) != 2:
+        return []
+    music, effects = sorted(banks, key=lambda bank: bank['offset'])
+    # The effects directory sits between the music control and the effects
+    # wave table. The songs follow the effects control and use the music bank.
+    effects_start = (music['offset'] + music['size'] + 63) & ~63
+    next_wave = effects['table_offset']
+    song_start = (effects['offset'] + effects['size'] + 63) & ~63
+    if not (music['table_offset'] < music['offset'] < effects_start < next_wave < effects['offset'] < song_start
+            and all(bank[field] % 64 == 0 for bank in banks for field in ('offset', 'table_offset'))
+            and next_wave - effects_start <= _MAX_BYTES
+            and not any(image[music['offset'] + music['size']:effects_start])
+            and image[song_start:song_start + 4] == b'\0\0\x02\x15'):
+        return []
+    if effects_start + _HEADER.size > next_wave:
+        return []
+    _, _, instruments, _, _, lookup = _HEADER.unpack_from(image, effects_start)
+    effects_end = effects_start + lookup + instruments * 2
+    if not effects_start < effects_end <= next_wave or ((effects_end + 63) & ~63) != next_wave:
+        return []
+    effect_waves = {sample['instrument'] for sample in effects['samples']}
+    scores = binary_effects(image[effects_start:effects_end], effect_waves)
+    if not scores:
+        return []
+    music_waves = {sample['instrument'] for sample in music['samples']}
+    songs = []
+    distinct_banks = False
+    for _ in range(128):
+        check()
+        if image[song_start:song_start + 4] != b'\0\0\x02\x15':
+            break
+        raw = image[song_start:song_start + _MAX_BYTES]
+        score = binary_song(raw, music_waves)
+        if not score:
+            return []
+        songs.append((song_start, score))
+        distinct_banks |= binary_song(raw[:score['extent']], effect_waves) is None
+        end = song_start + score['extent']
+        song_start = (end + 63) & ~63
+        if any(image[end:song_start]):
+            break
+    if not distinct_banks or len(songs) < 2:
+        return []
+
+    def asset(bank, offset, size, entries, *, is_effect):
+        layout = 'libmus-binary-effects' if is_effect else 'libmus-binary-song'
+        kind = 'audio sequence' if is_effect else 'music sequence'
+        label = 'libmus sequenced effects' if is_effect else 'libmus binary song'
+        samples = [dict(label=f'Effect {index}' if is_effect else 'Song', codec='Nintendo libmus')
+                   for index in range(1, len(entries) + 1)]
+        return dict(offset=offset, size=size, kind=kind, media='audio', audio_kind='indexed sample directory',
+                    control=bank['offset'], table_offset=bank['table_offset'], sequence_packed=False,
+                    layout=layout, confidence='validated', label=label, samples=samples,
+                    channels=max(score['channels'] for score in entries),
+                    notes=sum(len(score['notes']) for score in entries), loops=sum(score['loops'] for score in entries),
+                    preview_settings=dict(format='auto', source='rom', offset=offset),
+                    reason='The cartridge-aligned sequence and instrument table resolve to its split libmus bank.')
+
+    result = [asset(effects, effects_start, effects_end - effects_start, scores, is_effect=True)]
+    result.extend(asset(music, start, score['extent'], [score], is_effect=False) for start, score in songs)
+    return result
+
+
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
     assets = _binary_regions(image,resolved,check)
@@ -418,6 +483,7 @@ def regions(image, banks, *, check=lambda: None):
         if bank.get('control_codec') == 'rnc':
             assets.extend(_rnc_regions(image,bank,check))
     raw = [bank for bank in resolved if not bank.get('compressed_control')]
+    assets.extend(_split_raw_sequences(image, raw, check))
     assets.extend(sequence for bank in raw if (sequence := _raw_control_sequence(image,bank)) is not None)
     if len(raw) != 1:
         return assets
