@@ -35,7 +35,7 @@ def directories(image, *, check=lambda: None):
             break
 
 
-def _entries(image, start, end, check):
+def _entries(image, start, end, check, *, exact=True):
     if end-start < 4 or image[start:start+2] != b'S1':
         return None
     count = int.from_bytes(image[start+2:start+4], 'big')
@@ -56,25 +56,57 @@ def _entries(image, start, end, check):
         notes = sum(event.status & 0xf0 == 0x90 and event.duration > 0 and event.data[1] > 0 for event in events)
         rows.append(dict(offset=first, size=length, division=division, notes=notes))
         cursor = (offset+length+3)&~3
+    if not exact:
+        return rows if start+cursor <= end else None
     return rows if 0 <= end-start-cursor < 16 and not any(image[start+cursor:end]) else None
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
+def _sample_end(samples, base):
+    return max(base+s['relative_offset']+s['size'] for s in samples)
+
+
+def _asset(offset, end, rows, label, reason, control=None):
+    asset = dict(offset=offset, size=end-offset, label=label, kind='music sequence',
+                 media='metadata', layout='uv-sequence-directory', confidence='validated', sequences=rows,
+                 reason=reason, preview_settings=dict(format='auto', source='rom', offset=offset))
+    if control is not None:
+        asset.update(media='audio', audio_kind='indexed sample directory', control=control,
+                     samples=[dict(offset=row['offset'], size=row['size'], codec='Nintendo compact MIDI',
+                                   label=f'Sequence {i}', preview_available=bool(row['notes']))
+                              for i, row in enumerate(rows)])
+    return asset
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None, sound_banks=()):
     banks = audio._uv_tables(image, check)
     result = []
     for offset, end, rows in directories(image, check=check):
         music = [control for control, (_, _, wave_end, tag) in banks.items()
                  if wave_end == offset and tag == b'UVMB']
-        asset = dict(offset=offset, size=end-offset, label='UV music directory', kind='music sequence',
-                     media='metadata', layout='uv-sequence-directory', confidence='validated', sequences=rows,
-                     reason='The indexed sequences fit the named ROM chunk and decode as compact MIDI.',
-                     preview_settings=dict(format='auto', source='rom', offset=offset))
-        if len(music) == 1:
-            asset.update(media='audio', audio_kind='indexed sample directory', control=music[0],
-                         samples=[dict(offset=row['offset'], size=row['size'], codec='Nintendo compact MIDI',
-                                       label=f'Sequence {i}', preview_available=bool(row['notes']))
-                                  for i, row in enumerate(rows)])
-        result.append(asset)
+        result.append(_asset(offset, end, rows, 'UV music directory',
+                             'The indexed sequences fit the named ROM chunk and decode as compact MIDI.',
+                             music[0] if len(music) == 1 else None))
+    found = set()
+    for bank in sound_banks:
+        base = bank.get('table_offset')
+        samples = bank.get('samples', [])
+        control = bank['offset']
+        if (bank.get('audio_kind') != 'sample bank' or base is None or not samples
+                or control in banks or image[control:control+2] != b'B1'
+                or base != (control+bank['size']+15)&~15):
+            continue
+        tail = _sample_end(samples, base)
+        offset = (tail+3)&~3
+        if offset in found or any(image[tail:offset]):
+            continue
+        rows = _entries(image, offset, len(image), check, exact=False)
+        if rows:
+            found.add(offset)
+            end = (rows[-1]['offset']+rows[-1]['size']+3)&~3
+            asset = _asset(offset, end, rows, 'Compact MIDI music directory',
+                           'A complete S1 directory follows the validated adjacent sample table.',
+                           control)
+            result.append({**asset, 'table_offset':base})
     return result
 
 
@@ -127,18 +159,25 @@ def note_voices(events, programs, bank=0):
 def _play(image, asset, selection):
     index = formats.integer(selection['sample'], 'Sequence', 0, len(asset['sequences'])-1)
     control = asset['control']
-    bounds = audio._uv_tables(image, lambda: None).get(control)
-    if not bounds:
-        raise formats.AssetError('The UV music bank changed. Rescan ROM Explorer.')
-    control_end, base, wave_end, tag = bounds
     try:
         bank = audio.bank(image, control)
     except audio.BankError as exc:
-        raise formats.AssetError('The UV music bank is invalid. Rescan ROM Explorer.') from exc
-    if (tag != b'UVMB' or control+bank['size'] > control_end or wave_end != asset['offset']
-            or any(sample['relative_offset']+sample['size'] > wave_end-base for sample in bank['samples'])):
-        raise formats.AssetError('The UV music bank exceeds its named chunks. Rescan ROM Explorer.')
-    bank['corroborated'] = True
+        raise formats.AssetError('The music bank is invalid. Rescan ROM Explorer.') from exc
+    if 'table_offset' in asset:
+        base = asset['table_offset']
+        tail = _sample_end(bank['samples'], base)
+        if (base != (control+bank['size']+15)&~15 or (tail+3)&~3 != asset['offset']
+                or any(image[tail:asset['offset']]) or image[asset['offset']:asset['offset']+2] != b'S1'):
+            raise formats.AssetError('The music bank no longer meets the S1 directory. Rescan ROM Explorer.')
+    else:
+        bounds = audio._uv_tables(image, lambda: None).get(control)
+        if not bounds:
+            raise formats.AssetError('The UV music bank changed. Rescan ROM Explorer.')
+        control_end, base, wave_end, tag = bounds
+        if (tag != b'UVMB' or control+bank['size'] > control_end or wave_end != asset['offset']
+                or _sample_end(bank['samples'], base) > wave_end):
+            raise formats.AssetError('The UV music bank exceeds its named chunks. Rescan ROM Explorer.')
+        bank['corroborated'] = True
     if not audio._fits(image, bank, base, [audio.MAX_HEADER_CHECKS], lambda: None):
         raise formats.AssetError('The UV music bank failed sample validation. Rescan ROM Explorer.')
     row = asset['sequences'][index]

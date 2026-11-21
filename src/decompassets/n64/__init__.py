@@ -70,9 +70,10 @@ def regions(image, *, context=None, **kwargs):
         uv_textures,
     )
     display_meshes = []
+    sound_banks = audio.regions(image,context=context,**kwargs)
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,models=display_meshes,**kwargs)
            +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
-           +audio.regions(image,context=context,**kwargs)
+           +sound_banks
            +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(display_meshes)
@@ -80,7 +81,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uso_textures.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
-    known.extend(uv_sequences.regions(image,**kwargs))
+    known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
