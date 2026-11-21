@@ -70,6 +70,7 @@ def regions(image, *, context=None, **kwargs):
         models,
         mwo_graphics,
         native_scene,
+        packed_anim,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -80,6 +81,7 @@ def regions(image, *, context=None, **kwargs):
         reloc_files,
         resources,
         rnx,
+        sn64,
         texture_packs,
         textures,
         uso_audio,
@@ -108,6 +110,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(relative_meshes.regions(image,**kwargs))
     known.extend(yay0_atlases.regions(image,context=context,**kwargs))
     known.extend(inline_tiles.regions(image,**kwargs))
+    known.extend(sn64.regions(image,**kwargs))
+    known.extend(packed_anim.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
@@ -165,6 +169,7 @@ def preview(data, asset, selection):
         mainfs,
         models,
         mwo_graphics,
+        packed_anim,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -176,6 +181,7 @@ def preview(data, asset, selection):
         rnx,
         rnx_atlas,
         scene_records,
+        sn64,
         texture_packs,
         textures,
         uso_audio,
@@ -194,6 +200,8 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout')==packed_anim.LAYOUT:return packed_anim.preview(data,asset,selection)
+    if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
