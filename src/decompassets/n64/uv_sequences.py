@@ -77,6 +77,97 @@ def _asset(offset, end, rows, label, reason, control=None):
     return asset
 
 
+# A detached directory starts at relative offset zero. Its second entry
+# starts at the first sequence's declared length.
+_DETACHED_INDEX = re.compile(rb'\0{4}(\0(?:[\x01-\x03]..|\0(?:[\x01-\xff].|\0[\x45-\xff])))\1', re.S)
+
+
+def _detached_rows(image, index, start, check):
+    cursor = 0
+    remaining_events = 256 * 1024
+    rows, scores = [], []
+    for i in range(128):
+        check()
+        if index+8*(i+1) > start:
+            break
+        offset, length = _ENTRY.unpack_from(image, index+i*8)
+        if offset != cursor or not length:
+            break
+        if length > 256*1024 or cursor+length > formats.MAX_BYTES or start+offset+length > len(image):
+            return [], []
+        at = start+offset
+        score = compact_midi.sequence(image[at:at+length])
+        if score is None:
+            return [], []
+        division, events = score
+        remaining_events -= len(events)
+        if remaining_events < 0:
+            return [], []
+        notes = sum(e.status & 0xf0 == 0x90 and e.duration > 0 and e.data[1] > 0 for e in events)
+        rows.append(dict(offset=at, size=length, division=division, notes=notes))
+        scores.append(events)
+        cursor += length
+    return rows, scores
+
+
+def _bank_covers(scores, programs):
+    for events in scores:
+        total = found = 0
+        for _, voice in note_voices(events, programs):
+            total += 1
+            found += voice is not None
+        if not total or found*10 < total*9:
+            return False
+    return True
+
+
+def _detached_directories(image, sound_banks, check):
+    # Use validated sample extents only. A sequence can follow a different
+    # bank from the one that supplies the sequence player's instruments.
+    controls = {asset['offset']: asset for asset in sound_banks
+                if len(asset.get('samples', ())) > 1 and asset.get('table_confidence') == 'validated'
+                and image[asset['offset']:asset['offset']+2] == b'B1'}
+    anchors = set()
+    for asset in controls.values():
+        check()
+        start = (_sample_end(asset['samples'], asset['table_offset'])+15)&~15
+        if image[start:start+4] == b'\0\0\0D':
+            anchors.add(start)
+    programs = {}
+    for start in sorted(anchors):
+        candidates = []
+        for match in islice(_DETACHED_INDEX.finditer(image, 0, start), 2048):
+            check()
+            index = match.start()
+            if index%4:
+                continue
+            rows, scores = _detached_rows(image, index, start, check)
+            if len(rows) >= 3:
+                candidates.append((index, rows, scores))
+                if len(candidates) > 1:
+                    break
+        if len(candidates) != 1:
+            continue
+        index, rows, scores = candidates[0]
+        if not programs:
+            for address in controls:
+                try:
+                    programs[address] = audio.bank(image, address, check=check)['programs']
+                except audio.BankError:
+                    continue
+        matches = [control for control, graph in programs.items() if _bank_covers(scores, graph)]
+        control = matches[0] if len(matches) == 1 else None
+        end = rows[-1]['offset']+rows[-1]['size']
+        asset = _asset(start, end, rows, 'Compact MIDI music bank',
+                       ('A detached offset-and-length table bounds every compact MIDI sequence. One validated bank matches the instruments used.'
+                        if control is not None else 'A detached offset-and-length table bounds every compact MIDI sequence.'),
+                       control)
+        asset['detached_index'] = index
+        if control is not None:
+            asset['table_offset'] = controls[control]['table_offset']
+        yield asset
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None, sound_banks=()):
     banks = audio._uv_tables(image, check)
     result = []
@@ -107,6 +198,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None, sound_banks=(
                            'A complete S1 directory follows the validated adjacent sample table.',
                            control)
             result.append({**asset, 'table_offset':base})
+    result.extend(_detached_directories(image, sound_banks, check))
     return result
 
 
@@ -163,7 +255,13 @@ def _play(image, asset, selection):
         bank = audio.bank(image, control)
     except audio.BankError as exc:
         raise formats.AssetError('The music bank is invalid. Rescan ROM Explorer.') from exc
-    if 'table_offset' in asset:
+    if 'detached_index' in asset:
+        base = asset['table_offset']
+        rows, _ = _detached_rows(image, asset['detached_index'], asset['offset'], lambda: None)
+        if rows != asset['sequences']:
+            raise formats.AssetError('The detached music directory changed. Rescan ROM Explorer.')
+        bank['corroborated'] = True
+    elif 'table_offset' in asset:
         base = asset['table_offset']
         tail = _sample_end(bank['samples'], base)
         if (base != (control+bank['size']+15)&~15 or (tail+3)&~3 != asset['offset']
@@ -188,7 +286,7 @@ def render_sequence(image, asset, index, bank, base, *, book_image=None):
     row = asset['sequences'][index]
     start, size = row['offset'], row['size']
     end = asset['offset']+asset['size']
-    score = compact_midi.sequence(image[start:start+size]) if asset['offset'] < start < start+size <= end <= len(image) else None
+    score = compact_midi.sequence(image[start:start+size]) if asset['offset'] <= start < start+size <= end <= len(image) else None
     if score is None:
         raise formats.AssetError('The compact MIDI sequence changed. Rescan ROM Explorer.')
     division, events = score
