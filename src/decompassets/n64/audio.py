@@ -509,6 +509,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
         common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=loader_refs.get(base,[]),table_offset=base)
+        if partition and not uv:
+            common['table_layout'] = 'parallel'
         results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                             reason=reason,preview_settings=dict(format='auto',source='rom',offset=offset),samples=samples,**common))
         seen=set()

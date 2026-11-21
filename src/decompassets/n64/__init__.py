@@ -58,6 +58,7 @@ def regions(image, *, context=None, **kwargs):
         borg_audio,
         borg_dcm,
         borg_models,
+        cartridge_scores,
         dean_audio,
         dialogue,
         dialogue_links,
@@ -126,6 +127,7 @@ def regions(image, *, context=None, **kwargs):
            +sound_banks+rare_audio.regions(image,**kwargs)+paired_audio.regions(image,**kwargs)
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
+    known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
@@ -202,6 +204,7 @@ def preview(data, asset, selection):
         borg_audio,
         borg_dcm,
         borg_models,
+        cartridge_scores,
         dean_audio,
         dialogue,
         diet_audio,
@@ -285,6 +288,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paged_models.LAYOUT:return paged_models.preview(data,asset,selection)
     if asset.get('layout')==packed_anim.LAYOUT:return packed_anim.preview(data,asset,selection)
     if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
+    if asset.get('layout')==cartridge_scores.LAYOUT:return cartridge_scores.preview(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')==iain_models.LAYOUT:return iain_models.preview(data,asset,selection)
