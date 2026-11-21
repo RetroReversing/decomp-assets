@@ -1,8 +1,13 @@
-"""Read a bounded first pass of older libmus song tracks."""
+"""Read and preview a bounded first pass of older libmus song tracks."""
 
+import base64
 import re
 import struct
 from dataclasses import dataclass
+
+from .. import formats
+from . import audio, compact_midi_render, ptr_audio
+from .compact_midi import Event
 
 _HEADER = struct.Struct('>6I')
 _SIGNATURE = re.compile(rb'\0\0\0[\x02-\x20]\0\0\0\x18')
@@ -22,14 +27,20 @@ class Note:
     wave: int
     velocity: int
     pan: int
+    volume: int
+
+
+def _signed(byte):
+    return (byte+128)%256-128
 
 
 def _track(data, start, end, waves):
     at = start
     tick = fixed = wave = 0
-    velocity = 127
+    transpose = cutoff = endit = 0
+    velocity = volume = 127
     pan = 64
-    explicit_velocity = ignore_fixed = False
+    explicit_velocity = ignore_fixed = ignore_transpose = False
     notes, tempos, loops = [], [], []
 
     def byte():
@@ -53,7 +64,10 @@ def _track(data, start, end, waves):
             if cmd != 0x60:
                 if cmd > 0x60 or wave not in waves:
                     raise ValueError
-                notes.append(Note(tick, length, cmd, wave, strength, pan))
+                key = cmd if ignore_transpose else cmd + transpose
+                ignore_transpose = False
+                duration = min(length, cutoff) if cutoff else max(0, length-endit)
+                notes.append(Note(tick, duration, key, wave, strength, pan, volume))
             tick += length
             continue
         if cmd == 0x80:
@@ -70,6 +84,16 @@ def _track(data, start, end, waves):
         args = [byte() for _ in range(_WIDTHS[cmd])]
         if cmd == 0x85 and args[0]:
             tempos.append((tick, args[0]))
+        elif cmd == 0x86:
+            cutoff, endit = int.from_bytes(bytes(args), 'big'), 0
+        elif cmd == 0x87:
+            cutoff, endit = 0, args[0]
+        elif cmd == 0x8d:
+            transpose = _signed(args[0])
+        elif cmd == 0x8e:
+            ignore_transpose = True
+        elif cmd == 0xa6:
+            volume = args[0]
         elif cmd == 0x8c:
             ignore_fixed = True
         elif cmd == 0x95:
@@ -131,7 +155,11 @@ def regions(image, banks, *, check=lambda: None):
         if start%4:
             continue
         if score := song(image[start:start+_MAX_BYTES], waves):
-            assets.append(dict(offset=start, size=score['extent'], kind='music sequence', media='metadata',
+            assets.append(dict(offset=start, size=score['extent'], kind='music sequence', media='audio',
+                               audio_kind='indexed sample directory', control=bank['offset'],
+                               table_offset=bank['table_offset'],
+                               samples=[dict(offset=start, size=score['extent'], codec='Nintendo libmus',
+                                             label='Song', preview_available=True)],
                                layout='libmus-raw-song', confidence='validated', label='libmus song',
                                channels=score['channels'], notes=len(score['notes']), loops=score['loops'],
                                reason='The raw libmus channel table and timed note commands resolve to a unique wave bank.',
@@ -140,5 +168,41 @@ def regions(image, banks, *, check=lambda: None):
 
 
 def preview(image, asset, selection):
+    if 'sample' in selection:
+        return _play(image, asset, selection)
     return dict(media='metadata', title=asset['label'], fields={'Channels':asset['channels'], 'Notes':asset['notes'],
                 'Looping channels':asset['loops']}, settings=asset['preview_settings'])
+
+
+def _play(image, asset, selection):
+    index = formats.integer(selection['sample'], 'Sequence', 0, 0)
+    base = asset['table_offset']
+    try:
+        bank = ptr_audio.bank(image, asset['control'])
+    except audio.BankError as exc:
+        raise formats.AssetError('The libmus wave bank changed. Rescan ROM Explorer.') from exc
+    if (image[base:base+len(ptr_audio.WAVES)] != ptr_audio.WAVES
+            or not ptr_audio.fits(image, bank, base, [ptr_audio.MAX_FRAME_CHECKS], lambda: None)):
+        raise formats.AssetError('The libmus wave table failed sample validation. Rescan ROM Explorer.')
+    waves = {sample['instrument']:sample for sample in bank['samples']}
+    start, size = asset['offset'], asset['size']
+    score = song(image[start:start+size], waves) if 0 <= start < start+size <= len(image) else None
+    if score is None:
+        raise formats.AssetError('The libmus channel data changed. Rescan ROM Explorer.')
+
+    tempos = [Event(tick, 0xff, tuple((60_000_000//bpm).to_bytes(4, 'big')))
+              for tick, bpm in score['tempos']]
+    voices = []
+    for note in score['notes']:
+        sample = waves[note.wave]
+        pitch = note.key + _signed(sample['base_note_byte']-48) + sample['detune']/100
+        gain = (note.volume*note.velocity/127**2)**2 if pitch <= 12 else 0
+        voices.append((note, dict(sample=sample, pitch=pitch, pan=note.pan, gain=gain)))
+    pcm, stats = compact_midi_render.render(image, base, 48, tempos, voices, label='libmus')
+    payload, details = formats.pcm(pcm, dict(format='pcm-s16le', channels=2,
+                                           rate=compact_midi_render.RATE, length=len(pcm)))
+    details.update(stats, format='Nintendo libmus', sample=index,
+                   note='Single-pass sample-backed preview. Envelopes, ties and modulation can differ.')
+    return dict(media='audio', mime='audio/wav', details=details,
+                data_url='data:audio/wav;base64,'+base64.b64encode(payload).decode(),
+                settings={**asset['preview_settings'], 'sample':index})

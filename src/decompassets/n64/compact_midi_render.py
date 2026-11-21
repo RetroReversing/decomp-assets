@@ -50,12 +50,16 @@ def _decode(image, base, sample):
     return pcm
 
 
-def render(image, base, division, events, voices):
+def render(image, base, division, events, voices, *, label='compact MIDI'):
     frame = _clock(division, events)
-    notes = [(frame(event.tick), frame(event.tick+event.duration), voice)
-             for event, voice in voices if frame(event.tick) < _FRAME_LIMIT]
-    end = max((stop for _, stop, _ in notes), default=0)
-    frames = min(_FRAME_LIMIT, end)
+    notes = []
+    end = 0
+    for event, voice in voices:
+        at, stop = frame(event.tick), frame(event.tick+event.duration)
+        end = max(end, stop)
+        if at < _FRAME_LIMIT:
+            notes.append((at, stop, voice))
+    frames = min(_FRAME_LIMIT, max((stop for _, stop, _ in notes), default=0))
     left, right = array('f', [0])*frames, array('f', [0])*frames
     cache = {}
     decoded = mixed = work = 0
@@ -68,7 +72,7 @@ def render(image, base, division, events, voices):
         if key not in cache:
             decoded += sample['samples']
             if decoded > 4*1024*1024:
-                raise formats.AssetError('The compact MIDI preview exceeds the decoded sample limit.')
+                raise formats.AssetError(f'The {label} preview exceeds the decoded sample limit.')
             cache[key] = _decode(image, base, sample)
         pcm = cache[key]
         step = sample['rate']/RATE * 2**(voice['pitch']/12)
@@ -98,10 +102,10 @@ def render(image, base, division, events, voices):
             position += step
             work += 1
         if work > _FRAME_LIMIT*16:
-            raise formats.AssetError('The compact MIDI preview exceeds the mixing limit.')
+            raise formats.AssetError(f'The {label} preview exceeds the mixing limit.')
         mixed += 1
     if not mixed:
-        raise formats.AssetError('This compact MIDI sequence has no playable notes in the preview window.')
+        raise formats.AssetError(f'This {label} sequence has no playable notes in the preview window.')
     peak = max(32767, max(map(abs, left)), max(map(abs, right)))
     pcm = array('h', (round(value*32000/peak) for pair in zip(left, right) for value in pair))
     if sys.byteorder != 'little':

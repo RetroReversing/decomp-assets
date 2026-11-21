@@ -63,3 +63,23 @@ def test_budget_cancellation_and_preview_limits(monkeypatch):
     assert result['details']['truncated'] and wav(result)[1]==30000
     for options in [{'sample':2},{'rate':999},{'rate':192001}]:
         with pytest.raises(AssetError):ptr_audio.preview(image,asset,options)
+
+
+def test_raw_song_preview_mixes_wave_bank_and_validates_table():
+    from decompassets.n64 import libmus_song
+
+    bank = fixture(pcm=True, loop=True)
+    bank += bytes((-len(bank))%4)
+    first = bytes.fromhex('81 01 85 78 8d f4 86 00 0c 48 18 80')
+    second = bytes.fromhex('81 01 9c fe a6 00 40 18 80')
+    tracks = struct.pack('>12I', 2,24,32,40,48,48,48,48+len(first),0,0,0,0)
+    image = bank+tracks+first+second
+    asset, = libmus_song.regions(image, ptr_audio.regions(image))
+    assert libmus_song.preview(image, asset, {})['fields']['Notes'] == 2
+    result = libmus_song.preview(image, asset, dict(sample=0))
+    assert result['details']['channels'] == 2
+    assert result['details']['mixed_notes'] == 1
+    assert any(wav(result)[2])
+    broken = image[:asset['table_offset']]+b'X'+image[asset['table_offset']+1:]
+    with pytest.raises(AssetError, match='failed sample validation'):
+        libmus_song.preview(broken, asset, dict(sample=0))
