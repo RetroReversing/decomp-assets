@@ -84,14 +84,19 @@ def _compressed(image, *, check):
         start = match.start()-4
         if start < 0 or start%4:
             continue
-        try:
-            decoded, extent = lzari.unpack(image[start:start+_MAX_PACKED], limit=MAX_CONTROL, check=check)
-            info = bank(decoded, 0, check=check)
-        except (lzari.LzariError, audio.BankError):
-            continue
-        if len(decoded) != info['size']:
-            continue
-        yield {**info, 'offset':start, 'size':extent, 'compressed_control':(start, extent)}
+        candidates = []
+        packed = image[start:start+_MAX_PACKED]
+        for order in ('big','little'):
+            try:
+                decoded, extent = lzari.unpack(packed, order=order, limit=MAX_CONTROL, check=check)
+                info = bank(decoded, 0, check=check)
+            except (lzari.LzariError, audio.BankError):
+                continue
+            if len(decoded) == info['size']:
+                candidates.append({**info, 'offset':start, 'size':extent,
+                                   'compressed_control':(start,extent), 'control_byte_order':order})
+        if len(candidates) == 1:
+            yield candidates[0]
 
 
 def _controls(image, *, check):
@@ -117,7 +122,7 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
         reason='PtrTablesV2 control graph, tuning arrays, sample extents, loops and predictor books checked. '+('Exactly one marked WaveTables candidate fits every sample and ADPCM frame selector; table placement remains a static inference.' if resolved else 'Wave-table placement is ambiguous or unresolved; sample bytes are not classified.')+' The bank stores no rate: 22050 Hz is an editable preview default. Pitch, mixing, sequences and loop playback are not recreated.'
         common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence='unique marked table (static inference)' if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
         if 'compressed_control' in info:
-            common['compressed_control'] = info['compressed_control']
+            common.update(compressed_control=info['compressed_control'], control_byte_order=info['control_byte_order'])
         results.append(dict(offset=info['offset'],size=info['size'],kind='audio',label='libmus '+info['name'],confidence='validated',samples=samples,sample_count=len(info['samples']),preview_settings=dict(format='auto',source='rom',offset=info['offset']),**common))
         if resolved:
             seen=set()
@@ -138,7 +143,7 @@ def preview(image,asset,selection):
     if span := asset.get('compressed_control'):
         start, size = span
         try:
-            books, consumed = lzari.unpack(image[start:start+size], limit=MAX_CONTROL)
+            books, consumed = lzari.unpack(image[start:start+size], order=asset.get('control_byte_order','big'), limit=MAX_CONTROL)
             if consumed != size:
                 raise lzari.LzariError('Changed compressed control length.')
         except lzari.LzariError as exc:

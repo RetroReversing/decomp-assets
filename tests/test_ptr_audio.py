@@ -93,31 +93,36 @@ _PACKED_CONTROL = bytes.fromhex(
         'ffffffffffffffb757fb80b633fc0000')
 
 
-def test_lzari_controls_use_the_decoded_predictor_books():
+@pytest.mark.parametrize('order', ['big','little'])
+def test_lzari_controls_use_the_decoded_predictor_books(order):
     from decompassets.n64 import lzari
 
-    packed = _PACKED_CONTROL
-    raw, consumed = lzari.unpack(packed)
+    packed = _PACKED_CONTROL if order == 'big' else _PACKED_CONTROL[:4][::-1]+_PACKED_CONTROL[4:]
+    raw, consumed = lzari.unpack(packed,order=order)
     assert raw == fixture()[64:308] and consumed == len(packed)
     image = bytes(32)+packed+fixture()[320:]
     bank, first, second = ptr_audio.regions(image)
     assert bank['compressed_control'] == (32, len(packed))
+    assert bank['control_byte_order'] == order
     assert bank['table_offset'] == 32+len(packed)
     for row, options in ((bank, {'sample':1}), (first, {}), (second, {})):
         assert any(wav(ptr_audio.preview(image,row,options))[2])
     with pytest.raises(lzari.LzariError, match='Truncated'):
-        lzari.unpack(packed[:-5])
+        lzari.unpack(packed[:-5],order=order)
     with pytest.raises(lzari.LzariError, match='size'):
-        lzari.unpack(packed, limit=len(raw)-1)
+        lzari.unpack(packed,order=order,limit=len(raw)-1)
+
+
+# Synthetic binary header, master tempo and two note tracks.
+_PACKED_SONG = bytes.fromhex(
+    '00000067fffffb9d19ffff7e7fff37afe53effa100fdb417e8cfbf9fa3d4d8feccb'
+    '7ffffffffffffc09ce399bffffffffffe35dfe51a3462b5126d2778240d4de41cf9acf2a00000')
 
 
 def test_binary_lzari_song_maps_instruments_and_renders_with_its_adjacent_bank():
     from decompassets import n64
 
-    # Synthetic binary header, master tempo and two note tracks.
-    song = bytes.fromhex(
-        '00000067fffffb9d19ffff7e7fff37afe53effa100fdb417e8cfbf9fa3d4d8feccb'
-        '7ffffffffffffc09ce399bffffffffffe35dfe51a3462b5126d2778240d4de41cf9acf2a00000')
+    song = _PACKED_SONG
     image = bytes(32)+bytes.fromhex('00000001')+song+_PACKED_CONTROL+fixture()[320:]
     asset, = [row for row in n64.regions(image) if row.get('layout') == 'libmus-binary-song']
     assert asset['channels'] == 2 and asset['notes'] == 3
@@ -138,3 +143,26 @@ def test_binary_effects_validate_the_track_directory_and_map_wave_ids():
     assert [(note.wave,note.key,note.duration) for note in scores[0]['notes']] == [(4,48,24)]
     assert libmus_song.binary_effects(raw,{0}) is None
     assert libmus_song.binary_effects(raw[:-1],{4}) is None
+
+
+def test_uncompressed_binary_song_follows_a_little_endian_bank_wave_table():
+    from decompassets import n64
+    from decompassets.n64 import lzari
+
+    bank = _PACKED_CONTROL[:4][::-1]+_PACKED_CONTROL[4:]
+    song, _ = lzari.unpack(_PACKED_SONG)
+    image = bytes(32)+bank+fixture()[320:]
+    image += bytes(-len(image)%8)+song
+    asset, = [row for row in n64.regions(image) if row.get('layout') == 'libmus-binary-song']
+    assert asset['control_byte_order'] == 'little' and not asset['sequence_packed']
+    assert any(wav(n64.preview(image,asset,{'sample':0}))[2])
+
+
+def test_binary_effect_count_is_independent_of_the_wave_lookup_count():
+    from decompassets.n64 import libmus_song
+
+    first = bytes.fromhex('81 00 30 18 80')
+    second = bytes.fromhex('81 00 31 18 80')
+    header = struct.pack('>10I',2,1,1,0,0,40+len(first)+len(second),40,100,40+len(first),100)
+    raw = header+first+second+struct.pack('>H',4)
+    assert [score['notes'][0].key for score in libmus_song.binary_effects(raw,{4})] == [48,49]

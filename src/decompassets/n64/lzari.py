@@ -8,8 +8,8 @@ class LzariError(ValueError):
     pass
 
 
-def unpack(data, *, limit=1<<20, check=lambda: None):
-    size = int.from_bytes(data[:4], 'big')
+def unpack(data, *, order='big', limit=1<<20, check=lambda: None):
+    size = int.from_bytes(data[:4], order)
     if not 0 < size <= limit or len(data) < 7:
         raise LzariError('Invalid arithmetic stream size.')
     symbols = [0, *range(314)]
