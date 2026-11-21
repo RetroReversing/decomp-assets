@@ -64,6 +64,7 @@ def regions(image, *, context=None, **kwargs):
         libmus_song,
         mainfs,
         models,
+        mwo_graphics,
         native_scene,
         paired_audio,
         ptr_audio,
@@ -94,6 +95,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
+    known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
     known.extend(borg.regions(image,rows=borg_rows,**kwargs))
@@ -145,6 +147,7 @@ def preview(data, asset, selection):
         libmus_song,
         mainfs,
         models,
+        mwo_graphics,
         paired_audio,
         ptr_audio,
         rare_assets,
@@ -189,6 +192,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in ('libmus-raw-song','libmus-binary-song','libmus-binary-effects'):return libmus_song.preview(data,asset,selection)
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
     if asset.get('layout') in (bolt.TEXTURE,bolt.MODEL,'bolt-vox'):return bolt.preview(data,asset,selection)
+    if asset.get('layout') in (mwo_graphics.TEXTURES,mwo_graphics.MODELS):return mwo_graphics.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
     if asset.get('layout')=='borg-texture':return borg.preview(data,asset,selection)
