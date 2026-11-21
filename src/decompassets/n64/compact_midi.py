@@ -109,7 +109,7 @@ def sequence(data):
     *offsets, division = _HEADER.unpack_from(data)
     starts = [at for at in offsets if at]
     if (not starts or starts != sorted(set(starts)) or starts[0] != _HEADER.size
-            or starts[-1] >= len(data) or not 1 <= division <= 960):
+            or starts[-1] >= len(data) or not 1 <= division <= 0x7fff):
         return None
     try:
         budget = [_MAX_EVENTS]
