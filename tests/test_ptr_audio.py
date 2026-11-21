@@ -166,3 +166,21 @@ def test_binary_effect_count_is_independent_of_the_wave_lookup_count():
     header = struct.pack('>10I',2,1,1,0,0,40+len(first)+len(second),40,100,40+len(first),100)
     raw = header+first+second+struct.pack('>H',4)
     assert [score['notes'][0].key for score in libmus_song.binary_effects(raw,{4})] == [48,49]
+
+
+def test_uncompressed_binary_songs_before_a_single_compressed_bank():
+    from decompassets import n64
+    from decompassets.n64 import lzari
+
+    song, _ = lzari.unpack(_PACKED_SONG)
+    first = 32
+    second = first+len(song)+(-len(song)%8)+120
+    control = second+len(song)+(-len(song)%8)+32
+    image = bytearray(control)
+    image[first:first+len(song)] = song
+    image[second:second+len(song)] = song
+    image = bytes(image)+_PACKED_CONTROL+fixture()[320:]
+    rows = [row for row in n64.regions(image) if row.get('layout') == 'libmus-binary-song']
+    assert [row['offset'] for row in rows] == [first,second]
+    assert all(row['control'] == control and not row['sequence_packed'] for row in rows)
+    assert all(any(wav(n64.preview(image,row,{'sample':0}))[2]) for row in rows)
