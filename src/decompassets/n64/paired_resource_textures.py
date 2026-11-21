@@ -93,7 +93,7 @@ def asset(offset, size, directory, index, items):
 
 def preview(image, asset, selection):
     offset = asset['offset']
-    decoded = paired_resources.unpack(image, offset, asset['size'])
+    decoded = paired_resources.unpack_asset(image, asset)
     if not decoded or not (items := textures(decoded)):
         raise formats.AssetError('The compressed texture resource changed. Rescan ROM Explorer.')
     index = formats.integer(selection.get('texture', 0), 'Texture', 0, len(items) - 1)

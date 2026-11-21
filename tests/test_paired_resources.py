@@ -65,6 +65,11 @@ def test_paired_texture_preview_uses_the_render_tile_and_local_palette():
     assert not paired_resources.regions(changed)
 
 
+def _flagged(data):
+    payload = zlib.compress(data)
+    return struct.pack('>I', 0x80000000 | (4 + len(payload))) + payload
+
+
 def test_paired_scene_previews_local_display_list_meshes():
     vertices = b''.join(struct.pack('>3hH2h4B', x, y, 0, 0, 0, 0, 255, 255, 255, 255)
                         for x, y in ((0, 0), (8, 0), (0, 8)))
@@ -80,3 +85,17 @@ def test_paired_scene_previews_local_display_list_meshes():
     assert result['surfaces'][0]['indices'] == (0, 2, 1)
     assert result['settings']['mesh'] == 1
     assert not paired_resources.regions(_directory(vertices + first[:-8]))
+    flagged = _flagged(vertices + first + second)
+    asset, = paired_resources.regions(flagged)
+    assert asset['codec'] == 'zlib'
+    assert preview(flagged, asset, {'mesh': 1})['surfaces'] == result['surfaces']
+
+
+def test_flagged_zlib_resource_exposes_textures_and_checks_its_exact_extent():
+    payload = zlib.compress(_texture())
+    image = bytes(2) + _flagged(_texture()) + b'padding'
+    asset, = paired_resources.regions(image)
+    assert asset['size'] == len(payload) + 4 and asset['codec'] == 'zlib'
+    assert preview(image, asset, {'texture': 0})['details']['width'] == 16
+    assert not paired_resources.regions(image[:-8])
+    assert not paired_resources.regions(bytes(2) + struct.pack('>I', 0x80000000 | (5 + len(payload))) + payload + b'x')
