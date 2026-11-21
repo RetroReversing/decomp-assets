@@ -56,6 +56,7 @@ def regions(image, *, context=None, **kwargs):
         ffs,
         fla2,
         fonts,
+        libmus_song,
         mainfs,
         models,
         native_scene,
@@ -75,12 +76,14 @@ def regions(image, *, context=None, **kwargs):
     )
     display_meshes = []
     sound_banks = audio.regions(image,context=context,**kwargs)
+    pointer_banks = ptr_audio.regions(image,**kwargs)
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,models=display_meshes,**kwargs)
            +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +sound_banks
-           +ptr_audio.regions(image,**kwargs)+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
+           +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(display_meshes)
+    known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
     known.extend(borg.regions(image,rows=borg_rows,**kwargs))
     known.extend(borg_models.regions(image,borg_rows,**kwargs))
@@ -117,6 +120,7 @@ def preview(data, asset, selection):
         ffs,
         fla2,
         fonts,
+        libmus_song,
         mainfs,
         models,
         ptr_audio,
@@ -151,6 +155,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
+    if asset.get('layout')=='libmus-raw-song':return libmus_song.preview(data,asset,selection)
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
