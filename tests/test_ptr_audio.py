@@ -213,3 +213,34 @@ def test_aligned_wave_control_and_raw_sequences_resolve_a_local_pair():
         asset, = libmus_song.regions(source,ptr_audio.regions(source))
         assert asset['layout'] == layout
         assert any(wav(libmus_song.preview(source,asset,{'sample':0}))[2])
+
+
+def test_rnc_controls_pair_with_aligned_song_effects_and_marked_waves():
+    from decompassets import n64
+    from decompassets.n64 import lzari
+
+    from .test_rnc import literal_block
+
+    def aligned(data):
+        return data + bytes((-len(data))%8)
+
+    track = bytes.fromhex('81 00 30 18 80')
+    effects = struct.pack('>8I', 1,1,1,0,0,32+len(track),32,100)+track+struct.pack('>H',1)
+    song, _ = lzari.unpack(_PACKED_SONG)
+    controls = fixture()[64:308]
+    first = aligned(literal_block(effects))
+    control = aligned(literal_block(controls))
+    second = aligned(literal_block(song))
+    image = first + control + second + fixture()[320:]
+    rows = n64.regions(image)
+    bank, = [a for a in rows if a.get('bank_offset') == len(first) and a['offset'] == len(first)]
+    assert bank['control_codec'] == 'rnc'
+    assert bank['table_offset'] == len(first)+len(control)+len(second)
+    assert len(bank['samples']) == 2
+    assert any(wav(n64.preview(image,bank,dict(sample=1)))[2])
+    sequences = {a['kind']:a for a in rows if a.get('sequence_codec') == 'rnc'}
+    assert set(sequences) == {'audio sequence', 'music sequence'}
+    assert all(any(wav(n64.preview(image,a,dict(sample=0)))[2]) for a in sequences.values())
+    bad = bytearray(image)
+    bad[len(first)+14] ^= 1  # packed control CRC
+    assert not any(a.get('control_codec') == 'rnc' for a in n64.regions(bad))

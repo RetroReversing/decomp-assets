@@ -10,6 +10,7 @@ import re
 import struct
 from bisect import bisect_left
 
+from .. import rnc
 from ..formats import MAX_BYTES, AssetError, integer
 from . import audio, lzari
 
@@ -19,6 +20,8 @@ WAVES=b'N64 WaveTables \0'
 # bank-specific fields. Full decompression and graph validation follow.
 _LZARI_PREFIX = bytes.fromhex('c0437af8c1cfa2dfb61d888b')
 _MAX_PACKED = 2*1024*1024
+RNC_HEADER = re.compile(rb'RNC[\x01\x02]')
+_RNC_LOOKBACK = 512*1024
 MAX_BANKS=128
 MAX_SAMPLES=2048
 MAX_CONTROL=1024*1024
@@ -100,7 +103,41 @@ def _compressed(image, *, check):
             yield candidates[0]
 
 
-def _controls(image, *, check):
+def _rnc_controls(image, tables, check):
+    # RNC sound bundles put their marked waves after their control and sequences.
+    seen = set()
+    for table in tables:
+        for match in RNC_HEADER.finditer(image, max(0, table-_RNC_LOOKBACK), table):
+            check()
+            start = match.start()
+            if start%8 or start in seen:
+                continue
+            seen.add(start)
+            try:
+                decoded, extent = rnc.unpack_at(image, start, max_output=MAX_CONTROL, max_packed=_MAX_PACKED)
+                if start+extent > table or not decoded.startswith(MAGIC):
+                    continue
+                info = bank(decoded, 0, check=check)
+            except (rnc.RncError, audio.BankError):
+                continue
+            if len(decoded) == info['size']:
+                yield {**info, 'offset':start, 'size':extent, 'control_codec':'rnc',
+                       'compressed_control':(start,extent)}
+
+
+def decoded_control(image, asset):
+    start, size = asset['compressed_control']
+    if asset.get('control_codec') == 'rnc':
+        decoded, extent = rnc.unpack_at(image, start, max_output=MAX_CONTROL, max_packed=_MAX_PACKED)
+    else:
+        decoded, extent = lzari.unpack(image[start:start+size], order=asset.get('control_byte_order','big'),
+                                       limit=MAX_CONTROL)
+    if extent != size:
+        raise audio.BankError('Changed compressed control length.')
+    return decoded
+
+
+def _controls(image, tables, *, check):
     for hit in itertools.islice(re.finditer(re.escape(MAGIC),image),MAX_BANKS):
         check()
         try:
@@ -108,13 +145,14 @@ def _controls(image, *, check):
         except audio.BankError:
             pass
     yield from _compressed(image,check=check)
+    yield from _rnc_controls(image,tables,check)
 
 
 def regions(image, *, check=lambda:None, progress=lambda _:None):
     """Keep ambiguous wave-table placement unresolved instead of choosing the nearest."""
     tables=[m.start() for m in itertools.islice(re.finditer(re.escape(WAVES),image),MAX_BANKS)]
     results=[];budget=[MAX_FRAME_CHECKS]
-    for index,info in enumerate(_controls(image,check=check)):
+    for index,info in enumerate(_controls(image,tables,check=check)):
         check();progress(dict(phase='Recognizing libmus audio banks',done=index))
         preceding = bisect_left(tables,info['offset'])-1
         paired = None
@@ -136,8 +174,9 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             reason += 'The bank stores no rate. 22050 Hz is an editable preview default.'
         common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('adjacent wave and control pair' if paired is not None else 'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
         if 'compressed_control' in info:
-            common.update(compressed_control=info['compressed_control'], control_byte_order=info['control_byte_order'])
-        results.append(dict(offset=info['offset'],size=info['size'],kind='audio',label='libmus '+info['name'],confidence='validated',samples=samples,sample_count=len(info['samples']),preview_settings=dict(format='auto',source='rom',offset=info['offset']),**common))
+            common.update(compressed_control=info['compressed_control'])
+            common.update((key, info[key]) for key in ('control_codec', 'control_byte_order') if key in info)
+        results.append(dict(offset=info['offset'],size=info['size'],kind='audio',label='libmus '+info['name'] if info['name'] else 'libmus sample bank',confidence='validated',samples=samples,sample_count=len(info['samples']),preview_settings=dict(format='auto',source='rom',offset=info['offset']),**common))
         if resolved:
             seen=set()
             for sample in samples:
@@ -154,13 +193,10 @@ def preview(image,asset,selection):
     rate=integer(selection.get('rate',DEFAULT_RATE),'Preview sample rate',1000,192000)
     selected={**asset,'samples':[{**s,'rate':rate} for s in asset.get('samples',[])]}
     books = None
-    if span := asset.get('compressed_control'):
-        start, size = span
+    if asset.get('compressed_control'):
         try:
-            books, consumed = lzari.unpack(image[start:start+size], order=asset.get('control_byte_order','big'), limit=MAX_CONTROL)
-            if consumed != size:
-                raise lzari.LzariError('Changed compressed control length.')
-        except lzari.LzariError as exc:
+            books = decoded_control(image, asset)
+        except (audio.BankError, lzari.LzariError, rnc.RncError) as exc:
             raise AssetError('The compressed audio controls changed. Rescan ROM Explorer.') from exc
     result=audio.preview(image,selected,selection,book_image=books)
     result['settings']['rate']=rate;result['details']['rate_basis']=asset['rate_basis']
