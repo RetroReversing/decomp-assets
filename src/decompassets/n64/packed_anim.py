@@ -70,31 +70,40 @@ def _frame(image, offset, check):
     return length, width, height, depth, raw
 
 
+def frames(image, offset, end, check):
+    """Read frames within a declared standalone or archived ANIM extent."""
+    header = image[offset:offset+48]
+    if len(header)!=48 or not _MAGIC.fullmatch(header[:8]) or any(header[16:]):
+        return []
+    count, delay = struct.unpack_from('>II',header,8)
+    if not 0 < count <= 512 or not 0 < delay <= 240:
+        return []
+    cursor = offset+48
+    results = []
+    for index in range(count):
+        check()
+        if cursor+_HEADER.size > end:
+            return []
+        length, = struct.unpack_from('>I',image,cursor)
+        if cursor+length > end:
+            return []
+        frame = _frame(image,cursor,check)
+        if not frame:
+            return []
+        length, width, height, _, _ = frame
+        results.append(dict(offset=cursor,size=length,kind='image',media='image',layout=LAYOUT,
+                            label=f'Packed ANIM frame {index+1}',confidence='validated',
+                            reason='The native frame header and LZSS stream agree on the indexed pixel extent.',
+                            preview_settings=dict(format='auto',source='rom',offset=cursor,width=width,height=height)))
+        cursor += length
+    return results
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     results = []
     for match in islice(_MAGIC.finditer(image),1024):
-        check()
-        offset = match.start()
-        header = image[offset:offset+48]
-        if offset%4 or len(header)!=48 or any(header[16:]):
-            continue
-        count, delay = struct.unpack_from('>II',header,8)
-        if not 0 < count <= 512 or not 0 < delay <= 240:
-            continue
-        at = offset+48
-        frames = []
-        for index in range(count):
-            frame = _frame(image,at,check)
-            if not frame:
-                break
-            length, width, height, depth, _ = frame
-            frames.append(dict(offset=at,size=length,kind='image',media='image',layout=LAYOUT,
-                               label=f'Packed ANIM frame {index+1}',confidence='validated',
-                               reason='The native frame header and LZSS stream agree on the indexed pixel extent.',
-                               preview_settings=dict(format='auto',source='rom',offset=at,width=width,height=height)))
-            at += length
-        if len(frames)==count:
-            results.extend(frames)
+        if match.start()%4 == 0:
+            results.extend(frames(image,match.start(),len(image),check))
     return results
 
 
