@@ -249,3 +249,50 @@ def test_unnamed_b1_relocator_pairs_the_copied_control_with_its_sample_table(sam
         assert len(bank['samples'])==2 and wav(audio.preview(bytes(image),bank,{}))[0]==22050
     else:
         assert bank['audio_kind']=='unresolved bank'
+
+
+@pytest.mark.parametrize('matching_buffer', [True, False])
+def test_pi_wrapper_forwards_b1_control_and_wave_table(matching_buffer):
+    original, _, base = fixture(raw=True)
+    control, wave_at = 128, 1024
+    image = bytearray(original[:base] + bytes(wave_at-base) + original[base:])
+    caller_pc, wrapper_pc, dma_pc, link_pc = 0x80000000, 0x80000200, 0x80000300, 0x80000380
+    image[:4] = words(jal(wrapper_pc))
+    image[512:516] = words(jal(link_pc))
+    image[640:664] = words(0x8fa40028, 0x8fa8002c, 0xa6020000, 0xae07000c, 0xae040008, 0xae080010)
+    image[768:788] = words(0x00809021, 0x864e0000, 0x24014231, 0x15c1002e, 0x864f0002)
+    functions = [dict(name=name, vram=pc, rom_offset=offset, size=0x70)
+                 for name, pc, offset in [('caller', caller_pc, 0), ('wrapper', wrapper_pc, 512),
+                                          ('dma', dma_pc, 640), ('link', link_pc, 768)]]
+
+    def constant(value):
+        return dict(kind='constant', value=value, offset=0)
+
+    def argument(index):
+        return dict(kind='argument', value=index, offset=0)
+
+    def read(vram, code, **kwargs):
+        if vram == caller_pc:
+            return dict(events=[dict(kind='call', target=wrapper_pc, instruction=vram, block=0,
+                                     args=[constant(0xb0000000+control), constant(base-control),
+                                           None, constant(0xb0000000+wave_at)])])
+        pointer = constant(0x80200000)
+        location = constant(0x80100000)
+        written = location if matching_buffer else constant(0x80100010)
+        return dict(events=[
+            dict(kind='store', width=4, instruction=vram, block=0, place=written, value=pointer),
+            dict(kind='call', target=dma_pc, instruction=vram+4, block=0,
+                 args=[None, None, None, argument(0), pointer, argument(1)]),
+            dict(kind='call', target=0x80001000, instruction=vram+8, block=0, args=[]),
+            dict(kind='load', width=4, instruction=vram+16, place=location),
+            dict(kind='call', target=link_pc, instruction=vram+24, block=0,
+                 args=[dict(kind='memory', value=vram+16, offset=0), argument(3)]),
+        ])
+
+    bank = audio.regions(bytes(image), context=dict(functions=functions, read_code=read))[0]
+    if matching_buffer:
+        assert bank['table_offset'] == wave_at
+        assert bank['table_confidence'] == 'validated'
+        assert wav(audio.preview(bytes(image), bank, {}))[0] == 22050
+    else:
+        assert bank['audio_kind'] == 'unresolved bank'

@@ -163,6 +163,54 @@ def loader_tables(image, context, *, check=lambda: None):
     return result
 
 
+def _guards_b1(words):
+    bases = {4, *(word >> 11 & 31 for word in words[:9] if word & 0xffff07ff == 0x00800021)}
+    for i, signature in enumerate(words[:-2]):
+        base = signature >> 21 & 31
+        magic = words[i+1]
+        if base not in bases or signature & 0xfc00ffff != 0x84000000 or magic & 0xffe0ffff != 0x24004231:
+            continue
+        if any(branch >> 26 == 5 and branch >> 21 & 31 == signature >> 16 & 31
+               and branch >> 16 & 31 == magic >> 16 & 31 for branch in words[i+2:i+4]):
+            return any(word & 0xffe0ffff == (0x84000002 | base << 21) for word in words[i+2:])
+    return False
+
+
+def _forwarded_control(events, pi_transfers, relocators):
+    """Check a wrapper's control ROM argument, length and wave address reach their proper uses."""
+    calls = [event for event in events if event['kind'] == 'call']
+    for index, copy in enumerate(calls):
+        if copy['target'] not in pi_transfers or len(copy['args']) < 6:
+            continue
+        source, buffer, size = copy['args'][3:6]
+        if not (source and source['kind']=='argument' and source['value']==0 and not source['offset']
+                and size and size['kind']=='argument' and size['value']==1 and not size['offset'] and buffer):
+            continue
+        # The wrapper may wait for the DMA completion message before relocating.
+        for link in calls[index+1:index+4]:
+            if link['block'] != copy['block'] or link['target'] not in relocators or len(link['args']) < 2:
+                continue
+            control, wave = link['args'][:2]
+            if not (control and control['kind']=='memory' and not control.get('offset', 0) and wave and wave['kind']=='argument'
+                    and wave['value']==3 and not wave['offset']):
+                continue
+            load = next((event for event in events if event['kind']=='load' and event['width']==4
+                         and event['instruction']==control['value']), None)
+            place = load and load['place']
+            if not place or place['kind']!='constant' or not copy['instruction'] < load['instruction'] < link['instruction']:
+                continue
+            stores = [event for event in events if event['kind'] == 'store'
+                      and event['block'] == copy['block'] and event['instruction'] < load['instruction']
+                      and event['place'] and event['place']['kind'] == 'constant'
+                      and event['place']['value'] == place['value']]
+            written = max(stores, key=lambda event: event['instruction']) if stores else None
+            if (written and written['instruction'] < copy['instruction'] and written['width'] == 4
+                    and written['value'] and all(written['value'].get(key) == buffer.get(key)
+                                                 for key in ('kind', 'value', 'offset'))):
+                return True
+    return False
+
+
 def _copied_tables(image, context, check):
     """Pair a copied B1 graph with the sample address passed to its relocator."""
     read = context.get('read_code')
@@ -173,28 +221,25 @@ def _copied_tables(image, context, check):
         check()
         if (start := fn.get('rom_offset')) is not None and 0 <= start < start+fn['size'] <= len(image):
             functions.setdefault(fn['vram'], []).append(fn)
-    relocators, transfers = set(), set()
+    relocators, transfers, pi_transfers = set(), set(), set()
     for pc, rows in functions.items():
         if len(rows) != 1 or not 0x70 <= rows[0]['size'] <= 0x280:
             continue
         start, size = rows[0]['rom_offset'], rows[0]['size']
         code = image[start:start+size]
         words = [word for word, in struct.iter_unpack('>I', code[:len(code)//4*4])]
-        # The B1 guard reads the signature and count before walking the control graph.
-        for signature, magic, _, branch in zip(words, words[1:], words[2:], words[3:]):
-            if (signature & 0xffe0ffff == 0x84800000 and magic & 0xffe0ffff == 0x24004231
-                    and branch >> 26 == 5 and branch >> 21 & 31 == signature >> 16 & 31
-                    and branch >> 16 & 31 == magic >> 16 & 31):
-                if any(word & 0xffe0ffff == 0x84800002 for word in words):
-                    relocators.add(pc)
-                break
+        if _guards_b1(words):
+            relocators.add(pc)
         if all(word in words for word in (
                 0x00809021, 0x00a08821, 0x00c08021, 0xafb00014, 0x02403821, 0xafb10010)):
             transfers.add(pc)
-    if not relocators or not transfers:
+        if all(word in words for word in (
+                0x8fa40028, 0x8fa8002c, 0xa6020000, 0xae07000c, 0xae040008, 0xae080010)):
+            pi_transfers.add(pc)
+    if not relocators or not (transfers or pi_transfers):
         return {}
     needles = [struct.pack('>I', 0x0c000000 | ((pc >> 2) & 0x3ffffff)) for pc in relocators]
-    result = {}
+    result, wrappers = {}, set()
     for rows in functions.values():
         check()
         if len(rows) != 1 or rows[0]['size'] > 0x8000:
@@ -205,6 +250,8 @@ def _copied_tables(image, context, check):
         if not any(needle in code for needle in needles):
             continue
         events = read(fn['vram'], code, gp=context.get('gp', 0), check=check)['events']
+        if pi_transfers and _forwarded_control(events, pi_transfers, relocators):
+            wrappers.add(fn['vram'])
         loads = {e['instruction']: e for e in events if e['kind'] == 'load' and e['width'] == 4}
         calls = [e for e in events if e['kind'] == 'call']
         for copy, link in itertools.pairwise(calls):
@@ -233,6 +280,30 @@ def _copied_tables(image, context, check):
             result.setdefault(control, {}).setdefault(base, []).append(dict(
                 function=fn['name'], instruction=link['instruction'], control_size=size,
                 role='sample-table argument', reason='The B1 relocator receives the copied controls and the sample-table address.'))
+    if wrappers:
+        needles = [struct.pack('>I', 0x0c000000 | ((pc >> 2) & 0x3ffffff)) for pc in wrappers]
+        for rows in functions.values():
+            check()
+            if len(rows)!=1 or rows[0]['size']>0x8000:
+                continue
+            fn = rows[0]
+            start = fn['rom_offset']
+            code = image[start:start+fn['size']]
+            if not any(needle in code for needle in needles):
+                continue
+            for call in read(fn['vram'],code,gp=context.get('gp',0),check=check)['events']:
+                if call['kind'] != 'call' or call['target'] not in wrappers or len(call['args']) < 4:
+                    continue
+                source, length, _, table = call['args'][:4]
+                if not all(arg and arg['kind']=='constant' for arg in (source,length,table)):
+                    continue
+                control, base = source['value']-0xb0000000, table['value']-0xb0000000
+                size = length['value']
+                if (0 <= control < control+size <= len(image) and 0 <= base < len(image)
+                        and image[control:control+2]==b'B1'):
+                    result.setdefault(control,{}).setdefault(base,[]).append(dict(
+                        function=fn['name'],instruction=call['instruction'],control_size=size,role='sample-table argument',
+                        reason='The wrapper forwards the controls and wave address to their verified consumers.'))
     return result
 
 
