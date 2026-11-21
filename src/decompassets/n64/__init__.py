@@ -44,6 +44,7 @@ def regions(image, *, context=None, **kwargs):
         audio,
         bind,
         blast_textures,
+        bolt,
         borg,
         borg_audio,
         borg_dcm,
@@ -92,6 +93,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
+    known.extend(bolt.regions(image,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
     known.extend(borg.regions(image,rows=borg_rows,**kwargs))
@@ -124,6 +126,7 @@ def preview(data, asset, selection):
         bind_models,
         bind_textures,
         blast_textures,
+        bolt,
         borg,
         borg_audio,
         borg_dcm,
@@ -185,6 +188,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
     if asset.get('layout') in ('libmus-raw-song','libmus-binary-song','libmus-binary-effects'):return libmus_song.preview(data,asset,selection)
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
+    if asset.get('layout') in (bolt.TEXTURE,bolt.MODEL,'bolt-vox'):return bolt.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
     if asset.get('layout')=='borg-texture':return borg.preview(data,asset,selection)
