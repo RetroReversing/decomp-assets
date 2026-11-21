@@ -7,7 +7,7 @@ import struct
 from dataclasses import dataclass, replace
 
 from .. import formats, rnc
-from . import audio, compact_midi_render, lzari, ptr_audio
+from . import audio, compact_midi_render, lzari, ptr_audio, raw_deflate_lists
 from .compact_midi import Event
 
 _HEADER = struct.Struct('>6I')
@@ -476,9 +476,45 @@ def _split_raw_sequences(image, banks, check):
     return result
 
 
+
+def _archived_songs(image, banks, check):
+    if not banks:
+        return
+    for offset, end in raw_deflate_lists.archive_spans(image, check):
+        check()
+        entries = raw_deflate_lists.members(image, offset, end - offset, b'\xaa\xa5')
+        if len(entries) < 2 or any(member[:4] != b'\0\0\x02\x15' or len(member) > _MAX_BYTES for member in entries):
+            continue
+        matches = []
+        for bank in banks:
+            waves = {sample['instrument'] for sample in bank['samples']}
+            scores = []
+            for entry in entries:
+                check()
+                score = binary_song(entry, waves)
+                if not score or not 0 <= len(entry) - score['extent'] <= 16:
+                    break
+                scores.append(score)
+            else:
+                matches.append((bank, scores))
+        if len(matches) != 1:
+            continue
+        bank, scores = matches[0]
+        samples = [dict(label=f'Song {i}', codec='Nintendo libmus', preview_available=True)
+                   for i in range(1, len(scores) + 1)]
+        yield dict(offset=offset, size=end - offset, kind='music sequence', media='audio',
+                   audio_kind='indexed sample directory', control=bank['offset'], table_offset=bank['table_offset'],
+                   sequence_codec='raw-deflate-directory', layout='libmus-binary-song',
+                   confidence='validated', label='Compressed libmus song directory', samples=samples,
+                   channels=max(score['channels'] for score in scores),
+                   notes=sum(len(score['notes']) for score in scores), loops=sum(score['loops'] for score in scores),
+                   reason='Every indexed song resolves to the same unique sample bank.',
+                   preview_settings=dict(format='auto', source='rom', offset=offset))
+
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
     assets = _binary_regions(image,resolved,check)
+    assets.extend(_archived_songs(image, resolved, check))
     for bank in resolved:
         if bank.get('control_codec') == 'rnc':
             assets.extend(_rnc_regions(image,bank,check))
@@ -539,7 +575,10 @@ def _play(image, asset, selection):
             score = song(raw,waves)
         else:
             try:
-                if asset.get('sequence_codec') == 'rnc':
+                if asset.get('sequence_codec') == 'raw-deflate-directory':
+                    entries = raw_deflate_lists.members(image, start, size, b'\xaa\xa5')
+                    raw = entries[index] if index < len(entries) else b''
+                elif asset.get('sequence_codec') == 'rnc':
                     raw, extent = rnc.unpack_at(raw, 0, max_output=_MAX_BYTES)
                     if extent != size:
                         raise rnc.RncError('changed packed sequence size')
