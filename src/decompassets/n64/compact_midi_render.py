@@ -31,12 +31,12 @@ def _clock(division, events):
     return frame
 
 
-def _decode(image, base, sample):
+def _decode(image, base, sample, book_image):
     offset = base+sample['relative_offset']
     count = sample['samples']
     if sample['codec'] == 'N64 VADPCM':
         predictors = sample['predictors']
-        book = struct.unpack_from(f'>{predictors*16}h', image, sample['book_offset'])
+        book = struct.unpack_from(f'>{predictors*16}h', book_image, sample['book_offset'])
         encoded = image[offset:offset+sample['encoded_size']]
         data = audio.vadpcm(encoded, book, predictors, count)
         little = True
@@ -50,7 +50,8 @@ def _decode(image, base, sample):
     return pcm
 
 
-def render(image, base, division, events, voices, *, label='compact MIDI'):
+def render(image, base, division, events, voices, *, label='compact MIDI', book_image=None):
+    books = image if book_image is None else book_image
     frame = _clock(division, events)
     notes = []
     end = 0
@@ -73,7 +74,7 @@ def render(image, base, division, events, voices, *, label='compact MIDI'):
             decoded += sample['samples']
             if decoded > 4*1024*1024:
                 raise formats.AssetError(f'The {label} preview exceeds the decoded sample limit.')
-            cache[key] = _decode(image, base, sample)
+            cache[key] = _decode(image, base, sample, books)
         pcm = cache[key]
         step = sample['rate']/RATE * 2**(voice['pitch']/12)
         pan = voice['pan']/127

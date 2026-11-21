@@ -170,7 +170,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
     if asset.get('layout')=='f3dex-mesh':return display_meshes.preview(data,asset,selection)
-    if asset.get('layout')=='libmus-raw-song':return libmus_song.preview(data,asset,selection)
+    if asset.get('layout') in ('libmus-raw-song','libmus-binary-song','libmus-binary-effects'):return libmus_song.preview(data,asset,selection)
     if asset.get('layout')=='borg-dcm':return borg_dcm.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)

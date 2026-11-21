@@ -1,12 +1,13 @@
 """Read and preview a bounded first pass of older libmus song tracks."""
 
 import base64
+import math
 import re
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .. import formats
-from . import audio, compact_midi_render, ptr_audio
+from . import audio, compact_midi_render, lzari, ptr_audio
 from .compact_midi import Event
 
 _HEADER = struct.Struct('>6I')
@@ -16,6 +17,7 @@ _WIDTHS.update(dict.fromkeys((0x86,0x9d,0xa3,0xa4,0xa5), 2))
 _WIDTHS.update(dict.fromkeys((0x88,0x89,0x97), 3))
 _WIDTHS.update(dict.fromkeys((0x83,0x8a,0x8c,0x8e,0x91,0x92,0x93,0x94,0x96,0x99,0x9a,0x9f), 0))
 _WIDTHS[0x84] = 7
+_BINARY_WIDTHS = _WIDTHS | {0x98:0, 0xaa:1, 0xab:1, 0xac:0, 0xb0:1}
 _MAX_BYTES = 256*1024
 
 
@@ -34,13 +36,17 @@ def _signed(byte):
     return (byte+128)%256-128
 
 
-def _track(data, start, end, waves):
+def _track(data, start, end, waves, *, instruments=None, drums=b'', effects=False):
     at = start
     tick = fixed = wave = 0
     transpose = cutoff = endit = 0
     velocity = volume = 127
     pan = 64
-    explicit_velocity = ignore_fixed = ignore_transpose = False
+    binary = instruments is not None
+    widths = _BINARY_WIDTHS if binary else _WIDTHS
+    explicit_velocity = binary and not effects
+    ignore_fixed = ignore_transpose = False
+    drum_bank = None
     notes, tempos, loops = [], [], []
 
     def byte():
@@ -59,15 +65,29 @@ def _track(data, start, end, waves):
         cmd = byte()
         if cmd < 128:
             strength = byte() if explicit_velocity else velocity
+            if binary and strength & 128:
+                strength &= 127
+                velocity = strength
+                explicit_velocity = False
             length = fixed if fixed and not ignore_fixed else variable()
             ignore_fixed = False
             if cmd != 0x60:
-                if cmd > 0x60 or wave not in waves:
-                    raise ValueError
+                voice, note_pan = wave, pan
                 key = cmd if ignore_transpose else cmd + transpose
+                if drum_bank is not None:
+                    slot = (drum_bank+cmd)*6
+                    if slot+6 > len(drums):
+                        raise ValueError
+                    voice, note_pan, key = drums[slot+1], drums[slot+4]>>1, drums[slot+5]
+                if binary:
+                    if not 0 <= voice < len(instruments):
+                        raise ValueError
+                    voice = instruments[voice]
+                if cmd > 0x60 or voice not in waves:
+                    raise ValueError
                 ignore_transpose = False
                 duration = min(length, cutoff) if cutoff else max(0, length-endit)
-                notes.append(Note(tick, duration, key, wave, strength, pan, volume))
+                notes.append(Note(tick, duration, key, voice, strength, note_pan, volume))
             tick += length
             continue
         if cmd == 0x80:
@@ -79,9 +99,10 @@ def _track(data, start, end, waves):
             elif cmd == 0x8b:
                 fixed = value
             continue
-        if cmd not in _WIDTHS:
+        width = 0 if effects and cmd==0x82 else widths.get(cmd)
+        if width is None:
             raise ValueError
-        args = [byte() for _ in range(_WIDTHS[cmd])]
+        args = [byte() for _ in range(width)]
         if cmd == 0x85 and args[0]:
             tempos.append((tick, args[0]))
         elif cmd == 0x86:
@@ -107,6 +128,12 @@ def _track(data, start, end, waves):
             if repeats > 1:
                 loops.append((target, repeats-1))
                 at = target
+        elif binary and cmd == 0x9e:
+            drum_bank = args[0]
+        elif binary and cmd == 0x9f:
+            drum_bank = None
+        elif binary and cmd == 0xac:
+            fixed = 0
         elif cmd == 0x9c:
             pan = args[0]>>1
         elif cmd == 0x99:
@@ -142,13 +169,146 @@ def song(data, waves):
     return dict(extent=extent, notes=events, tempos=tempos, loops=loops, channels=len(tracks)) if events else None
 
 
+_BINARY_HEADER = struct.Struct('>10I')
+# Fixed initial arithmetic bits of the binary song magic and track count.
+_BINARY_PACKED = re.compile(rb'\xff\xff\xfb\x9d\x19\xff')
+
+
+def binary_song(data, waves):
+    if len(data) < 56:
+        return None
+    version, count, instruments, table, volume, bend, envelope, drum, voices, master = _BINARY_HEADER.unpack_from(data)
+    if (version != 0x215 or not 1 <= count <= 32 or not 1 <= instruments <= 256 or table != 56
+            or volume != table+count*4 or bend != volume+count*4 or voices != bend+count*4
+            or not voices+instruments*2 <= min(envelope,drum) <= max(envelope,drum) <= master < len(data)):
+        return None
+    lookup = struct.unpack_from(f'>{instruments}H', data, voices)
+    if not set(lookup) <= waves:
+        return None
+    tracks = struct.unpack_from(f'>{count}I', data, table)
+    if tuple(sorted(set(tracks))) != tracks or not master < tracks[0] <= tracks[-1] < len(data):
+        return None
+    if any(offset and not max(envelope,drum) <= offset < master
+           for offset, in struct.iter_unpack('>I', data[volume:voices])):
+        return None
+    events, tempos, loops = [], [], 0
+    try:
+        for start, end in zip((master,*tracks), (*tracks,len(data))):
+            _, notes, changes, repeats = _track(data,start,end,waves,instruments=lookup,
+                                               drums=data[drum:master])
+            events.extend(notes)
+            tempos.extend(changes)
+            loops += repeats
+    except ValueError:
+        return None
+    return dict(notes=events, tempos=tempos, loops=loops, channels=count) if events else None
+
+
+def binary_effects(data, waves):
+    if len(data) < 24:
+        return None
+    count, second, third, reserved, drum, instruments = _HEADER.unpack_from(data)
+    start = 24+count*8
+    if (not 1 <= count <= 256 or count != second or count != third or reserved or drum
+            or not start < instruments < len(data) or len(data)-instruments != count*2):
+        return None
+    lookup = struct.unpack_from(f'>{count}H', data, instruments)
+    if not set(lookup) <= waves:
+        return None
+    tracks = [offset for offset,_ in struct.iter_unpack('>2I', data[24:start])]
+    if sorted(set(tracks)) != tracks or tracks[0] != start or tracks[-1] >= instruments:
+        return None
+    scores = []
+    try:
+        for at,end in zip(tracks, (*tracks[1:],instruments)):
+            _,notes,tempos,loops = _track(data,at,end,waves,instruments=lookup,effects=True)
+            if not notes:
+                return None
+            scores.append(dict(notes=notes,tempos=tempos,loops=loops,channels=1))
+    except ValueError:
+        return None
+    return scores
+
+
+def _effects_region(image, bank, waves, check):
+    end = bank['offset']+bank['size']
+    for start in range((end+7)&~3, min(end+32,len(image)-8), 4):
+        if image[start-4:start] != b'\0\0\0\1':
+            continue
+        try:
+            data, size = lzari.unpack(image[start:start+_MAX_BYTES],limit=_MAX_BYTES,check=check)
+        except lzari.LzariError:
+            continue
+        scores = binary_effects(data,waves)
+        if scores is None:
+            continue
+        return dict(offset=start, size=size, kind='audio sequence', media='audio',
+                    audio_kind='indexed sample directory', control=bank['offset'],
+                    compressed_control=bank['compressed_control'], table_offset=bank['table_offset'],
+                    samples=[dict(label=f'Effect {i}',codec='Nintendo libmus') for i in range(1,len(scores)+1)],
+                    layout='libmus-binary-effects', confidence='validated', label='libmus sequenced effects',
+                    channels=1, notes=sum(len(score['notes']) for score in scores), loops=0,
+                    reason='The adjacent LZARI effects directory resolves its tracks to the preceding verified wave bank.',
+                    preview_settings=dict(format='auto', source='rom', offset=start))
+    return None
+
+
+def _binary_regions(image, banks, check):
+    packed_banks = sorted((bank for bank in banks if bank.get('compressed_control')),
+                          key=lambda bank:bank['offset'])
+    if not packed_banks:
+        return []
+    matches = []
+    for index, match in enumerate(_BINARY_PACKED.finditer(image)):
+        if index == 128:
+            break
+        start = match.start()-4
+        if start < 4 or start%4 or image[start-4:start] != b'\0\0\0\1':
+            continue
+        check()
+        try:
+            data, size = lzari.unpack(image[start:start+_MAX_BYTES],limit=_MAX_BYTES,check=check)
+        except lzari.LzariError:
+            continue
+        matches.append((start,size,data))
+    assets = []
+    for bank in packed_banks:
+        end = bank['offset']
+        waves = {sample['instrument'] for sample in bank['samples']}
+        adjacent = []
+        for start, size, data in reversed(matches):
+            if start >= end:
+                continue
+            if not 0 <= end-start-size <= 32:
+                break
+            score = binary_song(data,waves)
+            if score is None:
+                break
+            adjacent.append((start,size,score))
+            end = start
+        for start,size,score in reversed(adjacent):
+            number = len(assets)+1
+            assets.append(dict(offset=start, size=size, kind='music sequence', media='audio',
+                               audio_kind='indexed sample directory', control=bank['offset'],
+                               compressed_control=bank['compressed_control'], table_offset=bank['table_offset'],
+                               samples=[dict(offset=start, size=size, codec='Nintendo libmus', label=f'Song {number}')],
+                               layout='libmus-binary-song', confidence='validated', label=f'libmus binary song {number}',
+                               channels=score['channels'], notes=len(score['notes']), loops=score['loops'],
+                               reason='Adjacent LZARI song streams resolve all channels and instruments to the following verified bank.',
+                               preview_settings=dict(format='auto', source='rom', offset=start)))
+        if effects := _effects_region(image,bank,waves,check):
+            assets.append(effects)
+    return assets
+
+
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
-    if len(resolved) != 1:
-        return []
-    bank = resolved[0]
+    assets = _binary_regions(image,resolved,check)
+    raw = [bank for bank in resolved if not bank.get('compressed_control')]
+    if len(raw) != 1:
+        return assets
+    bank = raw[0]
     waves = {sample['instrument'] for sample in bank['samples']}
-    assets = []
     for match in _SIGNATURE.finditer(image):
         check()
         start = match.start()
@@ -175,18 +335,38 @@ def preview(image, asset, selection):
 
 
 def _play(image, asset, selection):
-    index = formats.integer(selection['sample'], 'Sequence', 0, 0)
+    index = formats.integer(selection['sample'], 'Sequence', 0, len(asset['samples'])-1)
     base = asset['table_offset']
+    books = None
     try:
-        bank = ptr_audio.bank(image, asset['control'])
-    except audio.BankError as exc:
+        if span := asset.get('compressed_control'):
+            start, size = span
+            books, _ = lzari.unpack(image[start:start+size],limit=ptr_audio.MAX_CONTROL)
+            bank = {**ptr_audio.bank(books, 0), 'offset':start, 'size':size}
+        else:
+            bank = ptr_audio.bank(image, asset['control'])
+    except (audio.BankError, lzari.LzariError) as exc:
         raise formats.AssetError('The libmus wave bank changed. Rescan ROM Explorer.') from exc
     if (image[base:base+len(ptr_audio.WAVES)] != ptr_audio.WAVES
             or not ptr_audio.fits(image, bank, base, [ptr_audio.MAX_FRAME_CHECKS], lambda: None)):
         raise formats.AssetError('The libmus wave table failed sample validation. Rescan ROM Explorer.')
     waves = {sample['instrument']:sample for sample in bank['samples']}
     start, size = asset['offset'], asset['size']
-    score = song(image[start:start+size], waves) if 0 <= start < start+size <= len(image) else None
+    score = None
+    if 0 <= start < start+size <= len(image):
+        if books is None:
+            score = song(image[start:start+size], waves)
+        else:
+            try:
+                raw, _ = lzari.unpack(image[start:start+size],limit=_MAX_BYTES)
+                if asset['layout'] == 'libmus-binary-effects':
+                    scores = binary_effects(raw,set(waves))
+                    if scores and index < len(scores):
+                        score = scores[index]
+                else:
+                    score = binary_song(raw,set(waves))
+            except lzari.LzariError:
+                pass
     if score is None:
         raise formats.AssetError('The libmus channel data changed. Rescan ROM Explorer.')
 
@@ -197,8 +377,13 @@ def _play(image, asset, selection):
         sample = waves[note.wave]
         pitch = note.key + _signed(sample['base_note_byte']-48) + sample['detune']/100
         gain = (note.volume*note.velocity/127**2)**2 if pitch <= 12 else 0
+        if asset['layout'] == 'libmus-binary-effects' and not sample.get('loop', {}).get('count'):
+            # An effect can hold a note until its wave ends. Stop nonlooping
+            # waves at that point instead of extending the WAV with silence.
+            ticks = math.ceil(96*sample['samples']/sample['rate']/2**(pitch/12))
+            note = replace(note,duration=min(note.duration,ticks))
         voices.append((note, dict(sample=sample, pitch=pitch, pan=note.pan, gain=gain)))
-    pcm, stats = compact_midi_render.render(image, base, 48, tempos, voices, label='libmus')
+    pcm, stats = compact_midi_render.render(image, base, 48, tempos, voices, label='libmus', book_image=books)
     payload, details = formats.pcm(pcm, dict(format='pcm-s16le', channels=2,
                                            rate=compact_midi_render.RATE, length=len(pcm)))
     details.update(stats, format='Nintendo libmus', sample=index,

@@ -10,10 +10,14 @@ import re
 import struct
 
 from ..formats import MAX_BYTES, AssetError, integer
-from . import audio
+from . import audio, lzari
 
 MAGIC=b'N64 PtrTablesV2\0'
 WAVES=b'N64 WaveTables \0'
+# The first encoded bits of the fixed PtrTablesV2 header, before any
+# bank-specific fields. Full decompression and graph validation follow.
+_LZARI_PREFIX = bytes.fromhex('c0437af8c1cfa2dfb61d888b')
+_MAX_PACKED = 2*1024*1024
 MAX_BANKS=128
 MAX_SAMPLES=2048
 MAX_CONTROL=1024*1024
@@ -74,21 +78,46 @@ def fits(image,info,base,budget,check):
     return True
 
 
+def _compressed(image, *, check):
+    for match in itertools.islice(re.finditer(re.escape(_LZARI_PREFIX), image), MAX_BANKS):
+        check()
+        start = match.start()-4
+        if start < 0 or start%4:
+            continue
+        try:
+            decoded, extent = lzari.unpack(image[start:start+_MAX_PACKED], limit=MAX_CONTROL, check=check)
+            info = bank(decoded, 0, check=check)
+        except (lzari.LzariError, audio.BankError):
+            continue
+        if len(decoded) != info['size']:
+            continue
+        yield {**info, 'offset':start, 'size':extent, 'compressed_control':(start, extent)}
+
+
+def _controls(image, *, check):
+    for hit in itertools.islice(re.finditer(re.escape(MAGIC),image),MAX_BANKS):
+        check()
+        try:
+            yield bank(image,hit.start(),check=check)
+        except audio.BankError:
+            pass
+    yield from _compressed(image,check=check)
+
+
 def regions(image, *, check=lambda:None, progress=lambda _:None):
     """Keep ambiguous wave-table placement unresolved instead of choosing the nearest."""
-    candidates=list(itertools.islice(re.finditer(re.escape(MAGIC),image),MAX_BANKS))
     tables=[m.start() for m in itertools.islice(re.finditer(re.escape(WAVES),image),MAX_BANKS)]
     results=[];budget=[MAX_FRAME_CHECKS]
-    for index,hit in enumerate(candidates):
-        check();progress(dict(phase='Recognizing libmus audio banks',done=index,total=len(candidates)))
-        try:info=bank(image,hit.start(),check=check)
-        except audio.BankError:continue
+    for index,info in enumerate(_controls(image,check=check)):
+        check();progress(dict(phase='Recognizing libmus audio banks',done=index))
         fitting=[base for base in tables if fits(image,info,base,budget,check)]
         resolved=len(fitting)==1 and budget[0]>0
         base=fitting[0] if resolved else None
         samples=[{**s,'offset':base+s['relative_offset']} for s in info['samples']] if resolved else []
         reason='PtrTablesV2 control graph, tuning arrays, sample extents, loops and predictor books checked. '+('Exactly one marked WaveTables candidate fits every sample and ADPCM frame selector; table placement remains a static inference.' if resolved else 'Wave-table placement is ambiguous or unresolved; sample bytes are not classified.')+' The bank stores no rate: 22050 Hz is an editable preview default. Pitch, mixing, sequences and loop playback are not recreated.'
         common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence='unique marked table (static inference)' if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
+        if 'compressed_control' in info:
+            common['compressed_control'] = info['compressed_control']
         results.append(dict(offset=info['offset'],size=info['size'],kind='audio',label='libmus '+info['name'],confidence='validated',samples=samples,sample_count=len(info['samples']),preview_settings=dict(format='auto',source='rom',offset=info['offset']),**common))
         if resolved:
             seen=set()
@@ -105,7 +134,16 @@ def preview(image,asset,selection):
     if not asset.get('samples'):raise AssetError('The pointer bank has no uniquely fitting marked wave table. Inspect its table candidates in ROM Explorer before preparing audio.')
     rate=integer(selection.get('rate',DEFAULT_RATE),'Preview sample rate',1000,192000)
     selected={**asset,'samples':[{**s,'rate':rate} for s in asset.get('samples',[])]}
-    result=audio.preview(image,selected,selection)
+    books = None
+    if span := asset.get('compressed_control'):
+        start, size = span
+        try:
+            books, consumed = lzari.unpack(image[start:start+size], limit=MAX_CONTROL)
+            if consumed != size:
+                raise lzari.LzariError('Changed compressed control length.')
+        except lzari.LzariError as exc:
+            raise AssetError('The compressed audio controls changed. Rescan ROM Explorer.') from exc
+    result=audio.preview(image,selected,selection,book_image=books)
     result['settings']['rate']=rate;result['details']['rate_basis']=asset['rate_basis']
     return result
 
