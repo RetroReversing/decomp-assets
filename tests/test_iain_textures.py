@@ -7,7 +7,7 @@ import zlib
 import pytest
 
 from decompassets.formats import AssetError
-from decompassets.n64 import iain, iain_textures, preview
+from decompassets.n64 import iain, preview
 
 
 def _archive(size, blocks):
@@ -35,7 +35,7 @@ def test_iain_texture_bank_previews_each_named_image():
     bank = (struct.pack('>I', 2) + b'Light\0' + struct.pack('>3H', 2, 1, 28) + bytes.fromhex('f80107c1')
             + b'Shade\0' + struct.pack('>3H', 1, 1, 3) + b'\xa5')
     image = _archive(len(bank), [(0, bank)])
-    asset, = iain_textures.regions(image)
+    asset, = iain.regions(image)
     assert [item['label'] for item in asset['textures']] == ['Light', 'Shade']
     assert preview(image, asset, {})['details']['width'] == 2
     result = preview(image, asset, {'texture': 1})
@@ -47,4 +47,26 @@ def test_iain_texture_bank_previews_each_named_image():
     with pytest.raises(AssetError, match='Texture'):
         preview(image, asset, {'texture': 2})
 
-    assert not iain_textures.regions(_archive(len(bank) + 1, [(0, bank + b'\0')]))
+    assert not iain.regions(_archive(len(bank) + 1, [(0, bank + b'\0')]))
+
+
+def test_iain_scene_meshes_use_local_faces_and_vertex_colors():
+    def mesh(label, face):
+        vertices = b''.join(struct.pack('>5fx3B', x, y, 0, 0, 0, 10, 20, 30)
+                            for x, y in ((0, 0), (1.5, 0), (0, 2)))
+        return struct.pack('>I2H44x', 0, 3, 1) + label + b'\0' + vertices + struct.pack('>3H8x', *face)
+
+    header = b'\0\x01paint\0' + struct.pack('>I', 2)
+    data = header + mesh(b'First', (0, 1, 2)) + mesh(b'Second', (1, 0, 2))
+    image = _archive(len(data), [(0, data)])
+    bank, = iain.regions(image)
+    assert [item['label'] for item in bank['meshes']] == ['First', 'Second']
+    result = preview(image, bank, {'mesh': 1})
+    assert result['vertices'] == [(0, 0, 0), (1.5, 0, 0), (0, 2, 0)]
+    assert result['edges'] == [(0, 1), (0, 2), (1, 2)]
+    assert result['surfaces'][0]['indices'] == (1, 0, 2)
+    assert result['surfaces'][0]['colors'] == [(10, 20, 30, 255)] * 3
+    assert result['settings']['mesh'] == 1
+
+    invalid = header + mesh(b'First', (0, 1, 2)) + mesh(b'Invalid', (1, 0, 3))
+    assert not iain.regions(_archive(len(invalid), [(0, invalid)]))

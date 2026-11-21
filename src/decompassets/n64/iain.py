@@ -90,3 +90,13 @@ def members(image, check):
         if decoded := unpack(image, offset):
             data, size = decoded
             yield offset, size, data
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None):
+    from . import iain_models, iain_textures
+
+    result = []
+    for offset, size, data in members(image, check):
+        if asset := iain_textures.asset(offset, size, data) or iain_models.asset(offset, size, data):
+            result.append(asset)
+    return result
