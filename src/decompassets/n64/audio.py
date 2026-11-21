@@ -18,6 +18,7 @@ from ..formats import MAX_BYTES, MAX_SECONDS, AssetError, integer
 
 MAX_CONTROL = 1024*1024
 MAX_CANDIDATES = 128
+MAX_INSTRUMENTS = 512  # Some effects banks index hundreds of sparse instrument slots.
 MAX_SOUNDS = 4096
 MAX_SAMPLES = 2048
 MAX_TABLE_PROBES = 32
@@ -120,7 +121,7 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
     for index in range(count):
         at=pointer(4+index*4);header=take(at,12)
         instruments,flags,pad,rate,percussion=struct.unpack('>HBBII',header)
-        if flags!=expected_flag or pad or not 0<=instruments<=256 or not 1000<=rate<=192000:raise BankError('Invalid bank header.')
+        if flags!=expected_flag or pad or not 0<=instruments<=MAX_INSTRUMENTS or not 1000<=rate<=192000:raise BankError('Invalid bank header.')
         take(at,12+instruments*4)
         instrument(resolve(percussion),rate,index,'percussion')
         for number in range(instruments):instrument(pointer(at+12+number*4),rate,index,number)
