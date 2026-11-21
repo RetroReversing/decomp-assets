@@ -338,3 +338,27 @@ def test_unnamed_guarded_b1_loader_resolves_kseg1_sample_table():
     assert wav(audio.preview(image, bank, {'sample': 1}))[1]
     image[64:68] = bytes(4)
     assert audio.regions(image, context=context)[0]['audio_kind'] == 'unresolved bank'
+
+
+def test_parallel_control_and_wave_tables_resolve_nonadjacent_banks():
+    single, _, base = fixture(raw=True)
+    control, waves = single[128:base], single[base:]
+    first = 128
+    second = first + len(control)
+    wave_start = second + len(control)
+    second_wave = wave_start + ((len(waves) + 15) & ~15)
+    directory = struct.pack('>6I', first, second, second, wave_start, wave_start, second_wave)
+    image = directory.ljust(first, b'\0') + control * 2 + waves.ljust(second_wave - wave_start, b'\0') + waves
+
+    banks = [asset for asset in audio.regions(image) if len(asset['samples']) == 2]
+    assert [(bank['offset'], bank['table_offset'], bank['table_confidence']) for bank in banks] == [
+        (first, wave_start, 'validated'), (second, second_wave, 'validated'),
+    ]
+    assert any(wav(audio.preview(image, banks[0], {'sample': 1}))[1])
+
+    broken = bytearray(image)
+    broken[11] ^= 1
+    assert all(asset['audio_kind'] == 'unresolved bank' for asset in audio.regions(broken))
+    broken = bytearray(image)
+    struct.pack_into('>I', broken, 20, wave_start + 48)
+    assert not any(asset['offset'] == first and asset['samples'] for asset in audio.regions(broken))
