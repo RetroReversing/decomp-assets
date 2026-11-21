@@ -1,7 +1,6 @@
 import struct
 
-from decompassets import formats
-from decompassets.n64 import striped_images
+from decompassets.n64 import preview, striped_images
 
 
 def test_striped_images_require_consecutive_complete_tables():
@@ -14,8 +13,9 @@ def test_striped_images_require_consecutive_complete_tables():
             image.extend(struct.pack('>I', offset + strip * 0xf00))
     assets = striped_images.regions(image)
     assert [asset['preview_settings']['format'] for asset in assets] == ['rgba5551-be', 'rgba5551-be', 'i8']
-    result = formats.preview(image, assets[-1]['preview_settings'])
+    result = preview(image, assets[-1], {})
     assert result['media'] == 'image'
+    assert result['details']['note'] == assets[-1]['reason']
     assert not striped_images.regions(image[:-1])
     image[-1] ^= 1
     assert not striped_images.regions(image)

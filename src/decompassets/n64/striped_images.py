@@ -3,6 +3,10 @@
 import re
 import struct
 
+from .. import formats
+
+LAYOUT = 'striped-image'
+
 _WIDTH = 320
 _HEIGHT = 240
 _STRIP_BYTES = 0xf00
@@ -44,7 +48,13 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         for start, size, encoding in rows:
             settings = dict(format=encoding, source='rom', offset=start, width=_WIDTH, height=_HEIGHT)
             assets.append(dict(kind='image', offset=start, size=size, label=f'Striped image {len(assets)+1}',
-                               confidence='validated', layout='striped-image', width=_WIDTH, height=_HEIGHT,
+                               confidence='validated', layout=LAYOUT, width=_WIDTH, height=_HEIGHT,
                                reason='The strip table gives a cartridge pointer to every row group.',
                                preview_settings=settings))
     return assets
+
+
+def preview(image, asset, selection):
+    result = formats.preview(image, asset['preview_settings'])
+    result['details']['note'] = asset['reason']
+    return result
