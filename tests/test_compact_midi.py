@@ -64,3 +64,20 @@ def test_music_form_uses_adjacent_named_bank_for_stereo_preview():
         assert any(output.readframes(output.getnframes()))
     assert result['details']['mixed_notes'] == 1
     assert result['details']['skipped_notes'] == 0
+
+
+def test_standalone_music_directory_follows_sample_extent():
+    from decompassets.n64 import audio
+
+    from .test_native_audio import fixture
+
+    image, _, base = fixture()
+    song = _sequence(bytes.fromhex('00 90 3c 60 18 00 ff 2f'))
+    sequence = b'S1'+struct.pack('>HII', 1, 12, len(song))+song
+    # Trim unused fixture tail to the sample's exact extent, then align.
+    rom = image[:base+58]+bytes(2)+sequence
+    asset, = uv_sequences.regions(rom, sound_banks=audio.regions(rom))
+    assert asset['table_offset'] == base
+    assert uv_sequences.preview(rom, asset, {'sample': 0})['details']['mixed_notes'] == 1
+    shifted = image[:base+58]+bytes(6)+sequence
+    assert not uv_sequences.regions(shifted, sound_banks=audio.regions(shifted))
