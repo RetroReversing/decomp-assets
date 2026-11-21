@@ -1,4 +1,4 @@
-"""BAM3 sprite archives compressed with adaptive Huffman coding and a 4 KiB dictionary."""
+"""TIM sprite archives compressed with adaptive Huffman coding and a 4 KiB dictionary."""
 
 import re
 import struct
@@ -6,10 +6,12 @@ import struct
 from .. import formats
 
 LAYOUT = 'n64-packed-tim'
-# Initial adaptive Huffman codes for the four BAM3 signature bytes.
-_SIGNATURE = re.compile(rb'\xe7\x73\x7b\x3b[\xf8-\xff]')
+# Initial adaptive Huffman codes for BAM3 and the big-endian directory tag 0x100.
+_SIGNATURE = re.compile(rb'\xe7\x73\x7b\x3b[\xf8-\xff]|\xc6\x62\xe3')
 _LENGTH = struct.Struct('>I')
 _RECTANGLE = struct.Struct('<I4H')
+_NATIVE_RECTANGLE = struct.Struct('>I4H')
+_NATIVE_FORMATS = {2: 'rgba5551-be', 8: 'ci4', 9: 'ci8'}
 _SYMBOLS = 314
 _TREE_SIZE = 2 * _SYMBOLS - 1
 _ROOT = _TREE_SIZE - 1
@@ -128,33 +130,51 @@ def _unpack(data, size, check):
     return output, bits.cursor
 
 
-def _rectangle(data, offset):
-    if offset + _RECTANGLE.size > len(data):
+def _rectangle(data, offset, header, *, padded=False):
+    if offset + header.size > len(data):
         return None
-    size, _, _, words, rows = _RECTANGLE.unpack_from(data, offset)
-    if words and rows and size == _RECTANGLE.size + words * rows * 2 and offset + size <= len(data):
-        return offset + _RECTANGLE.size, offset + size, words, rows
-    return None
+    size, _, _, words, rows = header.unpack_from(data, offset)
+    pixels = offset + header.size
+    end = offset + size
+    visible_end = pixels + words * rows * 2
+    if not words or not rows or end > len(data):
+        return None
+    if visible_end != end:
+        padded_end = pixels + words * ((rows + 31) & ~31) * 2
+        if not padded or not visible_end < end == padded_end:
+            return None
+        # The loader uploads only the declared rows. Corroborate the padded
+        # rectangle by requiring the extra rows to have one repeated index.
+        padding = data[visible_end:end]
+        if any(value != padding[0] for value in padding):
+            return None
+    return pixels, end, words, rows
 
 
-def _tim(data):
-    if len(data) < 20 or data[:4] != b'\x10\0\0\0':
+def _tim(data, native=False):
+    order = 'big' if native else 'little'
+    header = _NATIVE_RECTANGLE if native else _RECTANGLE
+    if len(data) < 20 or int.from_bytes(data[:4], order) != 16:
         return None
-    mode = int.from_bytes(data[4:8], 'little')
-    if mode not in (2, 3, 8, 9):
+    mode = int.from_bytes(data[4:8], order)
+    if mode not in (_NATIVE_FORMATS if native else _TIM_FORMATS):
         return None
     offset = 8
     colors = palette = palettes = 0
     if mode in (8, 9):
         colors = 16 if mode == 8 else 256
-        rectangle = _rectangle(data, offset)
+        rectangle = _rectangle(data, offset, header)
         if not rectangle:
             return None
         palette, offset, columns, rows = rectangle
         if columns % colors or columns * rows // colors > 256:
             return None
         palettes = columns * rows // colors
-    rectangle = _rectangle(data, offset)
+    if (native and palettes and len(data) == offset + header.size
+            and (size := header.unpack_from(data, offset))[0] == header.size and size[-2:] == (0, 0)):
+        return dict(width=colors, height=1, mode=mode, pixels=palette, palette_offset=palette,
+                    colors=colors, palettes=palettes, palette_only=True)
+    rectangle = _rectangle(data, offset, header, padded=native and mode == 9)
     if not rectangle:
         return None
     pixels, end, words, height = rectangle
@@ -166,23 +186,37 @@ def _tim(data):
                 palette_offset=palette, colors=colors, palettes=palettes)
 
 
-def _members(bank):
-    if len(bank) < 12 or bank[:4] != b'BAM3':
+def _members(bank, native=False):
+    if len(bank) < 12:
         return []
-    table_end = _LENGTH.unpack_from(bank, 4)[0]
-    if table_end % 4 or not 12 <= table_end <= min(len(bank), 16384):
+    if native:
+        tag, count = struct.unpack_from('>2I', bank)
+        table_end = 8 + count * 4
+        if tag != 0x100 or not 1 <= count <= 4096 or table_end >= len(bank):
+            return []
+        ends = [offset for offset, in _LENGTH.iter_unpack(bank[8:table_end])] + [len(bank)]
+        if ends[0] != table_end:
+            return []
+    else:
+        table_end = _LENGTH.unpack_from(bank, 4)[0]
+        if bank[:4] != b'BAM3' or table_end % 4 or not 12 <= table_end <= min(len(bank), 16384):
+            return []
+        ends = [offset for offset, in _LENGTH.iter_unpack(bank[4:table_end])]
+        if ends[-1] != len(bank):
+            return []
+    if any(start >= end for start, end in zip(ends, ends[1:])):
         return []
-    ends = [offset for offset, in _LENGTH.iter_unpack(bank[4:table_end])]
-    if ends[-1] != len(bank) or any(start >= end for start, end in zip(ends, ends[1:])):
-        return []
+    labels = _NATIVE_FORMATS if native else _TIM_FORMATS
     textures = []
     for index, (start, end) in enumerate(zip(ends, ends[1:]), 1):
-        info = _tim(memoryview(bank)[start:end])
+        info = _tim(memoryview(bank)[start:end], native)
         if info:
-            textures.append(dict(label=f'TIM image {index}', palettes=info['palettes'], frames=1,
+            palette_only = info.get('palette_only', False)
+            label = f'TIM palette {index}' if palette_only else f'TIM image {index}'
+            fmt = 'palette-rgba5551' if palette_only else labels[info['mode']]
+            textures.append(dict(label=label, palettes=info['palettes'], frames=1,
                                  member_start=start, member_end=end,
-                                 preview_settings=dict(format=_TIM_FORMATS[info['mode']],
-                                                       width=info['width'], height=info['height'])))
+                                 preview_settings=dict(format=fmt, width=info['width'], height=info['height'])))
     return textures
 
 
@@ -204,11 +238,13 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             bank, consumed = _unpack(memoryview(image)[offset + 4:offset + 4 + formats.MAX_BYTES], size, check)
         except formats.AssetError:
             continue
-        if textures := _members(bank):
+        native = bank[:4] == b'\x00\x00\x01\x00'
+        if textures := _members(bank, native):
             found.append(dict(offset=offset, size=consumed + 4, kind='image', media='image', layout=LAYOUT,
-                              label='BAM3 texture bank', confidence='validated', textures=textures,
+                              label='Big-endian TIM bank' if native else 'BAM3 texture bank',
+                              confidence='validated', textures=textures, native_tim=native,
                               palettes=textures[0]['palettes'], frames=1, expanded_size=size,
-                              reason='The compressed bank expands to a BAM3 directory with valid TIM images.',
+                              reason='The compressed directory bounds TIM member dimensions, palettes, and pixel data.',
                               preview_settings=dict(source='rom', offset=offset, **textures[0]['preview_settings'])))
     return found
 
@@ -243,10 +279,20 @@ def preview(image, asset, selection):
     offset = asset['offset']
     bank, _ = _unpack(memoryview(image)[offset + 4:offset + asset['size']], asset['expanded_size'], lambda: None)
     data = memoryview(bank)[texture['member_start']:texture['member_end']]
-    info = _tim(data)
+    native = asset.get('native_tim', False)
+    info = _tim(data, native)
     if not info:
         raise formats.AssetError('The TIM image changed. Rescan ROM Explorer.')
-    png = formats._png(info['width'], info['height'], _pixels(data, info, palette))
-    result = formats.preview(png, {'format': 'auto'})
-    result['settings'] = dict(asset['preview_settings'], width=info['width'], height=info['height'])
+    settings = texture['preview_settings']
+    if native:
+        # The runtime copies the big-endian RGBA5551 palettes and the
+        # high-nibble-first indices directly to the N64 texture buffers.
+        palette_at = info['palette_offset'] + palette * info['colors'] * 2
+        pixels_at = palette_at if info.get('palette_only') else info['pixels']
+        result = formats.preview(data, dict(settings, offset=pixels_at, palette_offset=palette_at))
+        result['details']['note'] = asset['reason']
+    else:
+        png = formats._png(info['width'], info['height'], _pixels(data, info, palette))
+        result = formats.preview(png, {'format': 'auto'})
+    result['settings'] = dict(asset['preview_settings'], **{k: settings[k] for k in ('width', 'height')})
     return result

@@ -44,3 +44,24 @@ def test_overlapping_match_obeys_declared_size():
     assert packed_tim._unpack(stream, 4, lambda: None)[0] == b'yyyy'
     with pytest.raises(AssetError, match='declared size'):
         packed_tim._unpack(stream, 3, lambda: None)
+
+
+def test_native_tim_uses_big_endian_colors_and_high_nibble_first():
+    image = bytes.fromhex(
+        '00000092c662e370e1befc76185b396b5bbd7bded2f5594aaadc5555558ac4aa849d934daaa6db6e'
+        '492492492492493352491f4773c01600b201fc052d354f8d3b3a55555555555555730aaaa0'
+    )
+    asset, = packed_tim.regions(image)
+    assert asset['native_tim']
+    colors = bytes((255, 0, 0, 255, 0, 255, 0, 255))
+    assert _rgba(preview(image, asset, {})) == colors + bytes(8)
+    swatch = preview(image, asset, {'texture': 1})
+    assert (swatch['details']['width'], swatch['details']['height']) == (16, 1)
+    assert _rgba(swatch) == bytes(4) + colors + bytes(52)
+
+
+def test_native_tim_crops_only_uniform_extra_rows():
+    header = struct.pack('>2I', 16, 9) + struct.pack('>I4H', 524, 0, 0, 256, 1) + bytes(512)
+    pixels = struct.pack('>I4H', 76, 0, 0, 1, 30) + bytes(60) + bytes([33])*4
+    assert packed_tim._tim(header + pixels, native=True)['height'] == 30
+    assert packed_tim._tim(header + pixels[:-1] + b'\x00', native=True) is None
