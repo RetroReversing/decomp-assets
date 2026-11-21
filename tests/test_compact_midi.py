@@ -37,3 +37,30 @@ def test_voice_selection_uses_channel_controllers_and_bank_keymap():
     matched, missing = uv_sequences.note_voices(events, {(0, 4): [voice]})
     assert matched == (note, dict(sample=sample, pitch=2, gain=64/127, pan=0))
     assert missing[1] is None
+
+
+def test_music_form_uses_adjacent_named_bank_for_stereo_preview():
+    import base64
+    import io
+    import wave
+
+    from .test_native_audio import fixture
+
+    def chunk(tag, data):
+        return tag+struct.pack('>I', len(data))+data
+
+    image, _, base = fixture(raw=True)
+    bank = chunk(b'FORM', b'UVMB'+chunk(b'PAD ', bytes(8))+
+                 chunk(b'.CTL', image[128:base])+chunk(b'.TBL', image[base:]))
+    song = _sequence(bytes.fromhex('00 90 3c 60 18 00 ff 2f'))
+    sequence = chunk(b'FORM', b'UVMS'+chunk(b'SEQS', b'S1'+struct.pack('>HII', 1, 12, len(song))+song))
+    rom = bank+sequence
+    asset, = uv_sequences.regions(rom)
+    assert asset['samples'][0]['preview_available']
+    result = uv_sequences.preview(rom, asset, {'sample': 0})
+    with wave.open(io.BytesIO(base64.b64decode(result['data_url'].split(',')[1]))) as output:
+        assert output.getnchannels() == 2
+        assert output.getframerate() == 22050
+        assert any(output.readframes(output.getnframes()))
+    assert result['details']['mixed_notes'] == 1
+    assert result['details']['skipped_notes'] == 0
