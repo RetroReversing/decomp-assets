@@ -25,3 +25,14 @@ def test_relative_mesh_rejects_missing_vertices_invalid_slots_and_vertex_flags()
     for data in (fixture(pointer=40, trailing=bytes(8)), fixture(triangle=0x020408),
                  fixture(flag=1), fixture()[:-1]):
         assert not relative_meshes.regions(data)
+
+
+def test_relative_f3dex2_mesh_accepts_only_the_new_dialect_and_its_terminator():
+    mesh = bytearray(fixture())
+    struct.pack_into('>8I', mesh, 16, 0x01004008, 32, 0x05000204, 0,
+                     0x05020406, 0, 0xdf000000, 0)
+    asset, = relative_meshes.regions(mesh)
+    assert asset['label']=='F3DEX2 local mesh'
+    assert n64.preview(mesh,asset,{})['triangles']==2
+    mesh[40] = 0xb8
+    assert not relative_meshes.regions(mesh)
