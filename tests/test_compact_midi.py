@@ -1,6 +1,8 @@
 import struct
 
-from decompassets.n64 import compact_midi, uv_sequences
+import pytest
+
+from decompassets.n64 import audio, compact_midi, uv_sequences
 
 
 def _sequence(track):
@@ -39,7 +41,8 @@ def test_voice_selection_uses_channel_controllers_and_bank_keymap():
     assert missing[1] is None
 
 
-def test_music_form_uses_adjacent_named_bank_for_stereo_preview():
+@pytest.mark.parametrize('sequence_first', [False, True])
+def test_music_form_uses_adjacent_named_bank_for_stereo_preview(sequence_first):
     import base64
     import io
     import wave
@@ -54,7 +57,8 @@ def test_music_form_uses_adjacent_named_bank_for_stereo_preview():
                  chunk(b'.CTL', image[128:base])+chunk(b'.TBL', image[base:]))
     song = _sequence(bytes.fromhex('00 90 3c 60 18 00 ff 2f'))
     sequence = chunk(b'FORM', b'UVMS'+chunk(b'SEQS', b'S1'+struct.pack('>HII', 1, 12, len(song))+song))
-    rom = bank+sequence
+    rom = b"\0\0"+sequence+bank if sequence_first else bank+sequence
+    assert audio.regions(rom)[0]['table_confidence'] == 'validated'
     asset, = uv_sequences.regions(rom)
     assert asset['samples'][0]['preview_available']
     result = uv_sequences.preview(rom, asset, {'sample': 0})
