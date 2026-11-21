@@ -91,7 +91,7 @@ def regions(image, *, context=None, **kwargs):
         paged_models,
         paged_textures,
         paired_audio,
-        paired_resource_textures,
+        paired_resources,
         ptr_audio,
         rare_assets,
         rare_audio,
@@ -170,7 +170,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
     iguana_models = []
-    known.extend(paired_resource_textures.regions(image,**kwargs))
+    known.extend(paired_resources.regions(image,**kwargs))
     known.extend(iain.regions(image,**kwargs))
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
@@ -234,6 +234,7 @@ def preview(data, asset, selection):
         paged_models,
         paged_textures,
         paired_audio,
+        paired_resource_models,
         paired_resource_textures,
         ptr_audio,
         rare_assets,
@@ -287,6 +288,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')==iain_models.LAYOUT:return iain_models.preview(data,asset,selection)
+    if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)

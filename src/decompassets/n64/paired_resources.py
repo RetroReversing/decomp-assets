@@ -79,3 +79,20 @@ def directories(image, check):
             members.append((offset, size))
         else:
             yield start, members
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None):
+    from . import paired_resource_models, paired_resource_textures
+
+    result = []
+    for directory, members in directories(image, check):
+        for index, (offset, size) in enumerate(members, 1):
+            check()
+            decoded = unpack(image, offset, size)
+            if not decoded:
+                continue
+            if items := paired_resource_textures.textures(decoded):
+                result.append(paired_resource_textures.asset(offset, size, directory, index, items))
+            if entries := paired_resource_models.meshes(decoded):
+                result.append(paired_resource_models.asset(offset, size, directory, entries))
+    return result
