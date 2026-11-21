@@ -188,3 +188,28 @@ def test_lzari_rescales_symbol_frequencies_in_long_streams():
     decoded, consumed = lzari.unpack(encoded, order='little')
     assert decoded == b'A'*32700+b'BCD'*13
     assert 4 < consumed <= len(encoded)
+
+
+def test_aligned_wave_control_and_raw_sequences_resolve_a_local_pair():
+    from decompassets.n64 import libmus_song, lzari
+
+    control = fixture()[64:308]
+    table = fixture()[320:]
+    pad = bytes(8+(-len(table)%8))
+    # Both tables validate structurally. Only the second has the exact local
+    # terminator and alignment before the control graph.
+    image = table+bytes((-len(table))%8)+table+pad+control
+    bank, *_ = ptr_audio.regions(image)
+    assert bank['table_offset'] == len(table)+(-len(table)%8)
+    assert bank['table_confidence'] == 'adjacent wave and control pair'
+    assert any(wav(ptr_audio.preview(image,bank,{'sample':1}))[2])
+
+    aligned = image+bytes(8+(-len(image)%8))
+    music, _ = lzari.unpack(_PACKED_SONG)
+    track = bytes.fromhex('81 00 00 18 80')
+    effects = struct.pack('>8I',1,1,2,0,0,32+len(track),32,100)+track+bytes(4)
+    for sequence, layout in ((music,'libmus-binary-song'),(effects,'libmus-binary-effects')):
+        source = aligned+sequence
+        asset, = libmus_song.regions(source,ptr_audio.regions(source))
+        assert asset['layout'] == layout
+        assert any(wav(libmus_song.preview(source,asset,{'sample':0}))[2])

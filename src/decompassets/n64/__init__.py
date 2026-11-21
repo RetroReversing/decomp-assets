@@ -42,6 +42,7 @@ def regions(image, *, context=None, **kwargs):
     from . import (
         archived_models,
         audio,
+        bind,
         blast_textures,
         borg,
         borg_audio,
@@ -86,6 +87,7 @@ def regions(image, *, context=None, **kwargs):
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(display_meshes)
+    known.extend(bind.regions(image,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
     known.extend(borg.regions(image,rows=borg_rows,**kwargs))
@@ -115,6 +117,8 @@ def preview(data, asset, selection):
     from . import (
         archived_models,
         audio,
+        bind_models,
+        bind_textures,
         blast_textures,
         borg,
         borg_audio,
@@ -164,6 +168,8 @@ def preview(data, asset, selection):
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
+    if asset.get('layout')==bind_models.LAYOUT:return bind_models.preview(data,asset,selection)
+    if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)

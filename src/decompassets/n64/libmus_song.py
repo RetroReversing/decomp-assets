@@ -209,7 +209,7 @@ def binary_effects(data, waves):
         return None
     count, second, third, reserved, drum, instruments = _HEADER.unpack_from(data)
     start = 24+count*8
-    if (not 1 <= third <= second <= count <= 256 or reserved or drum
+    if (not (1 <= second <= count <= 256 and 1 <= third <= 256) or reserved or drum
             or not start < instruments < len(data) or len(data)-instruments != third*2):
         return None
     lookup = struct.unpack_from(f'>{third}H', data, instruments)
@@ -329,10 +329,44 @@ def _binary_regions(image, banks, check):
     return assets
 
 
+def _raw_control_sequence(image, bank):
+    if bank.get('table_confidence') != 'adjacent wave and control pair':
+        return None
+    end = bank['offset']+bank['size']
+    aligned = (end+7)&~7
+    waves = {sample['instrument'] for sample in bank['samples']}
+    for start in (aligned,aligned+8):
+        if any(image[end:start]) or start+_HEADER.size > len(image):
+            return None
+        raw = image[start:start+_MAX_BYTES]
+        if score := binary_song(raw,waves):
+            scores = [score]
+            size = score['extent']
+            kind, layout, label = 'music sequence','libmus-binary-song','libmus binary song'
+            break
+        _, _, instruments, _, _, lookup = _HEADER.unpack_from(raw)
+        size = lookup+2*instruments
+        if _HEADER.size <= size <= len(raw) and (scores := binary_effects(raw[:size],waves)):
+            kind, layout, label = 'audio sequence','libmus-binary-effects','libmus sequenced effects'
+            break
+    else:
+        return None
+    samples = [dict(label=f'Effect {i}' if kind == 'audio sequence' else 'Song',codec='Nintendo libmus')
+               for i in range(1,len(scores)+1)]
+    return dict(offset=start,size=size,kind=kind,media='audio',
+                audio_kind='indexed sample directory',control=bank['offset'],table_offset=bank['table_offset'],
+                sequence_packed=False,layout=layout,confidence='validated',label=label,samples=samples,
+                channels=max(score['channels'] for score in scores),notes=sum(len(score['notes']) for score in scores),
+                loops=sum(score['loops'] for score in scores),
+                reason='The aligned sequence after the control graph resolves every instrument to its paired wave table.',
+                preview_settings=dict(format='auto',source='rom',offset=start))
+
+
 def regions(image, banks, *, check=lambda: None):
     resolved = [bank for bank in banks if bank['offset'] == bank['bank_offset'] and bank['samples']]
     assets = _binary_regions(image,resolved,check)
     raw = [bank for bank in resolved if not bank.get('compressed_control')]
+    assets.extend(sequence for bank in raw if (sequence := _raw_control_sequence(image,bank)) is not None)
     if len(raw) != 1:
         return assets
     bank = raw[0]
@@ -382,11 +416,11 @@ def _play(image, asset, selection):
     start, size = asset['offset'], asset['size']
     score = None
     if 0 <= start < start+size <= len(image):
-        if books is None:
-            score = song(image[start:start+size], waves)
+        raw = image[start:start+size]
+        if asset['layout'] == 'libmus-raw-song':
+            score = song(raw,waves)
         else:
             try:
-                raw = image[start:start+size]
                 if asset.get('sequence_packed',True):
                     raw, _ = lzari.unpack(raw,order=asset.get('sequence_byte_order','big'),limit=_MAX_BYTES)
                 if asset['layout'] == 'libmus-binary-effects':
