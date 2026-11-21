@@ -107,6 +107,7 @@ def regions(image, *, context=None, **kwargs):
         relative_meshes,
         reloc_files,
         resources,
+        rle_font_atlas,
         rnc_tiled_images,
         rnx,
         rzip_audio,
@@ -152,6 +153,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rzip_audio.regions(image,**kwargs))
     known.extend(prefixed_texture_catalog.regions(image,**kwargs))
     known.extend(prefixed_texture_models.regions(image,**kwargs))
+    known.extend(rle_font_atlas.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
@@ -277,6 +279,7 @@ def preview(data, asset, selection):
         raw_deflate_lists,
         reloc_files,
         resources,
+        rle_font_atlas,
         rnc_display_models,
         rnc_meshes,
         rnc_textures,
@@ -356,6 +359,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == rzip_audio.LAYOUT:return rzip_audio.preview(data,asset,selection)
     if asset.get('layout') == prefixed_texture_catalog.LAYOUT:return prefixed_texture_catalog.preview(data,asset,selection)
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
+    if asset.get('layout') == rle_font_atlas.LAYOUT:return rle_font_atlas.preview(data,asset,selection)
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
