@@ -118,7 +118,7 @@ def preview(image, asset, selection):
         return _play(image, asset, selection)
     return dict(media='metadata', title=asset['label'], fields={'Sequencer': 'Nintendo compact MIDI'},
                 table=table(asset['label'], ['index', 'offset', 'size', 'division', 'notes'], len(rows),
-                            lambda i: dict(index=i, **rows[i]), selection),
+                            rows.__getitem__, selection),
                 settings=asset['preview_settings'])
 
 
