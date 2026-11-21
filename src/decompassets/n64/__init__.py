@@ -97,6 +97,7 @@ def regions(image, *, context=None, **kwargs):
         paired_resources,
         ptr_audio,
         rare_assets,
+        raw_deflate_lists,
         rare_audio,
         rare_models,
         relative_materials,
@@ -135,6 +136,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(deflate_catalog.regions(image,**kwargs))
     known.extend(deflate_catalog_models.regions(image,**kwargs))
+    known.extend(raw_deflate_lists.regions(image,**kwargs))
     known.extend(lz_banks.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
@@ -247,6 +249,7 @@ def preview(data, asset, selection):
         paired_resource_textures,
         ptr_audio,
         rare_assets,
+        raw_deflate_lists,
         rare_models,
         reloc_files,
         resources,
@@ -315,6 +318,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog.TEXTURE:return deflate_catalog.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog_models.MODEL:return deflate_catalog_models.preview(data,asset,selection)
+    if asset.get('layout') in (raw_deflate_lists.TEXTURE, raw_deflate_lists.MODEL):
+        return raw_deflate_lists.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
     if asset.get('layout')=='uv-sequence-directory':return uv_sequences.preview(data,asset,selection)
