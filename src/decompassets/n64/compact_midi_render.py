@@ -69,12 +69,13 @@ def render(image, base, division, events, voices, *, label='compact MIDI', book_
         if not voice or not voice['gain'] or at >= stop:
             continue
         sample = voice['sample']
-        key = sample['relative_offset'], sample['size'], sample.get('book_offset')
+        table_offset = voice.get('table_offset', base)
+        key = table_offset, sample['relative_offset'], sample['size'], sample.get('book_offset')
         if key not in cache:
             decoded += sample['samples']
             if decoded > 4*1024*1024:
                 raise formats.AssetError(f'The {label} preview exceeds the decoded sample limit.')
-            cache[key] = _decode(image, base, sample, books)
+            cache[key] = _decode(image, table_offset, sample, books)
         pcm = cache[key]
         step = sample['rate']/RATE * 2**(voice['pitch']/12)
         pan = voice['pan']/127
