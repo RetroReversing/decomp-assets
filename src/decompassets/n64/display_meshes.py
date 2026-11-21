@@ -40,7 +40,10 @@ def geometry(image, offset, end, displacements, *, extra_state=None):
                 if w0 & 0x10000 or (w0 & 1023) != count*16-1:
                     return None
             limit = 64 if dialect == 2 else 32
-            mapping = displacements.get(_space(w1))
+            space = _space(w1)
+            if space is None and not w1 >> 24 and 0 in displacements:
+                space = 0  # a recogniser explicitly established file-relative addresses
+            mapping = displacements.get(space)
             if mapping is None or not count or not 0 <= dest < dest+count <= limit:
                 return None
             start = mapping+(w1 & 0xffffff)
