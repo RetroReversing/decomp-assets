@@ -33,3 +33,34 @@ def test_uvmd_local_mesh_uses_cached_indices():
 @pytest.mark.parametrize('kwargs', [dict(load=0x30), dict(triangle=0x4013), dict(triangle_count=2)])
 def test_uvmd_rejects_inconsistent_geometry(kwargs):
     assert uv_models.regions(_fixture(**kwargs)) == []
+
+
+def _local_fixture(*, triangle=0x8022, first=0, extra_header=False):
+    positions = ((0, 0, 0), (9, 0, 0), (0, 9, 0))
+    vertices = b''.join(struct.pack('>3hH2h4B', *position, 0, 0, 0, 255, 255, 255, 255)
+                        for position in positions)
+    common = struct.pack('>4B3H3f', 2, 1, 0x80 if extra_header else 0, 0, 3, 1, 2, 1, 1, 1)
+    if extra_header:
+        common += bytes(47)
+    empty = struct.pack('>BBf', 0, 0, 1)
+    level = struct.pack('>BBf', 1, 0, 2)
+    part = struct.pack('>3B6f3B', 0, 0, 0, *([0]*6), 0, 0, 1)
+    material = struct.pack('>4I6H', 0, 0, 0, 0, 3, 1, 0, 0, 2, 0)
+    commands = struct.pack('>HBH', first, 0x40, triangle)
+    common += empty + level + part + material + vertices + commands + bytes(64)
+    body = b'UVMD' + b'COMM' + struct.pack('>I', len(common)) + common
+    return bytes(2) + b'FORM' + struct.pack('>I', len(body)) + body
+
+
+@pytest.mark.parametrize('extra_header', [False, True])
+def test_uvmd_local_material_draws_first_nonempty_lod(extra_header):
+    image = _local_fixture(extra_header=extra_header)
+    asset, = uv_models.regions(image)
+    result = n64.preview(image, asset, {})
+    assert result['vertices'] == [(0, 0, 0), (9, 0, 0), (0, 9, 0)]
+    assert result['surfaces'][0]['indices'] == (0, 1, 2)
+
+
+@pytest.mark.parametrize('kwargs', [dict(first=1), dict(triangle=0x8023)])
+def test_uvmd_local_material_rejects_unloaded_vertices(kwargs):
+    assert uv_models.regions(_local_fixture(**kwargs)) == []
