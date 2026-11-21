@@ -69,6 +69,7 @@ def regions(image, *, context=None, **kwargs):
         fla2,
         fonts,
         gzip_meshes,
+        iain_textures,
         iguana_audio,
         iguana_textures,
         inline_meshes,
@@ -168,6 +169,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
     iguana_models = []
+    known.extend(iain_textures.regions(image,**kwargs))
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
     known.extend(iguana_audio.regions(image,**kwargs))
@@ -207,6 +209,7 @@ def preview(data, asset, selection):
         fla2,
         fonts,
         gzip_meshes,
+        iain_textures,
         iguana_audio,
         iguana_models,
         iguana_textures,
@@ -279,6 +282,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
+    if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
