@@ -166,3 +166,19 @@ def test_wrapped_b1_finds_the_table_and_previews_each_sound():
     wrapped[base+16]=15
     found=audio.regions(wrapped)
     assert len(found)==1 and found[0]['audio_kind']=='unresolved bank'
+
+
+def test_uv_form_pairs_named_control_and_wave_chunks():
+    def chunk(tag, body):
+        return tag+struct.pack('>I', len(body))+body
+
+    image, _, base = fixture(raw=True)
+    control, table = image[128:base], image[base:]
+    form = chunk(b'FORM', b'UVSX'+chunk(b'.CTL', control)+chunk(b'.TBL', table))
+    bank = audio.regions(form)[0]
+    assert bank['table_confidence'] == 'validated'
+    assert len(bank['samples']) == 2
+    assert len(wav(audio.preview(form, bank, {}))[1]) == 32
+    # Valid trailing ROM bytes cannot compensate for a truncated wave chunk.
+    short = chunk(b'FORM', b'UVSX'+chunk(b'.CTL', control)+chunk(b'.TBL', table[:-1]))+table[-1:]
+    assert not audio.regions(short)
