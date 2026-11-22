@@ -100,7 +100,8 @@ def textures(data, found):
         commands = [struct.unpack_from('>II', data, at+8*j) for j in range(13)]
         if ([x[0] >> 24 for x in commands] != [0xe7,0xe3,0xfd,0xf5,0xf0,0xf5,0xe6,0xfd,0xf3,0xf5,0xf2,0xe6,0xdf]
                 or commands[2][0] != 0xfd100000 or commands[7][0] != 0xfd500000
-                or commands[2][1] >> 24 != 5 or commands[7][1] >> 24 != 5):
+                or commands[2][1] >> 24 != 5 or commands[7][1] >> 24 != 5
+                or commands[10][0] != 0xf2000000 or commands[10][1] & 0x003003):
             continue
         tile = commands[10][1]
         width, height = ((tile >> 12) & 0xfff)//4+1, (tile & 0xfff)//4+1
