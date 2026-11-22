@@ -10,13 +10,13 @@ _SECTION = struct.Struct('>10I')
 _SYMBOL = struct.Struct('>IIIBBH')
 
 
-def _objects(data):
+def _symbols(data):
     if len(data) < 52 or data[:7] != b'\x7fELF\x01\x02\x01' or struct.unpack_from('>HH', data, 16) != (1, 8):
-        return []
+        return {}
     offset = struct.unpack_from('>I', data, 32)[0]
     size, count = struct.unpack_from('>HH', data, 46)
     if size != 40 or not 1 <= count <= 1024 or offset + size*count > len(data):
-        return []
+        return {}
     sections = [_SECTION.unpack_from(data, offset+size*i) for i in range(count)]
     symbols = {}
     for section in sections:
@@ -38,8 +38,13 @@ def _objects(data):
             target = sections[index]
             if target[1] != 1 or value + extent > target[5] or target[4] + target[5] > len(data):
                 continue
-            if label.endswith((b'_dl', b'_vtx')):
+            if label.endswith((b'_dl', b'_vtx', b'_Textures')):
                 symbols[label] = (target[4]+value,extent)
+    return symbols
+
+
+def _objects(data):
+    symbols = _symbols(data)
     result = []
     for name,(dl,size) in symbols.items():
         if not name.endswith(b'_dl') or (vertex := symbols.get(name[:-3]+b'_vtx')) is None:
