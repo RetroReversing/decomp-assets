@@ -97,6 +97,7 @@ def regions(image, *, context=None, **kwargs):
         indexed_archive_models,
         indexed_resource_models,
         indexed_resource_textures,
+        indexed_sprite_banks,
         inline_meshes,
         inline_tiles,
         iwad_maps,
@@ -222,6 +223,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
     known.extend(indexed_archive_models.regions(image, **kwargs))
+    known.extend(indexed_sprite_banks.regions(image, **kwargs))
     known.extend(segmented_node_models.regions(image, **kwargs))
     known.extend(deflated_texture_table.regions(image, **kwargs))
     known.extend(vol_textures.regions(image, **kwargs))
@@ -415,6 +417,7 @@ def preview(data, asset, selection):
         indexed_archive_models,
         indexed_resource_models,
         indexed_resource_textures,
+        indexed_sprite_banks,
         inline_tiles,
         iwad_maps,
         iwad_sprites,
@@ -585,6 +588,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == vol_textures.LAYOUT:return vol_textures.preview(data,asset,selection)
     if asset.get('layout') == deflated_texture_table.LAYOUT:return deflated_texture_table.preview(data,asset,selection)
     if asset.get('layout') == segmented_node_models.LAYOUT:return segmented_node_models.preview(data,asset,selection)
+    if asset.get('layout') == indexed_sprite_banks.LAYOUT:return indexed_sprite_banks.preview(data,asset,selection)
     if asset.get('layout') == indexed_archive_models.LAYOUT:return indexed_archive_models.preview(data,asset,selection)
     if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
