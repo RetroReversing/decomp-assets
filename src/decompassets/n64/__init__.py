@@ -100,6 +100,7 @@ def regions(image, *, context=None, **kwargs):
         iwad_maps,
         iwad_sprites,
         level_bytecode,
+        level_logos,
         libmus_song,
         lz_banks,
         lz_standard_midi,
@@ -204,6 +205,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(fla2_models.regions(image, **kwargs))
     known.extend(ptr_audio_v1.regions(image, **kwargs))
     known.extend(romdisk_speech.regions(image, **kwargs))
+    known.extend(level_logos.regions(image, **kwargs))
     known.extend(romdisk_art.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
     known.extend(display_meshes)
@@ -395,6 +397,7 @@ def preview(data, asset, selection):
         iwad_maps,
         iwad_sprites,
         level_bytecode,
+        level_logos,
         libmus_song,
         lz_banks,
         lz_directory_models,
@@ -543,6 +546,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == fla2_models.LAYOUT:return fla2_models.preview(data,asset,selection)
     if asset.get('layout') == ptr_audio_v1.LAYOUT:return ptr_audio_v1.preview(data,asset,selection)
     if asset.get('layout') == romdisk_speech.LAYOUT:return romdisk_speech.preview(data,asset,selection)
+    if asset.get('layout') == level_logos.LAYOUT:return level_logos.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
