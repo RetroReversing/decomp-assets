@@ -41,7 +41,7 @@ def _files(image, base, end):
     return files
 
 
-def _members(image, check):
+def _groups(image, check):
     for match in _HEADER.finditer(image):
         base = match.start()
         check()
@@ -53,7 +53,12 @@ def _members(image, check):
                 continue
             nested = _files(image, at, at + stored)
             if nested is not None:
-                yield from nested
+                yield nested
+
+
+def _members(image, check):
+    for group in _groups(image, check):
+        yield from group
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
