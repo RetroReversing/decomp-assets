@@ -29,6 +29,7 @@ def test_rle_atlas_directory_and_preview():
     image = _fixture()
     assets = atlas.regions(image)
     assert len(assets) == 1 and assets[0]['texture_count'] == 16
+    assert assets[0]['textures'][0]['preview_settings']['format'] == 'ci8'
     result = atlas.preview(image, assets[0], {'texture': 7})
     assert result['mime'] == 'image/png'
     assert result['details']['width'] == 8 and result['details']['height'] == 2

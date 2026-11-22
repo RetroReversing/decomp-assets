@@ -80,6 +80,7 @@ def _glyph_tables(image, check):
             stride = (width + 7) & ~7
             items.append(dict(label=f'{chr(char)} · {width}×{height}', width=stride, height=height,
                               offset=offset, frames=1, palettes=1,
+                              preview_settings=dict(format='ci8', width=stride, height=height, offset=offset),
                               levels=[dict(width=stride, height=height, offset=0)]))
             end += stride * height
             at += 8

@@ -36,3 +36,12 @@ def test_invalid_group_counts_and_triangle_indices():
     data = bytearray(_model())
     data[44] = 3
     assert models.geometry(data) is None
+
+
+def test_model_group_has_browser_counts(monkeypatch):
+    image = _model()
+    monkeypatch.setattr(models.rle_font_atlas, '_directories',
+                        lambda *_args: [(0, [(0x10000000 | len(image), 0)])])
+    group, = models.regions(image)
+    assert (group['vertices'], group['triangles']) == (3, 1)
+    assert group['meshes'][0]['name']

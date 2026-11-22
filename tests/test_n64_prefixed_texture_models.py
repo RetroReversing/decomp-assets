@@ -41,3 +41,13 @@ def test_model_rejects_invalid_vertices_and_batch_bounds():
     data = bytearray(_model())
     struct.pack_into('>I', data, 52, 48)
     assert not models.models(data)
+
+
+def test_model_group_has_browser_counts(monkeypatch):
+    data = _model()
+    z = zlib.compressobj(wbits=-15)
+    image = struct.pack('>I', len(data)) + z.compress(data) + z.flush()
+    monkeypatch.setattr(models.prefixed_texture_catalog, 'catalogs', lambda *_args: [[(0, len(image))]])
+    group, = models.regions(image)
+    assert (group['vertices'], group['triangles']) == (3, 1)
+    assert group['meshes'][0]['name']

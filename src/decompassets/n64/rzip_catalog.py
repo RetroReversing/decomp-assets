@@ -140,6 +140,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             start, end, _ = flat[index]
             textures.append(dict(label=f'CI4 {width}×{height}', offset=start, size=end - start,
                                  width=width, height=height, palettes=1, frames=1,
+                                 preview_settings=dict(format='ci4', width=width, height=height, offset=0),
                                  levels=[dict(width=width, height=height, offset=0)]))
         if textures:
             start, end = flat[0][0], flat[-1][1]

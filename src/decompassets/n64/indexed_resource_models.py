@@ -53,7 +53,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 continue
             vertices, faces = parsed
             meshes.append(dict(offset=offset, size=size, vertices=len(vertices), triangles=len(faces),
-                               label=f'Model · {len(vertices)} vertices'))
+                               name=f'Model {index + 1}', label=f'Model · {len(vertices)} vertices'))
         meshes.sort(key=lambda mesh: mesh['offset'])
         for pos in range(0, len(meshes), _GROUP):
             group = meshes[pos:pos + _GROUP]
@@ -61,7 +61,9 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             end = max(mesh['offset'] + mesh['size'] for mesh in group)
             result.append(dict(offset=start, size=end-start, kind='3d model', media='model', layout=LAYOUT,
                                confidence='validated', label=f'{len(group)} indexed models', meshes=group,
-                               nodes=len(group), preview_settings=dict(source='rom', format='auto', offset=start),
+                               nodes=len(group), vertices=sum(mesh['vertices'] for mesh in group),
+                               triangles=sum(mesh['triangles'] for mesh in group),
+                               preview_settings=dict(source='rom', format='auto', offset=start),
                                reason='The resource table and every vertex, UV and grouped triangle index are checked.'))
     return result
 

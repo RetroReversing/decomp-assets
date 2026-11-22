@@ -70,11 +70,13 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 vertices = sum(len(v) for v, _ in pieces)
                 triangles = sum(len(f) for _, f in pieces)
                 meshes.append(dict(number=number, vertices=vertices, triangles=triangles,
-                                   label=f'Model · {vertices} vertices'))
+                                   name=f'Model {number + 1}', label=f'Model · {vertices} vertices'))
             if meshes:
                 result.append(dict(offset=start, size=end-start, kind='3d model', media='model', layout=LAYOUT,
                                    confidence='validated', label=f'{len(meshes)} compressed models', meshes=meshes,
-                                   nodes=len(meshes), preview_settings=dict(source='rom', format='auto', offset=start),
+                                   nodes=len(meshes), vertices=sum(mesh['vertices'] for mesh in meshes),
+                                   triangles=sum(mesh['triangles'] for mesh in meshes),
+                                   preview_settings=dict(source='rom', format='auto', offset=start),
                                    reason='Model records locate bounded display-list batches and their local vertices.'))
     return result
 
