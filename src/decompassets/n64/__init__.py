@@ -102,6 +102,7 @@ def regions(image, *, context=None, **kwargs):
         offset_models,
         offset_textures,
         packed_anim,
+        packed_model_tables,
         packed_tim,
         paged_lz_models,
         paged_models,
@@ -228,6 +229,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(indexed_models)
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(rle_texture_tables.regions(image,context=context,**kwargs))
+    known.extend(packed_model_tables.regions(image,context=context,**kwargs))
     known.extend(graphbin.regions(image,**kwargs))
     known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(deflate_segment_models.regions(image,**kwargs))
@@ -326,6 +328,7 @@ def preview(data, asset, selection):
         offset_models,
         offset_textures,
         packed_anim,
+        packed_model_tables,
         packed_tim,
         paged_lz_models,
         paged_models,
@@ -395,6 +398,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout') == packed_model_tables.LAYOUT:return packed_model_tables.preview(data,asset,selection)
     if asset.get('layout') == rle_texture_tables.LAYOUT:return rle_texture_tables.preview(data,asset,selection)
     if asset.get('layout') == sdf2_music.LAYOUT:return sdf2_music.preview(data,asset,selection)
     if asset.get('layout') == sdf2_audio.LAYOUT:return sdf2_audio.preview(data,asset,selection)
