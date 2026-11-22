@@ -111,3 +111,23 @@ def test_quad_commands_use_four_positions_and_texture_coordinates():
     assert faces[0] == (((0, 0, 7), (2, 7, 7), (1, 0, 0)), 4)
     assert faces[1] == (((1, 0, 0), (2, 7, 7), (3, 7, 0)), 4)
     assert edl_mesh_vertices._faces(data[:-1], item['descriptor'], 4) is None
+
+
+def test_shared_position_storage_uses_only_referenced_bounded_vertices():
+    data = _pack()
+    data.extend(bytes(16))
+    struct.pack_into('>HH', data, 0x3c, 1, 4)
+    struct.pack_into('>I', data, 0x58, (0xb8 - 0x58) << 8)
+    struct.pack_into('>3h2x', data, 0x8c, 100, 100, 100)
+    struct.pack_into('>3h2x', data, 0xa4, 0, 1, 2)
+    data[0xb8:] = bytes((0, 0x1f, 0, 0, 0, 0, 0, 3, 0,
+                         1, 0, 0, 2, 0, 0, 3, 0, 0, 0x0e, 0x20, 0x08, 6))
+    item, = edl_mesh_vertices.meshes(data)
+    assert item['source_indices'] == [1, 2, 3]
+    rom = struct.pack('>4sII', b'EDL\x80', len(data) + 12, len(data)) + data
+    asset, = edl_mesh_vertices.regions(rom, {0: (0, len(rom), len(data))}, lambda: None)
+    preview = eurocom.preview(rom, asset, {})
+    assert preview['vertices'] == [(4, -3, 5), (0, 0, 0), (0, 1, 2)]
+    assert preview['surfaces'][0]['indices'] == (0, 1, 2)
+    struct.pack_into('>h', data, 0x94, 99)
+    assert edl_mesh_vertices.meshes(data) == []

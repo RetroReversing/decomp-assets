@@ -124,17 +124,32 @@ def meshes(data):
         elif (size - 16) % 8 == 0 and data[end - 4:end] == bytes(4):
             pad = 4
         else:
-            continue
+            pad = None
         bounds = struct.unpack_from('>6h', data, start)
-        vertices = list(struct.iter_unpack('>3h2x', data[start + 12:end - pad if pad else end]))
-        if not all(bounds[0] <= x <= bounds[3] and bounds[4] <= y <= bounds[1]
-                   and bounds[2] <= z <= bounds[5] for x, y, z in vertices):
+
+        def in_bounds(vertex, bounds=bounds):
+            x, y, z = vertex
+            return bounds[0] <= x <= bounds[3] and bounds[4] <= y <= bounds[1] and bounds[2] <= z <= bounds[5]
+
+        vertices = (list(struct.iter_unpack('>3h2x', data[start + 12:end - pad if pad else end]))
+                    if pad is not None else [])
+        faces = _faces(data, entry, len(vertices)) if vertices else None
+        if vertices and all(map(in_bounds, vertices)) and (faces or (flags == 4 and pad and not packed & 255)):
+            result.append(dict(name=f'Mesh {i + 1}' if faces else f'Mesh {i + 1} (vertices)', descriptor=entry,
+                               vertices=len(vertices), triangles=len(faces) if faces else 0))
             continue
-        faces = _faces(data, entry, len(vertices))
-        if (flags != 4 or not pad or packed & 255) and not faces:
+        # Some records place additional data after the positions. Resolve the
+        # indices actually referenced by validated triangles and expose only
+        # those positions; the intervening bytes are not necessarily vertices.
+        capacity = (size - 12) // 8
+        faces = _faces(data, entry, capacity)
+        if not faces:
             continue
-        result.append(dict(name=f'Mesh {i + 1}' if faces else f'Mesh {i + 1} (vertices)', descriptor=entry,
-                           vertices=len(vertices), triangles=len(faces) if faces else 0))
+        used = sorted({corner[0] for corners, _ in faces for corner in corners})
+        if not all(in_bounds(struct.unpack_from('>3h', data, start + 12 + 8 * index)) for index in used):
+            continue
+        result.append(dict(name=f'Mesh {i + 1}', descriptor=entry, vertices=len(used), triangles=len(faces),
+                           source_indices=used, source_capacity=capacity))
     return result
 
 
@@ -174,8 +189,16 @@ def preview(image, asset, selection):
     entry = items[index]['descriptor']
     start = entry + 4 + struct.unpack_from('>I', data, entry + 4)[0]
     count = items[index]['vertices']
-    vertices = list(struct.iter_unpack('>3h2x', data[start + 12:start + 12 + count * 8]))
-    records = _faces(data, entry, count) or []
+    source_indices = items[index].get('source_indices')
+    if source_indices is None:
+        vertices = list(struct.iter_unpack('>3h2x', data[start + 12:start + 12 + count * 8]))
+        records = _faces(data, entry, count) or []
+    else:
+        vertices = [struct.unpack_from('>3h', data, start + 12 + 8 * i) for i in source_indices]
+        remap = {old: new for new, old in enumerate(source_indices)}
+        source_records = _faces(data, entry, items[index]['source_capacity']) or []
+        records = [(tuple((remap[v], u, w) for v, u, w in corners), texture)
+                   for corners, texture in source_records]
     texture_offset = asset.get('texture_offset')
     texture_data = edl.unpack(image, texture_offset) if texture_offset is not None else b''
     textures = edl_indexed_textures.textures(texture_data)
