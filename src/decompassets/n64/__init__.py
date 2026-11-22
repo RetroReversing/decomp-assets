@@ -60,6 +60,7 @@ def regions(image, *, context=None, **kwargs):
         borg_dcm,
         borg_models,
         cartridge_scores,
+        chunked_package_images,
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
@@ -230,6 +231,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(rle_texture_tables.regions(image,context=context,**kwargs))
     known.extend(packed_model_tables.regions(image,context=context,**kwargs))
+    known.extend(chunked_package_images.regions(image,**kwargs))
     known.extend(graphbin.regions(image,**kwargs))
     known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(deflate_segment_models.regions(image,**kwargs))
@@ -287,6 +289,7 @@ def preview(data, asset, selection):
         borg_dcm,
         borg_models,
         cartridge_scores,
+        chunked_package_images,
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
@@ -404,6 +407,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == sdf2_audio.LAYOUT:return sdf2_audio.preview(data,asset,selection)
     if asset.get('layout') == deflate_segment_models.LAYOUT:return deflate_segment_models.preview(data,asset,selection)
     if asset.get('layout') == deflate_sprites.LAYOUT:return deflate_sprites.preview(data,asset,selection)
+    if asset.get('layout') == chunked_package_images.LAYOUT:return chunked_package_images.preview(data,asset,selection)
     if asset.get('layout') == graphbin.LAYOUT:return graphbin.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
     if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK,rnc_display_models.LAYOUT):return rnc_tiled_images.preview(data,asset,selection)
