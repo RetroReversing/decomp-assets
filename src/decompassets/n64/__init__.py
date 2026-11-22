@@ -74,6 +74,8 @@ def regions(image, *, context=None, **kwargs):
         display_lists,
         emsh_links,
         eurocom,
+        exs_images,
+        exs_models,
         fat_models,
         fat_textures,
         ffs,
@@ -200,6 +202,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(zip_object_textures.regions(image,**kwargs))
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
+    known.extend(exs_images.regions(image,**kwargs))
+    known.extend(exs_models.regions(image,**kwargs))
     known.extend(ia_font_textures.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
     known.extend(iwad_maps.regions(image,**kwargs))
@@ -317,6 +321,8 @@ def preview(data, asset, selection):
         diet_audio,
         display_meshes,
         eurocom,
+        exs_images,
+        exs_models,
         fat_models,
         fat_textures,
         ffs,
@@ -462,6 +468,8 @@ def preview(data, asset, selection):
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
+    if asset.get('layout') == exs_models.LAYOUT:return exs_models.preview(data,asset,selection)
+    if asset.get('layout') == exs_images.LAYOUT:return exs_images.preview(data,asset,selection)
     if asset.get('layout') == lzss_archive_images.LAYOUT:return lzss_archive_images.preview(data,asset,selection)
     if asset.get('layout') == level_bytecode.LAYOUT:return level_bytecode.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
