@@ -40,3 +40,18 @@ def test_linked_headers_resolve_the_directory_vertex_base():
     assert preview['triangles'] == 1
     struct.pack_into('>I', image, headers[0]+36, 0x01000100)
     assert not inline_meshes.regions(image)
+
+
+def test_tile_can_use_a_preceding_mapping_when_palette_evidence_is_stronger():
+    image = bytearray(256)
+    for start in (0, 32):
+        struct.pack_into('>4H2I', image, start, 4, 4, 2, 0, _BASE+160, _BASE+start+24)
+        image[start+16] = 0xdf
+        image[start+24:start+32] = bytes([0x12])*8
+    for i in range(16):
+        struct.pack_into('>H', image, 128+2*i, i*2+1)
+    struct.pack_into('>H', image, 162, 1)
+    tile, = inline_tiles.regions(image)
+    assert tile['offset'] == 24
+    assert tile['preview_settings']['palette_offset'] == 128
+    assert tile['confidence'] == 'inferred'

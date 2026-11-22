@@ -55,16 +55,49 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         if tile := _tile(image, offset):
             tiles[offset] = tile
     verified = set()
+    previous = {}
+    previous_members = set()
+
+    def palette_score(at, size):
+        if at < 0 or at+size > len(image):
+            return 0
+        words = struct.unpack_from('>'+str(size//2)+'H', image, at)
+        return len({word for word in words if word & 1})
+
     for offset, tile in tiles.items():
         following = (tile.end+7)&~7
         next_tile = tiles.get(following)
-        if next_tile and tile.displacement == next_tile.displacement and not any(image[tile.end:following]):
-            verified.update((offset, following))
-    return [dict(offset=tile.start, size=tile.end-tile.start, kind='image', media='image',
-                 layout=LAYOUT, confidence='validated', label='Inline RDP tile',
-                 reason='Adjacent headers agree on the loaded-bank mapping, pixel extent and RDP tile format.',
-                 preview_settings=dict(source='rom', **tile.settings))
-            for offset in sorted(verified) for tile in (tiles[offset],)]
+        if not next_tile or tile.displacement != next_tile.displacement or any(image[tile.end:following]):
+            continue
+        verified.update((offset, following))
+        # Some banks put the descriptor after its pixels. Both interpretations
+        # have identical adjacent pointer strides; the palette supplies the
+        # deciding evidence when only the preceding mapping resembles RGBA5551.
+        settings = tile.settings
+        if ('palette_offset' not in settings or next_tile.end-next_tile.start != tile.end-tile.start
+                or any(settings[k] != next_tile.settings.get(k) for k in ('width', 'height', 'format'))):
+            continue
+        size = 32 if settings['format'] == 'ci4' else 512
+        palette = settings['palette_offset']-(following-offset)
+        old_score = palette_score(settings['palette_offset'], size)
+        new_score = palette_score(palette, size)
+        if new_score < 12 or new_score <= 2*old_score:
+            continue
+        previous[offset] = {**settings, 'palette_offset': palette}
+        previous_members.update((offset, following))
+    result = []
+    for offset in sorted(verified):
+        tile = tiles[offset]
+        if offset in previous_members and offset not in previous:
+            continue
+        settings = previous.get(offset, tile.settings)
+        inferred = offset in previous
+        result.append(dict(offset=tile.start, size=tile.end-tile.start, kind='image', media='image',
+                           layout=LAYOUT, confidence='inferred' if inferred else 'validated', label='Inline RDP tile',
+                           reason=('Adjacent descriptors and palette contents support a preceding-tile mapping.' if inferred else
+                                   'Adjacent headers agree on the loaded-bank mapping, pixel extent and RDP tile format.'),
+                           preview_settings=dict(source='rom', **settings)))
+    return result
 
 
 
