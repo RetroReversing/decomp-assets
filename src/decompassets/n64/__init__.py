@@ -102,6 +102,7 @@ def regions(image, *, context=None, **kwargs):
         lzss_archive_images,
         lzss_archive_models,
         mainfs,
+        mio0_graphics,
         models,
         mwo_graphics,
         named_resource_images,
@@ -206,6 +207,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(ead_direct_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
     known.extend(exs_models.regions(image,**kwargs))
+    mio0_images = []
+    known.extend(mio0_graphics.regions(image,images=mio0_images,**kwargs))
+    known.extend(mio0_images)
     known.extend(ia_font_textures.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
     known.extend(iwad_maps.regions(image,**kwargs))
@@ -353,6 +357,7 @@ def preview(data, asset, selection):
         lzss_archive_images,
         lzss_archive_models,
         mainfs,
+        mio0_graphics,
         models,
         mwo_graphics,
         named_resource_images,
@@ -472,6 +477,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
+    if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
+    if asset.get('layout') == mio0_graphics.IMAGE:return mio0_graphics.preview_image(data,asset,selection)
     if asset.get('layout') == exs_models.LAYOUT:return exs_models.preview(data,asset,selection)
     if asset.get('layout') == exs_images.LAYOUT:return exs_images.preview(data,asset,selection)
     if asset.get('layout') == lzss_archive_images.LAYOUT:return lzss_archive_images.preview(data,asset,selection)
