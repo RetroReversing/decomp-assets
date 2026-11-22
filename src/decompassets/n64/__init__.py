@@ -144,6 +144,7 @@ def regions(image, *, context=None, **kwargs):
         resources,
         rle_font_atlas,
         rle_texture_tables,
+        rnc_adpcm,
         rnc_indexed_sprites,
         rnc_quad_models,
         rnc_reloc_display,
@@ -212,6 +213,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(terminated_rgba_tiles.regions(image,**kwargs))
     known.extend(rnc_indexed_sprites.regions(image,**kwargs))
     known.extend(named_adpcm.regions(image,**kwargs))
+    known.extend(rnc_adpcm.regions(image,**kwargs))
     known.extend(rnc_quad_models.regions(image,**kwargs))
     known.extend(rnc_reloc_display.regions(image,**kwargs))
     known.extend(rnc_reloc_display.image_regions(image,**kwargs))
@@ -421,6 +423,7 @@ def preview(data, asset, selection):
         resources,
         rle_font_atlas,
         rle_texture_tables,
+        rnc_adpcm,
         rnc_display_models,
         rnc_indexed_sprites,
         rnc_meshes,
@@ -512,6 +515,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == rnc_indexed_sprites.LAYOUT:return rnc_indexed_sprites.preview(data,asset,selection)
     if asset.get('layout') == named_adpcm.LAYOUT:return named_adpcm.preview(data,asset,selection)
     if asset.get('layout') == rnc_quad_models.LAYOUT:return rnc_quad_models.preview(data,asset,selection)
+    if asset.get('layout') == rnc_adpcm.LAYOUT:return rnc_adpcm.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
