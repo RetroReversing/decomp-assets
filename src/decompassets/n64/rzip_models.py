@@ -104,13 +104,15 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 vertices, faces = parsed
                 models.append(dict(offset=start, size=end-start, compressed=bool(flags & 1), part=part,
                                    length=len(data), vertices=len(vertices), triangles=len(faces),
-                                   label=f'Mesh · {len(vertices)} vertices'))
+                                   name=f'Mesh {len(models) + 1}', label=f'Mesh · {len(vertices)} vertices'))
         if models:
             start = min(model['offset'] for model in models)
             end = max(model['offset'] + model['size'] for model in models)
             result.append(dict(offset=start, size=end-start, kind='3d model', media='model', layout=MODEL,
                                confidence='validated', label=f'{len(models)} indexed meshes', meshes=models,
-                               nodes=len(models), reason='Resource headers and every loaded triangle resolve inside each local model.',
+                               nodes=len(models), vertices=sum(model['vertices'] for model in models),
+                               triangles=sum(model['triangles'] for model in models),
+                               reason='Resource headers and every loaded triangle resolve inside each local model.',
                                preview_settings=dict(format='auto', source='rom', offset=start)))
     return result
 

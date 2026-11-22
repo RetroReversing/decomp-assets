@@ -41,6 +41,7 @@ def test_catalog_finds_indexed_textures_and_previews():
     assets = rzip_catalog.regions(image)
     assert len(assets) == 1
     assert assets[0]['texture_count'] == 1
+    assert assets[0]['textures'][0]['preview_settings']['format'] == 'ci4'
     result = rzip_catalog.preview(image, assets[0], {})
     assert result['mime'] == 'image/png'
     assert result['details']['width'] == result['details']['height'] == 64

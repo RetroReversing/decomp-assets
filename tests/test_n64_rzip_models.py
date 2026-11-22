@@ -34,6 +34,15 @@ def test_model_loads_vertices_and_previews_compressed_geometry():
         rzip_models.preview(image[:-1], asset, {})
 
 
+def test_model_group_has_browser_counts(monkeypatch):
+    image = _packed(_model())
+    monkeypatch.setattr(rzip_models.rzip_catalog, 'catalogs',
+                        lambda *_args, **_kwargs: [(0, [(0, len(image), 1)], [])])
+    group, = rzip_models.regions(image)
+    assert (group['vertices'], group['triangles']) == (3, 1)
+    assert group['meshes'][0]['name']
+
+
 def test_model_rejects_unloaded_triangles_and_bad_list_end():
     data = bytearray(_model())
     at = 0x28 + 3 * 16
