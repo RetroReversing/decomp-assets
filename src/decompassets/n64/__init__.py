@@ -103,6 +103,7 @@ def regions(image, *, context=None, **kwargs):
         lz_banks,
         lz_standard_midi,
         lz_texture_directories,
+        lzo_models,
         lzss_archive_images,
         lzss_archive_models,
         mainfs,
@@ -195,6 +196,7 @@ def regions(image, *, context=None, **kwargs):
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
+    known.extend(lzo_models.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
@@ -389,6 +391,7 @@ def preview(data, asset, selection):
         lz_directory_models,
         lz_standard_midi,
         lz_texture_directories,
+        lzo_models,
         lzss_archive_images,
         lzss_archive_models,
         mainfs,
@@ -524,6 +527,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == rnc_adpcm.LAYOUT:return rnc_adpcm.preview(data,asset,selection)
     if asset.get('layout') == b1_speech.LAYOUT:return b1_speech.preview(data,asset,selection)
     if asset.get('layout') == sprite_constructor.LAYOUT:return sprite_constructor.preview(data,asset,selection)
+    if asset.get('layout') == lzo_models.LAYOUT:return lzo_models.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
