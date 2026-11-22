@@ -75,6 +75,7 @@ def regions(image, *, context=None, **kwargs):
         iain,
         iguana_audio,
         iguana_textures,
+        indexed_resource_models,
         inline_meshes,
         inline_tiles,
         libmus_song,
@@ -154,6 +155,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(prefixed_texture_catalog.regions(image,**kwargs))
     known.extend(prefixed_texture_models.regions(image,**kwargs))
     known.extend(rle_font_atlas.regions(image,**kwargs))
+    known.extend(indexed_resource_models.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
@@ -250,6 +252,7 @@ def preview(data, asset, selection):
         iguana_audio,
         iguana_models,
         iguana_textures,
+        indexed_resource_models,
         inline_tiles,
         libmus_song,
         lz_banks,
@@ -360,6 +363,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_catalog.LAYOUT:return prefixed_texture_catalog.preview(data,asset,selection)
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == rle_font_atlas.LAYOUT:return rle_font_atlas.preview(data,asset,selection)
+    if asset.get('layout') == indexed_resource_models.LAYOUT:return indexed_resource_models.preview(data,asset,selection)
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
