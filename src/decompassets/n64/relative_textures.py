@@ -34,6 +34,44 @@ def references(data, count):
     return found
 
 
+
+def indexed_references(data, count):
+    """Pair a colour-indexed image with the next palette load in its list."""
+    events = []
+    for pos in range(0, len(data) - 16, 8):
+        a, index = struct.unpack_from('>2I', data, pos)
+        if a >> 24 != 0xfd or a & 0x7ffff or index >= count:
+            continue
+        tile = size = None
+        palette_entries = None
+        for at in range(pos + 8, min(pos + 112, len(data) - 7), 8):
+            x, y = struct.unpack_from('>2I', data, at)
+            op = x >> 24
+            if op == 0xfd:
+                break
+            if op == 0xf5 and (y >> 24) & 7 == 0:
+                tile = ((x >> 21) & 7, (x >> 19) & 3)
+            elif op == 0xf0:
+                palette_entries = ((y >> 14) & 1023) + 1
+            elif op == 0xf2 and (y >> 24) & 7 == 0:
+                size = (((y >> 12) & 0xfff) // 4 + 1, (y & 0xfff) // 4 + 1)
+        if palette_entries is not None:
+            events.append(('palette', index, palette_entries, pos))
+        elif tile and size:
+            events.append(('image', index, tile, size, pos))
+    found = defaultdict(set)
+    for first, second in zip(events, events[1:]):
+        if (first[0] != 'image' or first[2] not in ((2, 0), (2, 1)) or second[0] != 'palette'
+                or second[-1] - first[-1] > 256
+                or any(data[at] == 0xdf for at in range(first[-1] + 8, second[-1], 8))):
+            continue
+        width, height = first[3]
+        entries = 16 if first[2][1] == 0 else 256
+        if 1 <= width <= 512 and 1 <= height <= 512 and second[2] >= entries:
+            found[first[1]].add((first[2], width, height, second[1]))
+    return found
+
+
 def _member(image, base, entries, index):
     if not 0 <= index < len(entries) - 1 or entries[index] & 0x80000000:
         return None
@@ -51,6 +89,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         if not texture_table:
             continue
         refs = defaultdict(set)
+        indexed = defaultdict(set)
         for table in (1, 4, 5):
             for index in range(len(tables[table]) - 1):
                 if index % 32 == 0:
@@ -59,6 +98,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 if member:
                     for key, uses in references(member[2], len(texture_table) - 1).items():
                         refs[key].update(uses)
+                    for key, uses in indexed_references(member[2], len(texture_table) - 1).items():
+                        indexed[key].update(uses)
         for index, uses in refs.items():
             if len(uses) != 1 or not (member := _member(image, base, texture_table, index)):
                 continue
@@ -73,6 +114,24 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                                directory=base, index=index, format=fmt, width=width, height=height,
                                reason='A display list identifies the resource and its tile format and dimensions.',
                                preview_settings=dict(source='rom', format='auto', offset=start)))
+        for index, uses in indexed.items():
+            if len(uses) != 1 or not (member := _member(image, base, texture_table, index)):
+                continue
+            (tile, width, height, palette_index), = uses
+            palette = _member(image, base, texture_table, palette_index)
+            start, end, data = member
+            bits = 4 << tile[1]
+            entries = 16 if bits == 4 else 256
+            if (not palette or len(palette[2]) < entries * 2 or width * height * bits > len(data) * 8
+                    or width * bits % 8):
+                continue
+            fmt = 'ci4' if bits == 4 else 'ci8'
+            result.append(dict(offset=start, size=end-start, kind='image', layout=LAYOUT,
+                               confidence='inferred', label=f'{fmt.upper()} {width}×{height} texture',
+                               directory=base, index=index, format=fmt, width=width, height=height,
+                               palette_index=palette_index,
+                               reason='Adjacent display-list commands bind the image and palette; the palette is interpreted as RGBA5551.',
+                               preview_settings=dict(source='rom', format='auto', offset=start)))
     return result
 
 
@@ -83,8 +142,15 @@ def preview(image, asset, selection):
         member = _member(image, base, tables[25], asset['index'])
         if member and member[:2] == (asset['offset'], asset['offset'] + asset['size']):
             data = member[2]
-            result = formats.preview(data, dict(source='rom', offset=0, format=asset['format'],
-                                                width=asset['width'], height=asset['height']))
+            settings = dict(source='rom', offset=0, format=asset['format'],
+                            width=asset['width'], height=asset['height'])
+            if 'palette_index' in asset:
+                palette = _member(image, base, tables[25], asset['palette_index'])
+                if not palette:
+                    break
+                settings.update(palette_offset=len(data), palette_format='rgba5551-be')
+                data += palette[2]
+            result = formats.preview(data, settings)
             result['details']['note'] = asset['reason']
             result['settings'] = asset['preview_settings']
             result['decoded'] = dict(codec='gzip', bytes=len(data), block_offset=asset['offset'])
