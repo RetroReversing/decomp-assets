@@ -23,7 +23,8 @@ def _faces(data, entry, vertex_count):
             pos += 1
             op, high = command & 15, command >> 4
             if command == 6:
-                return faces if len(faces) == expected else None
+                # The game stops at this command; the header can exceed the emitted count.
+                return faces if 0 < len(faces) <= expected else None
             if op == 0:
                 if command & 0x20:
                     return None
