@@ -63,6 +63,7 @@ def regions(image, *, context=None, **kwargs):
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
+        deflate_sprites,
         dialogue,
         dialogue_links,
         diet_audio,
@@ -221,6 +222,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(indexed_models)
     known.extend(named_resource_models.regions(image,**kwargs))
     known.extend(graphbin.regions(image,**kwargs))
+    known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(tagged_deflate.regions(image,**kwargs))
     known.extend(striped_images.regions(image,**kwargs))
     compressed_meshes = []
@@ -278,6 +280,7 @@ def preview(data, asset, selection):
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
+        deflate_sprites,
         dialogue,
         diet_audio,
         display_meshes,
@@ -380,6 +383,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout') == deflate_sprites.LAYOUT:return deflate_sprites.preview(data,asset,selection)
     if asset.get('layout') == graphbin.LAYOUT:return graphbin.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
     if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK,rnc_display_models.LAYOUT):return rnc_tiled_images.preview(data,asset,selection)

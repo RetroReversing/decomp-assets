@@ -43,7 +43,7 @@ def _images(data):
     return images
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
+def pairs(image, check):
     # The cartridge carries start/end pairs for the compressed resources. Require
     # the stream itself to agree before interpreting any decoded image headers.
     pairs = set()
@@ -55,8 +55,12 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             if value - previous <= _LIMIT:
                 pairs.add((previous, value))
         previous = value
+    return sorted(pairs)
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None):
     result = []
-    for start, end in sorted(pairs):
+    for start, end in pairs(image, check):
         check()
         data = _unpack(image, start, end)
         if not data or not data.startswith(b'GraphBin') or not (images := _images(data)):
