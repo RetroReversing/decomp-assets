@@ -116,6 +116,7 @@ def regions(image, *, context=None, **kwargs):
         rzip_audio,
         rzip_catalog,
         rzip_models,
+        segmented_model_resources,
         siff_models,
         sized_lz_catalog,
         sn64,
@@ -162,6 +163,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(indexed_resource_textures.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
+    known.extend(segmented_model_resources.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
     known.extend(stage_meshes.regions(image, stages, kwargs.get("check", lambda: None)))
@@ -299,6 +301,7 @@ def preview(data, asset, selection):
         rzip_catalog,
         rzip_models,
         scene_records,
+        segmented_model_resources,
         siff_models,
         sized_lz_catalog,
         sn64,
@@ -375,6 +378,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == sized_lz_catalog.TEXTURE:return sized_lz_catalog.preview(data,asset,selection)
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
+    if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
