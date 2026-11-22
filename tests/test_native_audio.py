@@ -395,3 +395,22 @@ def test_checked_offset_directory_pairs_sample_only_banks_including_pcm(monkeypa
     assert all(wav(audio.preview(image,item,{}))[1] for item in banks)
     damaged = bytearray(image); struct.pack_into('>I', damaged, 4, boundaries[-1]+1)
     assert not audio._offset_directory_tables(damaged, lambda: None)
+
+
+def test_end_anchor_requires_many_dense_nonoverlapping_adpcm_samples():
+    samples = [dict(relative_offset=i*16,size=9,codec='N64 VADPCM') for i in range(32)]
+    info = dict(offset=0,size=32,samples=samples)
+    assert audio._end_anchored_tables(info,[0x1000]) == [0xe00]
+    assert not audio._end_anchored_tables({**info,'samples':samples[:31]},[0x1000])
+    changed = [dict(sample) for sample in samples];changed[10]['relative_offset'] += 8
+    assert not audio._end_anchored_tables({**info,'samples':changed},[0x1000])
+    assert not audio._end_anchored_tables(info,[0x1010-1])
+
+
+def test_inferred_anchor_is_checked_when_an_unrelated_loader_base_is_present(monkeypatch):
+    image, _, base = fixture(raw=True)
+    monkeypatch.setattr(audio,'loader_tables',lambda *args,**kwargs:{len(image)-1:[]})
+    monkeypatch.setattr(audio,'_end_anchored_tables',lambda info,boundaries:[base])
+    banks = [item for item in audio.regions(image) if item.get('audio_kind') == 'sample bank']
+    assert banks and banks[0]['table_offset'] == base
+    assert banks[0]['table_confidence'] == 'tentative'

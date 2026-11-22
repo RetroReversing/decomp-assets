@@ -451,12 +451,25 @@ def _offset_directory_tables(image, check):
     return result
 
 
+def _end_anchored_tables(info, boundaries):
+    """Infer a dense sample table immediately before a verified data-file header."""
+    samples = info['samples']
+    ranges = sorted({(s['relative_offset'],s['relative_offset']+s['size']) for s in samples})
+    if (len(ranges) < 32 or sum(s['codec'] == 'N64 VADPCM' for s in samples) < 32
+            or ranges[0][0] != 0 or any(not 0 <= b[0]-a[1] <= 15 for a,b in zip(ranges,ranges[1:]))):
+        return []
+    size = (ranges[-1][1]+15) & ~15
+    return [end-size for end in boundaries if end-size >= info['offset']+info['size'] and not (end-size)%16]
+
+
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
     parallel = _parallel_tables(image, candidates, check)
     directory = _offset_directory_tables(image, check)
+    from .fat_textures import file_tables
+    data_boundaries = [base for base, _, _, _, _ in file_tables(image, check)]
     copied = _copied_tables(image, context, check) if any(not relocated for _, relocated in candidates) else {}
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
@@ -490,6 +503,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
         partition = parallel.get(offset) or directory.get(offset)
+        anchored = _end_anchored_tables(info, data_boundaries)
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
             control_end, wave, wave_end, _, _ = uv
@@ -517,10 +531,11 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         elif sample_only:
             bases = [adjacent]
         else:
-            bases=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES] if loader_refs else [adjacent]
+            preferred=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES]
+            bases=list(dict.fromkeys([*preferred,adjacent,*anchored]))
         fits=[]
         for base in bases:
-            info['corroborated']=bool(uv or partition) or base in loader_refs
+            info['corroborated']=bool(uv or partition) or base in loader_refs or base in anchored
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
             if sample_only:
@@ -539,6 +554,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
+                 'Dense samples end at a verified data-file boundary; table placement is inferred.' if base in anchored else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
