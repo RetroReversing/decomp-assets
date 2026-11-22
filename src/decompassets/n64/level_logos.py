@@ -10,7 +10,7 @@ _RECORD = 0x54
 _NAME = re.compile(rb'[a-z0-9_]{2,16}\x00')
 
 
-def directory(image):
+def records(image):
     """Find a run of bounded level records and resident, terminated names."""
     if len(image) < 0x2000:
         return []
@@ -31,18 +31,21 @@ def directory(image):
                     or not 0x80000400 <= entry < ram_end <= 0x80800000
                     or not 0 <= logo <= len(image)-0x820):
                 break
-            rows.append((label.group()[:-1].decode('ascii'), logo))
-        if len(rows) >= 8 and len({offset for _, offset in rows if offset}) >= 4:
-            return [(name, offset) for name, offset in rows if offset]
+            rows.append(dict(name=label.group()[:-1].decode('ascii'), logo=logo, start=lo, end=hi))
+        if len(rows) >= 8 and len({row['logo'] for row in rows if row['logo']}) >= 4:
+            return rows
     return []
 
 
 def regions(image, *, check=lambda: None, **kwargs):
-    rows = directory(image)
+    rows = records(image)
     result = []
     seen = set()
-    for name, at in rows:
+    for row in rows:
+        name, at = row['name'], row['logo']
         check()
+        if not at:
+            continue
         if at in seen or not any(image[at:at+32]):
             continue
         seen.add(at)
