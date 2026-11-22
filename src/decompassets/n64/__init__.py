@@ -95,6 +95,7 @@ def regions(image, *, context=None, **kwargs):
         lz_banks,
         lz_standard_midi,
         lz_texture_directories,
+        lzss_archive_images,
         mainfs,
         models,
         mwo_graphics,
@@ -209,6 +210,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(stages)
     known.extend(stage_meshes.regions(image, stages, kwargs.get("check", lambda: None)))
     known.extend(lz_banks.regions(image,**kwargs))
+    known.extend(lzss_archive_images.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
     known.extend(arithmetic_descriptors.regions(image,context=context,**kwargs))
@@ -332,6 +334,7 @@ def preview(data, asset, selection):
         lz_directory_models,
         lz_standard_midi,
         lz_texture_directories,
+        lzss_archive_images,
         mainfs,
         models,
         mwo_graphics,
@@ -449,6 +452,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
     if asset.get('layout')==bind_models.LAYOUT:return bind_models.preview(data,asset,selection)
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
+    if asset.get('layout') == lzss_archive_images.LAYOUT:return lzss_archive_images.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')==offset_models.LAYOUT:return offset_models.preview(data,asset,selection)
