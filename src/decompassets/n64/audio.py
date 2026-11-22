@@ -419,11 +419,44 @@ def _uv_tables(image, check):
     return tables
 
 
+def _offset_directory_tables(image, check):
+    """Pair two control graphs with sample ranges from a checked asset directory."""
+    from .offset_textures import catalogs
+
+    result = {}
+    for base, offsets, _ in catalogs(image, check):
+        if len(offsets) <= 40:
+            continue
+        table, samples, end = (base+offsets[i] for i in (38, 39, 40))
+        if not table < samples < end <= len(image) or samples-table < 20:
+            continue
+        values = []
+        terminated = False
+        for at in range(table, min(samples, table+256), 4):
+            value = int.from_bytes(image[at:at+4], 'big')
+            if value == 0xffffffff:
+                terminated = True
+                break
+            if value > end-samples or values and value < values[-1]:
+                break
+            values.append(value)
+        else:
+            continue
+        if (not terminated or len(values) < 4 or not 0 < values[0] < values[1] < values[2] < values[3]
+                or image[samples:samples+2] != b'B1' or image[samples+values[1]:samples+values[1]+2] != b'B1'):
+            continue
+        for control, control_end, wave_at, wave_end in ((samples, samples+values[0], samples+values[0], samples+values[1]),
+                (samples+values[1], samples+values[2], samples+values[2], samples+values[3])):
+            result[control] = (control_end, wave_at, wave_end)
+    return result
+
+
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
     parallel = _parallel_tables(image, candidates, check)
+    directory = _offset_directory_tables(image, check)
     copied = _copied_tables(image, context, check) if any(not relocated for _, relocated in candidates) else {}
     for number,(offset,relocated) in enumerate(candidates):
         check();progress(dict(phase='Recognizing audio banks',done=number,total=len(candidates)))
@@ -433,13 +466,13 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         except KeyMapError:
             if relocated:
                 continue
-            # Some sample banks leave MIDI key maps unset. Require independently
-            # validated adjacent ADPCM data before advertising these as audio.
+            # Some sample banks leave MIDI key maps unset. Require validated
+            # ADPCM adjacency, or a directory that bounds their sample table.
             try:
                 info = bank(image, offset, sample_only=True, check=check)
             except BankError:
                 continue
-            if any(sample['codec'] != 'N64 VADPCM' for sample in info['samples']):
+            if offset not in directory and any(sample['codec'] != 'N64 VADPCM' for sample in info['samples']):
                 continue
             sample_only = True
         except BankError:
@@ -456,7 +489,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                        or not refs or any(not ref.get('adjacent_control') for ref in refs)}
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
-        partition = parallel.get(offset)
+        partition = parallel.get(offset) or directory.get(offset)
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
             control_end, wave, wave_end, _, _ = uv
@@ -502,6 +535,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
+                 'A checked cartridge directory pairs bounded control and sample ranges.' if offset in directory else
                  'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
@@ -510,7 +544,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
         common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=loader_refs.get(base,[]),table_offset=base)
         if partition and not uv:
-            common['table_layout'] = 'parallel'
+            common['table_layout'] = 'offset-directory' if offset in directory else 'parallel'
         results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                             reason=reason,preview_settings=dict(format='auto',source='rom',offset=offset),samples=samples,**common))
         seen=set()
