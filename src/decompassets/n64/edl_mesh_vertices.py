@@ -3,7 +3,7 @@
 import struct
 
 from .. import formats
-from . import edl
+from . import edl, edl_indexed_textures
 
 LAYOUT = 'eurocom-edl-mesh-vertices'
 
@@ -16,7 +16,7 @@ def _faces(data, entry, vertex_count):
     if pos + 7 > len(data) or data[pos:pos + 2] != b'\0\x1f':
         return None
     pos += 6
-    cache, faces = [], []
+    cache, faces, texture = [], [], None
     try:
         for _ in range(10000):
             command = data[pos]
@@ -45,14 +45,18 @@ def _faces(data, entry, vertex_count):
                         pos += 1 if u & 0x80 else 3
                     if index >= vertex_count or pos > len(data):
                         return None
-                    cache.append(index)
+                    cache.append((index, (u & 127) * 2, (v & 127) * 2))
             elif op in (1, 7):
                 pos += 3
             elif op in (2, 8, 10):
                 pass
             elif op in (3, 4):
+                texture = data[pos + 1]
                 pos += 2
-            elif op in (9, 11, 13):
+            elif op == 9:
+                texture = data[pos]
+                pos += 1
+            elif op in (11, 13):
                 pos += 1
             elif op == 12:
                 pos += 1 + high
@@ -67,14 +71,14 @@ def _faces(data, entry, vertex_count):
                     pos += 2
                     count -= 1
                     a, b, c = word & 31, (word >> 5) & 31, (word >> 10) & 31
-                    faces.append((cache[a], cache[b], cache[c]))
+                    faces.append(((cache[a], cache[b], cache[c]), texture))
                     if word & 0x8000:
                         if not count:
                             return None
                         extra = data[pos]
                         pos += 1
                         count -= 1
-                        faces.append((cache[extra], cache[a], cache[c]))
+                        faces.append(((cache[extra], cache[a], cache[c]), texture))
             else:
                 return None
             if pos >= len(data) or len(faces) > expected:
@@ -115,7 +119,8 @@ def meshes(data):
 
 def regions(image, blocks, check):
     result = []
-    for offset, (_, stored, decoded) in blocks.items():
+    pairs = {}
+    for offset, (_, stored, decoded) in sorted(blocks.items()):
         if decoded > formats.MAX_BYTES:
             continue
         check()
@@ -123,6 +128,10 @@ def regions(image, blocks, check):
             data = edl.unpack(image, offset)
         except formats.AssetError:
             continue
+        if edl_indexed_textures.textures(data):
+            next_offset = (offset + stored + 15) & ~15
+            if next_offset in blocks:
+                pairs[next_offset] = offset
         items = meshes(data)
         if items:
             result.append(dict(offset=offset, size=stored, kind='3d model', media='model', layout=LAYOUT,
@@ -130,6 +139,7 @@ def regions(image, blocks, check):
                                vertices=sum(m['vertices'] for m in items),
                                triangles=sum(m['triangles'] for m in items), nodes=0,
                                reason='Relative pointers resolve to position arrays inside declared bounds.',
+                               texture_offset=pairs.get(offset),
                                preview_settings=dict(source='rom', format='auto', offset=offset)))
     return result
 
@@ -144,13 +154,38 @@ def preview(image, asset, selection):
     start = entry + 4 + struct.unpack_from('>I', data, entry + 4)[0]
     count = items[index]['vertices']
     vertices = list(struct.iter_unpack('>3h2x', data[start + 12:start + 12 + count * 8]))
-    faces = _faces(data, entry, count) or []
-    edges = {tuple(sorted((face[i], face[(i + 1) % 3]))) for face in faces for i in range(3)}
-    surfaces = [dict(indices=face, uv=[[0, 0]] * 3, colors=[[255, 255, 255, 255]] * 3, material=0)
-                for face in faces]
-    note = ('Untextured local geometry; texture mapping and placement are not yet decoded.' if faces else
-            'Vertex positions only; the surface commands for this mesh have not yet been decoded.')
-    return dict(media='model', vertices=vertices, triangles=len(faces), edges=sorted(edges),
-                points=list(range(count)), surfaces=surfaces, materials=[],
-                details=dict(format='Compressed model geometry', vertices=count, triangles=len(faces)), note=note,
+    records = _faces(data, entry, count) or []
+    texture_offset = asset.get('texture_offset')
+    texture_data = edl.unpack(image, texture_offset) if texture_offset is not None else b''
+    textures = edl_indexed_textures.textures(texture_data)
+    used = {texture for _, texture in records if texture is not None and texture < len(textures)}
+    materials = [dict(name='Untextured')]
+    material_index = {}
+    image_bytes = 0
+    for texture in sorted(used):
+        settings = textures[texture]['preview_settings']
+        rendered = formats.preview(texture_data, settings)
+        image_bytes += len(rendered['data_url'])
+        if image_bytes > 16 * 1024 * 1024:
+            continue
+        material_index[texture] = len(materials)
+        materials.append(dict(name=f'Texture {texture}', image=rendered['data_url'], state='linked', wrap='repeat'))
+    edges, surfaces = set(), []
+    for corners, texture in records:
+        face = tuple(corner[0] for corner in corners)
+        edges.update(tuple(sorted((face[i], face[(i + 1) % 3]))) for i in range(3))
+        if texture in material_index:
+            settings = textures[texture]['preview_settings']
+            uv = [[corner[1] / settings['width'], corner[2] / settings['height']] for corner in corners]
+        else:
+            uv = [[0, 0]] * 3
+        surfaces.append(dict(indices=face, uv=uv, colors=[[255, 255, 255, 255]] * 3,
+                             material=material_index.get(texture, 0)))
+    note = ('Textures follow an adjacent resource pack; runtime placement and effects are not shown.'
+            if material_index else 'Untextured local geometry; runtime placement and effects are not shown.')
+    if not records:
+        note = 'Vertex positions only; the surface commands for this mesh have not yet been decoded.'
+    return dict(media='model', vertices=vertices, triangles=len(records), edges=sorted(edges),
+                points=list(range(count)), surfaces=surfaces, materials=materials,
+                details=dict(format='Compressed model geometry', vertices=count, triangles=len(records)), note=note,
                 settings=dict(source='rom', format='auto', offset=asset['offset'], mesh=index))
