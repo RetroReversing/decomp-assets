@@ -8,7 +8,7 @@ from collections import Counter
 from itertools import islice
 
 from .. import formats
-from . import edl, edl_textures, eurocom_mesh, mort, musyx, musyx_project, musyx_render, musyx_song
+from . import edl, edl_models, edl_textures, eurocom_mesh, mort, musyx, musyx_project, musyx_render, musyx_song
 from .resource_inspection import table
 
 WORD = struct.Struct('>I')
@@ -306,7 +306,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 continue
             result.append(_asset(offset, size, f'EDL method {method} stream', 'edl-stream',
                                  kind='compressed', expanded_size=decoded))
-        return result + edl_textures.regions(image, blocks, check)
+        return result + edl_textures.regions(image, blocks, check) + edl_models.regions(image, blocks, check)
     index, base, entries = found
     archive_end = entries[-1][0] + ENTRY.size
     counts = Counter(m for offset,(m,_,_) in blocks.items() if base <= offset < archive_end)
@@ -493,6 +493,8 @@ def _records(image, asset):
 
 
 def preview(image, asset, selection):
+    if asset['layout'] == 'eurocom-edl-models':
+        return edl_models.preview(image, asset, selection)
     if asset['layout'] == 'eurocom-edl-textures':
         return edl_textures.preview(image, asset, selection)
     if asset['layout'] == 'eurocom-model':
