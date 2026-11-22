@@ -146,6 +146,7 @@ def regions(image, *, context=None, **kwargs):
         sdf2_audio,
         sdf2_music,
         segmented_model_resources,
+        shpn_images,
         siff_models,
         sized_lz_catalog,
         sn64,
@@ -205,6 +206,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(zip_object_textures.regions(image,**kwargs))
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
+    known.extend(shpn_images.regions(image,**kwargs))
     known.extend(ead_direct_audio.regions(image,**kwargs))
     known.extend(bnkb_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
@@ -405,6 +407,7 @@ def preview(data, asset, selection):
         sdf2_audio,
         sdf2_music,
         segmented_model_resources,
+        shpn_images,
         siff_models,
         sized_lz_catalog,
         sn64,
@@ -479,6 +482,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
+    if asset.get('layout') == shpn_images.LAYOUT:return shpn_images.preview(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
     if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
