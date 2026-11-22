@@ -32,6 +32,7 @@
 - animation.py: three-bit shared-header animation ADPCM and node tracks.
 - resources.py, resource_inspection.py: an indexed cartridge directory and its records.
 - fonts.py: I4 glyph tables a named text writer points at.
+- big_pages.py, big_models.py, big_textures.py: paged resource archives, their meshes and indexed images.
 - native_scene.py: links a directory's objects to their models, textures and animations.
 """
 
@@ -52,6 +53,7 @@ def regions(image, *, context=None, **kwargs):
         arithmetic_assets,
         arithmetic_descriptors,
         audio,
+        big_models,
         bind,
         blast_textures,
         bolt,
@@ -232,6 +234,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rle_texture_tables.regions(image,context=context,**kwargs))
     known.extend(packed_model_tables.regions(image,context=context,**kwargs))
     known.extend(chunked_package_images.regions(image,**kwargs))
+    big_images = []
+    known.extend(big_models.regions(image,images=big_images,**kwargs))
+    known.extend(big_images)
     known.extend(graphbin.regions(image,**kwargs))
     known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(deflate_segment_models.regions(image,**kwargs))
@@ -280,6 +285,8 @@ def preview(data, asset, selection):
         arithmetic_assets,
         arithmetic_descriptors,
         audio,
+        big_models,
+        big_textures,
         bind_models,
         bind_textures,
         blast_textures,
@@ -408,6 +415,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == deflate_segment_models.LAYOUT:return deflate_segment_models.preview(data,asset,selection)
     if asset.get('layout') == deflate_sprites.LAYOUT:return deflate_sprites.preview(data,asset,selection)
     if asset.get('layout') == chunked_package_images.LAYOUT:return chunked_package_images.preview(data,asset,selection)
+    if asset.get('layout') == big_textures.LAYOUT:return big_textures.preview(data,asset,selection)
+    if asset.get('layout') == big_models.LAYOUT:return big_models.preview(data,asset,selection)
     if asset.get('layout') == graphbin.LAYOUT:return graphbin.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
     if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK,rnc_display_models.LAYOUT):return rnc_tiled_images.preview(data,asset,selection)
