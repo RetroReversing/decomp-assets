@@ -10,7 +10,7 @@ LAYOUT = 'offset-directory-textures'
 KINDS = {0: 'rgba8888', 1: 'rgba5551-be', 2: 'i8', 3: 'i4', 4: 'ia16', 5: 'ia8', 6: 'ia4'}
 
 
-def sections(image, check=lambda: None):
+def catalogs(image, check=lambda: None):
     # The outer directory contains a count and monotone relative section starts.
     # Its second word is zero; require two complete texture offset tables below.
     for hit in re.finditer(rb'\x00\x00\x00[\x10-\x80]\x00\x00\x00\x00', image):
@@ -50,7 +50,12 @@ def sections(image, check=lambda: None):
                 break
             pairs.append((start, end, values))
         if len(pairs) == 2:
-            yield pairs
+            yield base, offsets, pairs
+
+
+def sections(image, check=lambda: None):
+    for _, _, pairs in catalogs(image, check):
+        yield pairs
 
 
 def _header(data):
