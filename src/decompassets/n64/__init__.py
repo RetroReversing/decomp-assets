@@ -107,6 +107,7 @@ def regions(image, *, context=None, **kwargs):
         mio0_graphics,
         models,
         mwo_graphics,
+        named_adpcm,
         named_resource_images,
         named_resource_models,
         native_scene,
@@ -141,6 +142,8 @@ def regions(image, *, context=None, **kwargs):
         resources,
         rle_font_atlas,
         rle_texture_tables,
+        rnc_indexed_sprites,
+        rnc_quad_models,
         rnc_tiled_images,
         rnx,
         rzip_audio,
@@ -201,6 +204,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(prefixed_texture_models.regions(image,**kwargs))
     known.extend(rle_font_atlas.regions(image,**kwargs))
     known.extend(fat_textures.regions(image,**kwargs))
+    known.extend(rnc_indexed_sprites.regions(image,**kwargs))
+    known.extend(named_adpcm.regions(image,**kwargs))
+    known.extend(rnc_quad_models.regions(image,**kwargs))
     known.extend(f3dex_tiles.regions(image,**kwargs))
     known.extend(fat_models.regions(image,**kwargs))
     known.extend(wad_resources.regions(image,**kwargs))
@@ -372,6 +378,7 @@ def preview(data, asset, selection):
         mio0_graphics,
         models,
         mwo_graphics,
+        named_adpcm,
         named_resource_images,
         named_resource_models,
         nested_scenes,
@@ -404,7 +411,9 @@ def preview(data, asset, selection):
         rle_font_atlas,
         rle_texture_tables,
         rnc_display_models,
+        rnc_indexed_sprites,
         rnc_meshes,
+        rnc_quad_models,
         rnc_textures,
         rnc_tiled_images,
         rnx,
@@ -485,6 +494,9 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
+    if asset.get('layout') == rnc_indexed_sprites.LAYOUT:return rnc_indexed_sprites.preview(data,asset,selection)
+    if asset.get('layout') == named_adpcm.LAYOUT:return named_adpcm.preview(data,asset,selection)
+    if asset.get('layout') == rnc_quad_models.LAYOUT:return rnc_quad_models.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
