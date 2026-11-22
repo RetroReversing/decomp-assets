@@ -18,6 +18,7 @@ def test_consecutive_polygon_groups_and_preview():
     blocks = {offset: edl.header(image, offset)[:3] for offset in offsets}
     assets = edl_models.regions(image, blocks, lambda: None)
     assert len(assets) == 1
+    assert assets[0]['nodes'] == 0
     assert len(assets[0]['meshes']) == 3
     result = edl_models.preview(image, assets[0], {'mesh': 1})
     assert result['media'] == 'model'
