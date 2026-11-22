@@ -32,7 +32,7 @@
 - animation.py: three-bit shared-header animation ADPCM and node tracks.
 - resources.py, resource_inspection.py: an indexed cartridge directory and its records.
 - fonts.py: I4 glyph tables a named text writer points at.
-- big_pages.py, big_models.py, big_textures.py: paged resource archives, their meshes and indexed images.
+- big_pages.py, big_models.py, big_textures.py, big_audio.py, big_sam_audio.py: paged resource archives, their meshes and indexed images.
 - native_scene.py: links a directory's objects to their models, textures and animations.
 """
 
@@ -234,9 +234,10 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rle_texture_tables.regions(image,context=context,**kwargs))
     known.extend(packed_model_tables.regions(image,context=context,**kwargs))
     known.extend(chunked_package_images.regions(image,**kwargs))
-    big_images = []
-    known.extend(big_models.regions(image,images=big_images,**kwargs))
+    big_images, big_sounds = [], []
+    known.extend(big_models.regions(image,images=big_images,audio=big_sounds,**kwargs))
     known.extend(big_images)
+    known.extend(big_sounds)
     known.extend(graphbin.regions(image,**kwargs))
     known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(deflate_segment_models.regions(image,**kwargs))
@@ -285,7 +286,9 @@ def preview(data, asset, selection):
         arithmetic_assets,
         arithmetic_descriptors,
         audio,
+        big_audio,
         big_models,
+        big_sam_audio,
         big_textures,
         bind_models,
         bind_textures,
@@ -415,6 +418,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == deflate_segment_models.LAYOUT:return deflate_segment_models.preview(data,asset,selection)
     if asset.get('layout') == deflate_sprites.LAYOUT:return deflate_sprites.preview(data,asset,selection)
     if asset.get('layout') == chunked_package_images.LAYOUT:return chunked_package_images.preview(data,asset,selection)
+    if asset.get('layout') == big_sam_audio.LAYOUT:return big_sam_audio.preview(data,asset,selection)
+    if asset.get('layout') == big_audio.LAYOUT:return big_audio.preview(data,asset,selection)
     if asset.get('layout') == big_textures.LAYOUT:return big_textures.preview(data,asset,selection)
     if asset.get('layout') == big_models.LAYOUT:return big_models.preview(data,asset,selection)
     if asset.get('layout') == graphbin.LAYOUT:return graphbin.preview(data,asset,selection)

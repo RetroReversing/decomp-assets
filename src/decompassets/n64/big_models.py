@@ -4,7 +4,7 @@ import re
 import struct
 
 from .. import formats
-from . import big_pages, big_textures
+from . import big_audio, big_pages, big_sam_audio, big_textures
 
 LAYOUT = 'big-resource-model'
 
@@ -44,13 +44,16 @@ def _mesh(data, start, size, index, *, geometry=False):
     return points, faces
 
 
-def regions(image, *, images=None, check=lambda: None, progress=lambda _: None):
+def regions(image, *, images=None, audio=None, check=lambda: None, progress=lambda _: None):
     result = []
     for archive in big_pages.archives(image):
         if not (data := big_pages.unpack(image, archive, check)):
             continue
         if images is not None:
             images.extend(big_textures.from_archive(image, archive, data, check))
+        if audio is not None:
+            audio.extend(big_audio.from_archive(image, archive, data, check))
+            audio.extend(big_sam_audio.from_archive(image, archive, data, check))
         for match in re.finditer(b'ARN\0', data):
             at = match.start()
             if at + 12 > len(data):
