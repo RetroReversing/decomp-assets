@@ -1,8 +1,4 @@
-"""Bounded position arrays in compressed model packs.
-
-These packs also contain a compact surface stream; its commands are not yet
-understood. Expose positions as points until their topology can be decoded.
-"""
+"""Bounded positions and compact triangle commands in compressed model packs."""
 
 import struct
 
@@ -10,6 +6,81 @@ from .. import formats
 from . import edl
 
 LAYOUT = 'eurocom-edl-mesh-vertices'
+
+
+def _faces(data, entry, vertex_count):
+    """Decode the validated subset of the game's compact graphics command stream."""
+    expected = struct.unpack_from('>H', data, entry)[0]
+    packed = struct.unpack_from('>I', data, entry + 28)[0]
+    pos = entry + 28 + (packed >> 8)
+    if pos + 7 > len(data) or data[pos:pos + 2] != b'\0\x1f':
+        return None
+    pos += 6
+    cache, faces = [], []
+    try:
+        for _ in range(10000):
+            command = data[pos]
+            pos += 1
+            op, high = command & 15, command >> 4
+            if command == 6:
+                return faces if len(faces) == expected else None
+            if op == 0:
+                if command & 0x20:
+                    return None
+                count = data[pos]
+                pos += 2
+                if not 1 <= count <= 32:
+                    return None
+                cache = []
+                for _ in range(count):
+                    index = data[pos]
+                    pos += 1
+                    if command & 0x80:
+                        index = (index << 8) | data[pos]
+                        pos += 1
+                    u, v = data[pos], data[pos + 1]
+                    pos += 2
+                    if v & 0x80:
+                        pos += 1 if u & 0x80 else 3
+                    if index >= vertex_count or pos > len(data):
+                        return None
+                    cache.append(index)
+            elif op in (1, 7):
+                pos += 3
+            elif op in (2, 8, 10):
+                pass
+            elif op in (3, 4):
+                pos += 2
+            elif op in (9, 11, 13):
+                pos += 1
+            elif op == 12:
+                pos += 1 + high
+            elif op in (5, 14):
+                if op == 5:
+                    count = data[pos]
+                    pos += 1
+                else:
+                    count = high + 1
+                while count:
+                    word = data[pos] | (data[pos + 1] << 8)
+                    pos += 2
+                    count -= 1
+                    a, b, c = word & 31, (word >> 5) & 31, (word >> 10) & 31
+                    faces.append((cache[a], cache[b], cache[c]))
+                    if word & 0x8000:
+                        if not count:
+                            return None
+                        extra = data[pos]
+                        pos += 1
+                        count -= 1
+                        faces.append((cache[extra], cache[a], cache[c]))
+            else:
+                return None
+            if pos >= len(data) or len(faces) > expected:
+                return None
+    except IndexError:
+        return None
+    return None
 
 
 def meshes(data):
@@ -35,8 +106,9 @@ def meshes(data):
         if not all(bounds[0] <= x <= bounds[3] and bounds[4] <= y <= bounds[1]
                    and bounds[2] <= z <= bounds[5] for x, y, z in vertices):
             continue
-        result.append(dict(name=f'Mesh {i + 1} (vertices)', descriptor=entry,
-                           vertices=len(vertices), triangles=0))
+        faces = _faces(data, entry, len(vertices))
+        result.append(dict(name=f'Mesh {i + 1}' if faces else f'Mesh {i + 1} (vertices)', descriptor=entry,
+                           vertices=len(vertices), triangles=len(faces) if faces else 0))
     return result
 
 
@@ -53,8 +125,9 @@ def regions(image, blocks, check):
         items = meshes(data)
         if items:
             result.append(dict(offset=offset, size=stored, kind='3d model', media='model', layout=LAYOUT,
-                               confidence='validated', label='Compressed model vertices', meshes=items,
-                               vertices=sum(m['vertices'] for m in items), triangles=0, nodes=0,
+                               confidence='validated', label='Compressed model geometry', meshes=items,
+                               vertices=sum(m['vertices'] for m in items),
+                               triangles=sum(m['triangles'] for m in items), nodes=0,
                                reason='Relative pointers resolve to position arrays inside declared bounds.',
                                preview_settings=dict(source='rom', format='auto', offset=offset)))
     return result
@@ -70,7 +143,13 @@ def preview(image, asset, selection):
     start = entry + 4 + struct.unpack_from('>I', data, entry + 4)[0]
     count = items[index]['vertices']
     vertices = list(struct.iter_unpack('>3h2x', data[start + 12:start + 12 + count * 8]))
-    return dict(media='model', vertices=vertices, triangles=0, edges=[], points=list(range(count)),
-                surfaces=[], materials=[], details=dict(format='Compressed model positions', vertices=count),
-                note='Vertex positions only; the surface and texture commands have not been decoded.',
+    faces = _faces(data, entry, count) or []
+    edges = {tuple(sorted((face[i], face[(i + 1) % 3]))) for face in faces for i in range(3)}
+    surfaces = [dict(indices=face, uv=[[0, 0]] * 3, colors=[[255, 255, 255, 255]] * 3, material=0)
+                for face in faces]
+    note = ('Untextured local geometry; texture mapping and placement are not yet decoded.' if faces else
+            'Vertex positions only; the surface commands for this mesh have not yet been decoded.')
+    return dict(media='model', vertices=vertices, triangles=len(faces), edges=sorted(edges),
+                points=list(range(count)), surfaces=surfaces, materials=[],
+                details=dict(format='Compressed model geometry', vertices=count, triangles=len(faces)), note=note,
                 settings=dict(source='rom', format='auto', offset=asset['offset'], mesh=index))
