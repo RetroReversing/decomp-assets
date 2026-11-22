@@ -53,23 +53,42 @@ def _samples(image, offset, check):
             or (patch_size,voice_size,row_size) != (4,20,_WAVE.size)):
         return None
     control_end = offset+_HEAD.size+body_size
-    wave_records = offset+_HEAD.size+patches*patch_size+voices*voice_size+8
-    loop = wave_records+count*row_size
-    if not loop+_LOOP.size <= control_end <= len(image):
+    if control_end > len(image):
         return None
-    count1, zero, loops, count2 = _LOOP.unpack_from(image,loop)
-    books = loop+_LOOP.size+loops*48
-    if count1 != count or count2 != count or zero or books+count*_BOOK.size != control_end:
+    records = offset+_HEAD.size+patches*patch_size+voices*voice_size
+    tables = []
+    for padding in (0, 8):
+        wave_records = records+padding
+        loop = wave_records+count*row_size
+        if loop+_LOOP.size > control_end:
+            continue
+        count1, zero, loops, count2 = _LOOP.unpack_from(image,loop)
+        books = loop+_LOOP.size+loops*48
+        if count1 == count2 == count and not zero and books+count*_BOOK.size == control_end:
+            tables.append((wave_records, loop, loops, books))
+    if len(tables) != 1:
         return None
-    sequence = _align(control_end)
-    parsed = _sequences(image,sequence,check)
-    if not parsed:
-        return None
-    wave_base, sequences = parsed
+    wave_records, loop, loops, books = tables[0]
+    wave_rows = list(_WAVE.iter_unpack(image[wave_records:loop]))
+    first = _align(control_end)
+    if image[first:first+4] == b'SSEQ':
+        sequence = first
+        parsed = _sequences(image,sequence,check)
+        if not parsed:
+            return None
+        wave_base, sequences = parsed
+        sequence_end = wave_base
+    else:
+        wave_base = first
+        relative, size, *_ = wave_rows[-1]
+        sequence = _align(wave_base+relative+size)
+        parsed = _sequences(image,sequence,check)
+        if not parsed:
+            return None
+        sequence_end, sequences = parsed
     samples = []
     end = 0
-    for index, (relative,size,zero,_,loop_id,reserved) in enumerate(
-            _WAVE.iter_unpack(image[wave_records:loop])):
+    for index, (relative,size,zero,_,loop_id,reserved) in enumerate(wave_rows):
         check()
         book_at = books+index*_BOOK.size
         order, predictors = struct.unpack_from('>II',image,book_at)
@@ -88,7 +107,7 @@ def _samples(image, offset, check):
                             size=size,encoded_size=encoded,samples=encoded//9*16,rate=22050,
                             book_offset=book_at+8,predictors=predictors))
         end = relative+size
-    return control_end, sequence, wave_base, samples, sequences
+    return control_end, sequence, sequence_end, wave_base, samples, sequences
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
@@ -99,7 +118,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         parsed = _samples(image,offset,check) if offset%16 == 0 else None
         if not parsed:
             continue
-        end, sequence, wave, samples, sequences = parsed
+        end, sequence, sequence_end, wave, samples, sequences = parsed
         reason = 'The paired SN64 and SSEQ records bound the sample table and every ADPCM frame selector validates.'
         asset = dict(kind='audio',media='audio',audio_kind='sample bank',layout='sn64-bank',
                      confidence='validated',reason=reason,table_offset=wave)
@@ -110,8 +129,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             assets.append(dict(**asset,offset=at,size=sample['size'],label=sample['label'],samples=[sample],
                                preview_settings=dict(format='auto',source='rom',offset=at)))
         assets.append(dict(kind='music sequence',media='metadata',layout='sn64-sequences',confidence='validated',
-                           label='SSEQ sequence directory',offset=sequence,size=wave-sequence,sequences=sequences,
-                           reason='Each track entry fits the directory immediately before the wave table.',
+                           label='SSEQ sequence directory',offset=sequence,size=sequence_end-sequence,sequences=sequences,
+                           reason='Each track entry fits the validated sequence directory paired with the wave table.',
                            preview_settings=dict(format='auto',source='rom',offset=sequence)))
     return assets
 
