@@ -91,6 +91,7 @@ def regions(image, *, context=None, **kwargs):
         inline_tiles,
         iwad_maps,
         iwad_sprites,
+        level_bytecode,
         libmus_song,
         lz_banks,
         lz_standard_midi,
@@ -209,6 +210,7 @@ def regions(image, *, context=None, **kwargs):
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
     known.extend(stage_meshes.regions(image, stages, kwargs.get("check", lambda: None)))
+    known.extend(level_bytecode.regions(image,**kwargs))
     known.extend(lz_banks.regions(image,**kwargs))
     known.extend(lzss_archive_images.regions(image,**kwargs))
     known.extend(bolt.regions(image,**kwargs))
@@ -329,6 +331,7 @@ def preview(data, asset, selection):
         inline_tiles,
         iwad_maps,
         iwad_sprites,
+        level_bytecode,
         libmus_song,
         lz_banks,
         lz_directory_models,
@@ -453,6 +456,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==bind_models.LAYOUT:return bind_models.preview(data,asset,selection)
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
     if asset.get('layout') == lzss_archive_images.LAYOUT:return lzss_archive_images.preview(data,asset,selection)
+    if asset.get('layout') == level_bytecode.LAYOUT:return level_bytecode.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')==offset_models.LAYOUT:return offset_models.preview(data,asset,selection)

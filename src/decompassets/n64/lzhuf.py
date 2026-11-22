@@ -8,7 +8,7 @@ _ROOT = 626
 _LIMIT = 4 * 1024 * 1024
 
 
-def unpack(source, size, check=lambda: None, *, prefix=None):
+def unpack(source, size, check=lambda: None, *, prefix=None, fill=32):
     if not 0 < size <= _LIMIT:
         raise AssetError('The Huffman output size is invalid.')
     freq = [0] * (_T + 1)
@@ -84,7 +84,7 @@ def unpack(source, size, check=lambda: None, *, prefix=None):
             position += 1
         return value
 
-    window = bytearray(b' ' * 4036 + bytes(60))
+    window = bytearray(bytes([fill]) * 4036 + bytes(60))
     cursor = 4036
     output = bytearray()
     target = min(size, prefix) if prefix is not None else size
