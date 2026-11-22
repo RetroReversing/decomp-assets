@@ -152,3 +152,27 @@ def test_mort_voiced_frame_matches_reference_pcm():
                          '7d6358d2f2ad6344688fac7800000fac')
     pcm = mort.decode(clip, 1)
     assert sha256(pcm).hexdigest() == '63398d1ebb1cde4c40dce1d80c43dabf339b70be940fda48ce9b7585d109a36f'
+
+
+def test_standalone_musyx_sample_index_needs_bounded_valid_frames():
+    from decompassets.n64 import musyx
+
+    count = 8
+    size = musyx.byte_length(64)
+    rows = b''.join(eurocom.SAMPLE.pack(i + 1, 0, i * size, 0, 0x3c00, 11025,
+                                       0x03000040, 0, 0) for i in range(count))
+    header = rows + b'\xff' * 4
+    header += bytes((-len(header)) % 16)
+    frame = bytes(musyx.BOOK.size) + struct.pack('>4h', 1, 2, 3, 4) + bytes(32)
+    image = header + frame * count
+    asset, = eurocom._standalone_samples(image, lambda: None)
+    assert asset['count'] == count
+    assert asset['bank_end'] == len(image)
+    assert all(s['size'] == size for s in asset['samples'])
+    assert eurocom.preview(image, asset, {'sample': 0})['mime'] == 'audio/wav'
+    assert any(a.get('layout') == 'eurocom-samples' for a in n64.regions(image))
+
+    broken = bytearray(image)
+    broken[len(header) + musyx.BOOK.size + 8] = 0x80
+    assert eurocom._standalone_samples(bytes(broken), lambda: None) == []
+    assert eurocom._standalone_samples(image[:-1], lambda: None) == []
