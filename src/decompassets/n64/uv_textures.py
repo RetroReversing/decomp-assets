@@ -8,7 +8,7 @@ what the game draws the texture with, so its tile commands give the format and s
 image is the file's own texels, at the address it names (the game adds the texels' RAM address to it).
 
 A file is taken when its display list ends where the counts say and its first drawn tile reads only its own
-texels. Colour-indexed tiles whose palette is another file are left out: which file that is comes from the level.
+texels. When a palette is external, grayscale shows the stored indices and is labeled accordingly.
 """
 from __future__ import annotations
 
@@ -104,11 +104,14 @@ def texture(data):
         if address + width*height*bits//8 > size:return None
         settings = dict(format=fmt, width=width, height=height, offset=header + address)
         palettes = []
-        if entries:
-            if palette is None or palette is False or palette + 2*entries > size:return None
+        unresolved = bool(entries and (palette is None or palette is False))
+        if entries and not unresolved:
+            if palette + 2*entries > size:return None
             palettes = [header + palette]
             settings.update(palette_offset=palettes[0], palette_format='rgba5551-be')
-        return dict(preview_settings=settings, swapped_rows=swapped if fmt != 'rgba8888' else False, frames=1, palettes=len(palettes), frame_offsets=[settings['offset']],
+        elif unresolved:
+            settings['format'] = 'i4' if fmt == 'ci4' else 'i8'
+        return dict(unresolved_palette=unresolved, preview_settings=settings, swapped_rows=swapped if fmt != 'rgba8888' else False, frames=1, palettes=len(palettes), frame_offsets=[settings['offset']],
                     palette_offsets=palettes, palette_entries=[entries] if palettes else [],
                     levels=[dict(width=width, height=height, offset=0)])
     return None
@@ -125,14 +128,16 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         item = stored and texture(stored[0])
         if not item:continue
         settings = item['preview_settings']
-        names = display_lists.NAMES[settings['format']]
+        names = ('palette-index map' if item['unresolved_palette'] else display_lists.NAMES[settings['format']])
         results.append(dict(offset=at, size=8 + int.from_bytes(image[at+4:at+8], 'big'), kind='image',
                             confidence='validated', layout='uv-texture', codec=stored[1],
                             label=f"UV texture {len(results)} · {names} {settings['width']}×{settings['height']}",
                             **{k: v for k, v in item.items() if k not in ('preview_settings', 'swapped_rows')},
                             preview_settings={**settings, 'source': 'rom', 'offset': at},
-                            reason='The UVTX file\'s chunks fit it exactly and its own display list, which ends where its '
-                                   'counts say, loads and draws this tile from the file\'s texels. Runtime use is not established.'))
+                            reason=('The indexed image refers to an external palette; grayscale shows its indices, not its colors.'
+                                    if item['unresolved_palette'] else
+                                    'The UVTX file\'s chunks fit it exactly and its own display list, which ends where its '
+                                    'counts say, loads and draws this tile from the file\'s texels. Runtime use is not established.')))
     return results
 
 
