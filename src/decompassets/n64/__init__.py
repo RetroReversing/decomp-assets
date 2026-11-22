@@ -3,6 +3,7 @@
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - rnc_textures.py: descriptor-table texture banks inside byte-sum RNC blocks.
 - texture_packs.py: texture packs with a trailing count, inside archives.
+- relative_directory.py, relative_textures.py: compressed resource tables and display-list textures.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
 - fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
@@ -112,6 +113,7 @@ def regions(image, *, context=None, **kwargs):
         raw_deflate_lists,
         relative_materials,
         relative_meshes,
+        relative_textures,
         reloc_files,
         resources,
         rle_font_atlas,
@@ -158,6 +160,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
     known.extend(diet_audio.regions(image,**kwargs))
+    known.extend(relative_textures.regions(image,**kwargs))
     known.extend(deflate_catalog.regions(image,**kwargs))
     known.extend(deflate_catalog_models.regions(image,**kwargs))
     known.extend(raw_deflate_lists.regions(image,**kwargs))
@@ -310,6 +313,7 @@ def preview(data, asset, selection):
         rare_assets,
         rare_models,
         raw_deflate_lists,
+        relative_textures,
         reloc_files,
         resources,
         rle_font_atlas,
@@ -393,6 +397,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
+    if asset.get('layout') == relative_textures.LAYOUT:return relative_textures.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog.TEXTURE:return deflate_catalog.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog_models.MODEL:return deflate_catalog_models.preview(data,asset,selection)
     if asset.get('layout') in (raw_deflate_lists.TEXTURE, raw_deflate_lists.MODEL):
