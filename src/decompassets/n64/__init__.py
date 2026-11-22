@@ -125,6 +125,7 @@ def regions(image, *, context=None, **kwargs):
         reloc_files,
         resources,
         rle_font_atlas,
+        rle_texture_tables,
         rnc_tiled_images,
         rnx,
         rzip_audio,
@@ -226,6 +227,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(lz_texture_directories.regions(image,models=indexed_models,**kwargs))
     known.extend(indexed_models)
     known.extend(named_resource_models.regions(image,**kwargs))
+    known.extend(rle_texture_tables.regions(image,context=context,**kwargs))
     known.extend(graphbin.regions(image,**kwargs))
     known.extend(deflate_sprites.regions(image,**kwargs))
     known.extend(deflate_segment_models.regions(image,**kwargs))
@@ -345,6 +347,7 @@ def preview(data, asset, selection):
         reloc_files,
         resources,
         rle_font_atlas,
+        rle_texture_tables,
         rnc_display_models,
         rnc_meshes,
         rnc_textures,
@@ -392,6 +395,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
+    if asset.get('layout') == rle_texture_tables.LAYOUT:return rle_texture_tables.preview(data,asset,selection)
     if asset.get('layout') == sdf2_music.LAYOUT:return sdf2_music.preview(data,asset,selection)
     if asset.get('layout') == sdf2_audio.LAYOUT:return sdf2_audio.preview(data,asset,selection)
     if asset.get('layout') == deflate_segment_models.LAYOUT:return deflate_segment_models.preview(data,asset,selection)
