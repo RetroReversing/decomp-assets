@@ -93,6 +93,7 @@ def regions(image, *, context=None, **kwargs):
         iain,
         iguana_audio,
         iguana_textures,
+        indexed_archive_models,
         indexed_resource_models,
         indexed_resource_textures,
         inline_meshes,
@@ -217,6 +218,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_logos.regions(image, **kwargs))
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
+    known.extend(indexed_archive_models.regions(image, **kwargs))
     known.extend(reloc_level_objects.regions(image, **kwargs))
     known.extend(romdisk_art.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
@@ -403,6 +405,7 @@ def preview(data, asset, selection):
         iguana_audio,
         iguana_models,
         iguana_textures,
+        indexed_archive_models,
         indexed_resource_models,
         indexed_resource_textures,
         inline_tiles,
@@ -570,6 +573,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == level_logos.LAYOUT:return level_logos.preview(data,asset,selection)
     if asset.get('layout') == level_world.IMAGE:return level_world.preview(data,asset,selection)
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)
+    if asset.get('layout') == indexed_archive_models.LAYOUT:return indexed_archive_models.preview(data,asset,selection)
     if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
