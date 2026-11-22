@@ -414,3 +414,42 @@ def test_inferred_anchor_is_checked_when_an_unrelated_loader_base_is_present(mon
     banks = [item for item in audio.regions(image) if item.get('audio_kind') == 'sample bank']
     assert banks and banks[0]['table_offset'] == base
     assert banks[0]['table_confidence'] == 'tentative'
+
+
+def test_following_sample_directory_requires_every_control_extent():
+    image = bytearray(256)
+    offsets = (0, 9, 27, 45, 63, 81, 99, 117, 135)
+    struct.pack_into('>10I', image, 32, 8, *offsets)
+    info = dict(offset=16, size=16, samples=[dict(relative_offset=9, size=18),
+                                             dict(relative_offset=81, size=18)])
+    assert audio._following_sample_directory(image, info) == (32, 80, offsets)
+    image[76] = 1
+    assert audio._following_sample_directory(image, info) is None
+    image[76] = 0
+    info['samples'][0]['size'] = 17
+    assert audio._following_sample_directory(image, info) is None
+
+
+def test_large_sparse_instrument_bank():
+    original, _, _ = fixture()
+    ctl = original[128:]
+    bank = bytearray(8192)
+    bank[:64] = ctl[:64]
+    struct.pack_into('>H', bank, 32, 579)
+    for i in range(579):
+        struct.pack_into('>I', bank, 44+4*i, 4096)
+    bank[4096:4096+len(ctl)-64] = ctl[64:]
+    delta = 4096-64
+    for at in (4096+14,):
+        struct.pack_into('>HII', bank, at, 2, 128+delta, 144+delta)
+    for at in (128+delta, 144+delta):
+        for k in range(3):
+            val = struct.unpack_from('>I', bank, at+4*k)[0]
+            struct.pack_into('>I', bank, at+4*k, val+delta)
+    for at in (256+delta, 280+delta):
+        struct.pack_into('>I', bank, at+16, 320+delta)
+    parsed = audio.bank(bank, 0)
+    assert len(parsed['samples']) == 2
+    struct.pack_into('>H', bank, 32, 1025)
+    with pytest.raises(audio.BankError):
+        audio.bank(bank, 0)

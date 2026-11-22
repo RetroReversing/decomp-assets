@@ -18,7 +18,7 @@ from ..formats import MAX_BYTES, MAX_SECONDS, AssetError, integer
 
 MAX_CONTROL = 1024*1024
 MAX_CANDIDATES = 128
-MAX_INSTRUMENTS = 512  # Some effects banks index hundreds of sparse instrument slots.
+MAX_INSTRUMENTS = 1024  # Some effects banks index hundreds of sparse instrument slots.
 MAX_SOUNDS = 4096
 MAX_SAMPLES = 2048
 MAX_TABLE_PROBES = 32
@@ -451,6 +451,25 @@ def _offset_directory_tables(image, check):
     return result
 
 
+def _following_sample_directory(image, info):
+    """Validate a count and complete relative sample extents after a control graph."""
+    at = info['offset'] + info['size']
+    if at + 4 > len(image):
+        return None
+    count = int.from_bytes(image[at:at+4], 'big')
+    end = at+4+4*(count+1)
+    base = (end+15) & ~15
+    if not 8 <= count <= 4096 or base > len(image) or any(image[end:base]):
+        return None
+    offsets = struct.unpack_from(f'>{count+1}I', image, at+4)
+    if offsets[0] or any(a >= b for a, b in zip(offsets, offsets[1:])) or base+offsets[-1] > len(image):
+        return None
+    extents = set(zip(offsets, offsets[1:]))
+    if not all((s['relative_offset'], s['relative_offset']+s['size']) in extents for s in info['samples']):
+        return None
+    return at, base, offsets
+
+
 def _end_anchored_tables(info, boundaries):
     """Infer a dense sample table immediately before a verified data-file header."""
     samples = info['samples']
@@ -502,7 +521,11 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                        or not refs or any(not ref.get('adjacent_control') for ref in refs)}
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
+        sample_directory = _following_sample_directory(image, info) if not relocated else None
         partition = parallel.get(offset) or directory.get(offset)
+        if sample_directory:
+            _, base, offsets = sample_directory
+            partition = (offset+info['size'], base, base+offsets[-1])
         anchored = _end_anchored_tables(info, data_boundaries)
         uv = uv_tables.get(offset) if not relocated else None
         if uv:
@@ -551,6 +574,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
                  'A checked cartridge directory pairs bounded control and sample ranges.' if offset in directory else
+                 'The following offset directory bounds every sample in the control graph.' if sample_directory else
                  'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
@@ -560,7 +584,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
         common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=loader_refs.get(base,[]),table_offset=base)
         if partition and not uv:
-            common['table_layout'] = 'offset-directory' if offset in directory else 'parallel'
+            common['table_layout'] = ('sample-directory' if sample_directory else
+                                      'offset-directory' if offset in directory else 'parallel')
         results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                             reason=reason,preview_settings=dict(format='auto',source='rom',offset=offset),samples=samples,**common))
         seen=set()
