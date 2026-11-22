@@ -4,13 +4,13 @@ import re
 import struct
 
 from .. import formats
-from . import lzss_boot
+from . import lzhuf, lzss_boot
 
 LAYOUT = 'ring-lzss-images'
 
 
 def archives(image):
-    for match in re.finditer(b'LZSS', image):
+    for match in re.finditer(rb'LZSS|LHUF|HUFF|COPY', image):
         base = match.start() - 12
         if base < 0 or base % 4 or base + 8 > len(image):
             continue
@@ -21,7 +21,7 @@ def archives(image):
         if base + table_end > len(image):
             continue
         rows = [struct.unpack_from('>I4sII', image, base + 8 + i * 16) for i in range(count)]
-        if (any(magic != b'LZSS' or not 0 < size <= lzss_boot._LIMIT or not 0 < packed <= lzss_boot._LIMIT
+        if (any(magic not in (b'LZSS', b'LHUF', b'HUFF', b'COPY') or not 0 < size <= lzss_boot._LIMIT or not 0 < packed <= lzss_boot._LIMIT
                 or offset < table_end or base + offset + packed > len(image)
                 for offset, magic, size, packed in rows)
                 or any(a[0] + a[3] > b[0] for a, b in zip(rows, rows[1:]))):
@@ -29,12 +29,25 @@ def archives(image):
         yield base, rows
 
 
+
+def unpack(image, base, row):
+    offset, magic, size, packed = row
+    source = image[base + offset:base + offset + packed]
+    try:
+        if magic == b'LZSS':
+            return lzss_boot.decode(source, size)
+        if magic in (b'LHUF', b'HUFF'):
+            return lzhuf.unpack(source, size, fill=0)
+        return source if len(source) == size else None
+    except formats.AssetError:
+        return None
+
 def regions(image, *, check=lambda: None, **kwargs):
     result = []
     for base, rows in archives(image):
         # These repeated full-color images are followed by small companion
         # resources. The 64-by-32 layout is inferred from the image data.
-        indexes = [i for i in range(len(rows) - 1) if rows[i][2] == 4096 and rows[i + 1][2] == 512]
+        indexes = [i for i in range(len(rows) - 1) if rows[i][1] == b'LZSS' and rows[i][2] == 4096 and rows[i + 1][2] == 512]
         if len(indexes) < 2:
             continue
         for i in indexes:

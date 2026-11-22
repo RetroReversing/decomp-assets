@@ -97,6 +97,7 @@ def regions(image, *, context=None, **kwargs):
         lz_standard_midi,
         lz_texture_directories,
         lzss_archive_images,
+        lzss_archive_models,
         mainfs,
         models,
         mwo_graphics,
@@ -213,6 +214,9 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_bytecode.regions(image,**kwargs))
     known.extend(lz_banks.regions(image,**kwargs))
     known.extend(lzss_archive_images.regions(image,**kwargs))
+    mixed_images = []
+    known.extend(lzss_archive_models.regions(image,images=mixed_images,**kwargs))
+    known.extend(mixed_images)
     known.extend(bolt.regions(image,**kwargs))
     known.extend(arithmetic_assets.regions(image,context=context,**kwargs))
     known.extend(arithmetic_descriptors.regions(image,context=context,**kwargs))
@@ -338,6 +342,7 @@ def preview(data, asset, selection):
         lz_standard_midi,
         lz_texture_directories,
         lzss_archive_images,
+        lzss_archive_models,
         mainfs,
         models,
         mwo_graphics,
@@ -455,6 +460,8 @@ def preview(data, asset, selection):
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
     if asset.get('layout')==bind_models.LAYOUT:return bind_models.preview(data,asset,selection)
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
+    if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
+    if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == lzss_archive_images.LAYOUT:return lzss_archive_images.preview(data,asset,selection)
     if asset.get('layout') == level_bytecode.LAYOUT:return level_bytecode.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
