@@ -91,6 +91,7 @@ def regions(image, *, context=None, **kwargs):
         named_resource_models,
         native_scene,
         nested_scenes,
+        offset_models,
         offset_textures,
         packed_anim,
         packed_tim,
@@ -170,6 +171,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(zip_object_models.regions(image,**kwargs))
     known.extend(zip_object_textures.regions(image,**kwargs))
     known.extend(offset_textures.regions(image,**kwargs))
+    known.extend(offset_models.regions(image,**kwargs))
     known.extend(ia_font_textures.regions(image,**kwargs))
     known.extend(indexed_resource_models.regions(image,**kwargs))
     known.extend(indexed_resource_textures.regions(image,**kwargs))
@@ -285,6 +287,7 @@ def preview(data, asset, selection):
         named_resource_images,
         named_resource_models,
         nested_scenes,
+        offset_models,
         offset_textures,
         packed_anim,
         packed_tim,
@@ -375,6 +378,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==bind_textures.LAYOUT:return bind_textures.preview(data,asset,selection)
     if asset.get('layout')=='fla2-texbank':return fla2.preview(data,asset,selection)
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
+    if asset.get('layout')==offset_models.LAYOUT:return offset_models.preview(data,asset,selection)
     if asset.get('layout')==offset_textures.LAYOUT:return offset_textures.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
