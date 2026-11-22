@@ -70,7 +70,10 @@ def test_uvtx_files_that_do_not_hold_together_are_left_out():
     ci4 = [(0xFD100000, 0), (0xF5100000, 0x07000000), (0xF3000000, 0x07007800), (0xF5400200, 0),
            (0xFD100000, 0), (0xF0000000, 0x0703C000), (0xF2000000, 0x0001C004), (0xDF000000, 0)]
     borrowed = uvtx(comm(20, rgba, ci4, 8, 2))                             # its palette is another file's
-    assert uv_textures.regions(unended + short + borrowed) == []
+    assets = uv_textures.regions(unended + short + borrowed)
+    assert len(assets) == 1 and assets[0]['unresolved_palette']
+    assert 'indices, not its colors' in assets[0]['reason']
+    assert n64.preview(unended + short + borrowed, assets[0], {})['media'] == 'image'
     image = uvtx(comm(20, rgba, RGBA16, 4, 2))
     asset = uv_textures.regions(image)[0]
     with pytest.raises(AssetError):uv_textures.preview(image[:-30] + bytes(30), dict(asset, offset=1), {})
