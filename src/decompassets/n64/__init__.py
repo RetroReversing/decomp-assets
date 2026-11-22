@@ -131,6 +131,7 @@ def regions(image, *, context=None, **kwargs):
         rare_audio,
         rare_models,
         raw_deflate_lists,
+        refpack_opcodes,
         refpack_stadium,
         refpack_triangles,
         relative_audio,
@@ -223,6 +224,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(shpn_images.regions(image,**kwargs))
     known.extend(refpack_triangles.regions(image,**kwargs))
     known.extend(refpack_stadium.regions(image,**kwargs))
+    known.extend(refpack_opcodes.regions(image,**kwargs))
     known.extend(ead_direct_audio.regions(image,**kwargs))
     known.extend(bnkb_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
@@ -405,6 +407,7 @@ def preview(data, asset, selection):
         rare_assets,
         rare_models,
         raw_deflate_lists,
+        refpack_opcodes,
         refpack_stadium,
         refpack_triangles,
         relative_audio,
@@ -515,6 +518,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == shpn_images.LAYOUT:return shpn_images.preview(data,asset,selection)
     if asset.get('layout') == refpack_triangles.LAYOUT:return refpack_triangles.preview(data,asset,selection)
     if asset.get('layout') == refpack_stadium.LAYOUT:return refpack_stadium.preview(data,asset,selection)
+    if asset.get('layout') == refpack_opcodes.LAYOUT:return refpack_opcodes.preview(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
     if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
