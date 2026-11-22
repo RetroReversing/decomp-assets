@@ -55,3 +55,19 @@ def test_tile_can_use_a_preceding_mapping_when_palette_evidence_is_stronger():
     assert tile['offset'] == 24
     assert tile['preview_settings']['palette_offset'] == 128
     assert tile['confidence'] == 'inferred'
+
+
+def test_linked_headers_support_legacy_f3dex_lists():
+    image = bytearray(0x400)
+    headers = tuple(range(0x100, 0x240, 0x40))
+    for i, point in enumerate(((0, 0), (9, 0), (0, 9))):
+        struct.pack_into('>3hH', image, 0x40+16*i, *point, 0, 0)
+    for i, start in enumerate(headers):
+        previous = _BASE+headers[i-1]+32 if i else 0
+        struct.pack_into('>4I', image, start+16, previous, 0x101, 0xffffffff, 0x7f7f7f00)
+        struct.pack_into('>8I', image, start+32, 0x04000c2f, 0x01000000, 0xbf000000, 0x00000204,
+                         0xe7000000, 0, 0xb8000000, 0)
+    struct.pack_into('>3I', image, 0x300, _BASE+0x40, _BASE+headers[1], 0)
+    asset, = inline_meshes.regions(image)
+    assert asset['label'] == 'Indexed F3DEX mesh'
+    assert n64.preview(image, asset, {})['triangles'] == 1

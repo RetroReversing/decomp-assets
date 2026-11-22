@@ -1,4 +1,4 @@
-"""Indexed F3DEX2 lists with a per-object vertex segment and linked headers."""
+"""Indexed F3DEX lists with a per-object vertex segment and linked headers."""
 
 import re
 import struct
@@ -21,7 +21,7 @@ def _headers(image, check):
     anchors = defaultdict(list)
     for previous, current in pairwise(headers):
         check()
-        if not 40 <= current-previous < 0x8000 or image[current-8:current] != b'\xdf'+bytes(7):
+        if not 40 <= current-previous < 0x8000 or image[current-8:current] not in (b'\xdf'+bytes(7), b'\xb8'+bytes(7)):
             continue
         address, = _WORD.unpack_from(image,current+16)
         if 0x80000000 <= address < 0x80800000 and address%8 == 0:
@@ -84,7 +84,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             continue
         vertex, (end, vertices, faces) = validated[0]
         result.append(dict(offset=start,size=end-start,kind='3d model',layout='f3dex-mesh',confidence='validated',
-                           label='Indexed F3DEX2 mesh',media='model',vertices=len(vertices),triangles=len(faces),
+                           label=('Indexed F3DEX mesh' if image[start] == 4 else 'Indexed F3DEX2 mesh'),media='model',vertices=len(vertices),triangles=len(faces),
                            address_maps=[(1,vertex)],vertex_end=header,
                            reason='Linked headers and the object directory resolve the segmented vertex loads.',
                            preview_settings=dict(format='auto',source='rom',offset=start)))
