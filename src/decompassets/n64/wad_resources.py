@@ -41,8 +41,7 @@ def _files(image, base, end):
     return files
 
 
-def regions(image, *, check=lambda: None, progress=lambda _: None):
-    result, seen = [], set()
+def _members(image, check):
     for match in _HEADER.finditer(image):
         base = match.start()
         check()
@@ -53,28 +52,32 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             if kind != 4 or stored != expanded:
                 continue
             nested = _files(image, at, at + stored)
-            if nested is None:
-                continue
-            for name, offset, kind, size, decoded in nested:
-                if not name.endswith('.TEX') or offset in seen or decoded < 528:
-                    continue
-                seen.add(offset)
-                source = image[offset:offset + size]
-                try:
-                    head = lzhuf.unpack(source, decoded, check, prefix=16) if size != decoded else source[:16]
-                except formats.AssetError:
-                    continue
-                if len(head) != 16:
-                    continue
-                width,height = struct.unpack_from('>II', head)
-                if not (1 <= width <= 2048 and 1 <= height <= 2048 and 16 + width * height + 512 == decoded):
-                    continue
-                result.append(dict(offset=offset, size=size, kind='image', media='image', layout=TEXTURE,
-                                   label=name, confidence='validated', width=width, height=height,
-                                   reason='Archive extent, texture dimensions and palette size agree.',
-                                   decoded_size=decoded, texture_count=1, frames=1, palettes=1,
-                                   preview_settings=dict(source='rom', format='auto', offset=offset,
-                                                         width=width, height=height, display_format='ci8')))
+            if nested is not None:
+                yield from nested
+
+
+def regions(image, *, check=lambda: None, progress=lambda _: None):
+    result, seen = [], set()
+    for name, offset, kind, size, decoded in _members(image, check):
+        if not name.endswith('.TEX') or offset in seen or decoded < 528:
+            continue
+        seen.add(offset)
+        source = image[offset:offset + size]
+        try:
+            head = lzhuf.unpack(source, decoded, check, prefix=16) if size != decoded else source[:16]
+        except formats.AssetError:
+            continue
+        if len(head) != 16:
+            continue
+        width,height = struct.unpack_from('>II', head)
+        if not (1 <= width <= 2048 and 1 <= height <= 2048 and 16 + width * height + 512 == decoded):
+            continue
+        result.append(dict(offset=offset, size=size, kind='image', media='image', layout=TEXTURE,
+                   label=name, confidence='validated', width=width, height=height,
+                   reason='Archive extent, texture dimensions and palette size agree.',
+                   decoded_size=decoded, texture_count=1, frames=1, palettes=1,
+                   preview_settings=dict(source='rom', format='auto', offset=offset,
+                                 width=width, height=height, display_format='ci8')))
     return result
 
 
