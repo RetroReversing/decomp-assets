@@ -89,6 +89,7 @@ def regions(image, *, context=None, **kwargs):
         fla2_models,
         fonts,
         graphbin,
+        grid_tile_meshes,
         gzip_meshes,
         ia_font_textures,
         iain,
@@ -223,6 +224,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
     known.extend(indexed_archive_models.regions(image, **kwargs))
+    known.extend(grid_tile_meshes.regions(image, **kwargs))
     known.extend(indexed_sprite_banks.regions(image, **kwargs))
     known.extend(segmented_node_models.regions(image, **kwargs))
     known.extend(deflated_texture_table.regions(image, **kwargs))
@@ -407,6 +409,7 @@ def preview(data, asset, selection):
         fla2_models,
         fonts,
         graphbin,
+        grid_tile_meshes,
         gzip_meshes,
         ia_font_textures,
         iain_models,
@@ -589,6 +592,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == deflated_texture_table.LAYOUT:return deflated_texture_table.preview(data,asset,selection)
     if asset.get('layout') == segmented_node_models.LAYOUT:return segmented_node_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_sprite_banks.LAYOUT:return indexed_sprite_banks.preview(data,asset,selection)
+    if asset.get('layout') == grid_tile_meshes.LAYOUT:return grid_tile_meshes.preview(data,asset,selection)
     if asset.get('layout') == indexed_archive_models.LAYOUT:return indexed_archive_models.preview(data,asset,selection)
     if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
