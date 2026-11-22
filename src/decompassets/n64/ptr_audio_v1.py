@@ -63,6 +63,7 @@ def regions(image, *, check=lambda: None, **kwargs):
                 for i, s in enumerate(info['samples'])]
         found.append(dict(offset=at, size=info['size'], kind='audio', media='audio', layout=LAYOUT,
                           label='libmus sample bank', confidence='validated', audio_kind='sample bank',
+                          table_confidence='validated', rate_basis='Preview rate',
                           sample_count=len(rows), samples=rows, table_offset=base,
                           reason='Every pointer, predictor book, loop and ADPCM frame fits the uniquely matching marked wave table. Preview rate is adjustable.',
                           preview_settings=dict(source='rom', format='auto', offset=at)))
