@@ -148,6 +148,7 @@ def regions(image, *, context=None, **kwargs):
         relative_objects,
         relative_textures,
         reloc_files,
+        reloc_level_objects,
         resources,
         rle_font_atlas,
         rle_texture_tables,
@@ -210,6 +211,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_logos.regions(image, **kwargs))
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
+    known.extend(reloc_level_objects.regions(image, **kwargs))
     known.extend(romdisk_art.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
     known.extend(display_meshes)
@@ -447,6 +449,7 @@ def preview(data, asset, selection):
         relative_objects,
         relative_textures,
         reloc_files,
+        reloc_level_objects,
         resources,
         rle_font_atlas,
         rle_texture_tables,
@@ -555,6 +558,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == level_logos.LAYOUT:return level_logos.preview(data,asset,selection)
     if asset.get('layout') == level_world.IMAGE:return level_world.preview(data,asset,selection)
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)
+    if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
