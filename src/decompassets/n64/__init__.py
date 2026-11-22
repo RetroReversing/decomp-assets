@@ -83,6 +83,7 @@ def regions(image, *, context=None, **kwargs):
         indexed_resource_textures,
         inline_meshes,
         inline_tiles,
+        iwad_maps,
         iwad_sprites,
         libmus_song,
         lz_banks,
@@ -188,6 +189,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(ia_font_textures.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
+    known.extend(iwad_maps.regions(image,**kwargs))
     known.extend(indexed_resource_models.regions(image,**kwargs))
     known.extend(indexed_resource_textures.regions(image,**kwargs))
     known.extend(sized_lz_catalog.regions(image,**kwargs))
@@ -293,6 +295,7 @@ def preview(data, asset, selection):
         indexed_resource_models,
         indexed_resource_textures,
         inline_tiles,
+        iwad_maps,
         iwad_sprites,
         libmus_song,
         lz_banks,
@@ -424,6 +427,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == ia_font_textures.LAYOUT:return ia_font_textures.preview(data,asset,selection)
     if asset.get('layout') in (iwad_sprites.LAYOUT, iwad_sprites.TEXTURE):return iwad_sprites.preview(data,asset,selection)
+    if asset.get('layout') == iwad_maps.LAYOUT:return iwad_maps.preview(data,asset,selection)
     if asset.get('layout') == zip_object_textures.LAYOUT:return zip_object_textures.preview(data,asset,selection)
     if asset.get('layout') == zip_object_models.LAYOUT:return zip_object_models.preview(data,asset,selection)
     if asset.get('layout') == wad_audio.LAYOUT:return wad_audio.preview(data,asset,selection)
