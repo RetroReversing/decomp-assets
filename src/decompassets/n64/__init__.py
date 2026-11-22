@@ -85,6 +85,7 @@ def regions(image, *, context=None, **kwargs):
         fat_textures,
         ffs,
         fla2,
+        fla2_models,
         fonts,
         graphbin,
         gzip_meshes,
@@ -197,6 +198,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
     known.extend(lzo_models.regions(image, **kwargs))
+    known.extend(fla2_models.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
@@ -371,6 +373,7 @@ def preview(data, asset, selection):
         fat_textures,
         ffs,
         fla2,
+        fla2_models,
         fonts,
         graphbin,
         gzip_meshes,
@@ -528,6 +531,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == b1_speech.LAYOUT:return b1_speech.preview(data,asset,selection)
     if asset.get('layout') == sprite_constructor.LAYOUT:return sprite_constructor.preview(data,asset,selection)
     if asset.get('layout') == lzo_models.LAYOUT:return lzo_models.preview(data,asset,selection)
+    if asset.get('layout') == fla2_models.LAYOUT:return fla2_models.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
