@@ -101,6 +101,7 @@ def regions(image, *, context=None, **kwargs):
         iwad_sprites,
         legacy_level_models,
         legacy_level_world,
+        legacy_reloc_objects,
         level_bytecode,
         level_logos,
         level_world,
@@ -212,6 +213,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(romdisk_speech.regions(image, **kwargs))
     known.extend(legacy_level_world.regions(image, **kwargs))
     known.extend(legacy_level_models.regions(image, **kwargs))
+    known.extend(legacy_reloc_objects.regions(image, **kwargs))
     known.extend(level_logos.regions(image, **kwargs))
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
@@ -408,6 +410,7 @@ def preview(data, asset, selection):
         iwad_sprites,
         legacy_level_models,
         legacy_level_world,
+        legacy_reloc_objects,
         level_bytecode,
         level_logos,
         level_world,
@@ -563,6 +566,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == romdisk_speech.LAYOUT:return romdisk_speech.preview(data,asset,selection)
     if asset.get('layout') == legacy_level_world.IMAGE:return legacy_level_world.preview(data,asset,selection)
     if asset.get('layout') == legacy_level_models.LAYOUT:return legacy_level_models.preview(data,asset,selection)
+    if asset.get('layout') in (legacy_reloc_objects.IMAGE, legacy_reloc_objects.MODEL):return legacy_reloc_objects.preview(data,asset,selection)
     if asset.get('layout') == level_logos.LAYOUT:return level_logos.preview(data,asset,selection)
     if asset.get('layout') == level_world.IMAGE:return level_world.preview(data,asset,selection)
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)

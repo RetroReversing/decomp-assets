@@ -59,3 +59,15 @@ def test_directory_needs_contiguous_members():
     assert len(objects.members(data)) == 16
     struct.pack_into('>I', data, 0x100+8, 0)
     assert objects.members(data) == []
+
+
+def test_directory_accepts_nonoverlapping_members_in_name_order():
+    data=bytearray(0x10000)
+    packed=zlib.compressobj(wbits=-15)
+    body=packed.compress(object_data())+packed.flush()
+    width=(len(body)+15)//16*16
+    for i in range(16):
+        lo=0x4000+(15-i)*width
+        struct.pack_into('>8sII',data,0x100+i*16,f'a{i:07}'.encode(),lo,lo+width)
+        data[lo:lo+len(body)]=body
+    assert len(objects.members(data))==16
