@@ -131,3 +131,13 @@ def test_shared_position_storage_uses_only_referenced_bounded_vertices():
     assert preview['surfaces'][0]['indices'] == (0, 1, 2)
     struct.pack_into('>h', data, 0x94, 99)
     assert edl_mesh_vertices.meshes(data) == []
+
+
+def test_triangle_header_can_be_smaller_than_terminated_stream():
+    data = _pack()
+    struct.pack_into('>H', data, 0x3c, 1)
+    data[0xa8:] = bytes((0, 0x1f, 0, 0, 0, 0, 0, 3, 0,
+                         0, 0, 0, 1, 0, 0, 2, 0, 0, 0x1e,
+                         0x20, 0x08, 0x41, 0x00, 6))
+    item, = edl_mesh_vertices.meshes(data)
+    assert item['triangles'] == 2

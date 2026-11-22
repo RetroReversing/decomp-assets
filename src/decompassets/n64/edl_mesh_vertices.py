@@ -35,8 +35,9 @@ def _faces(data, entry, vertex_count):
             pos += 1
             op, high = command & 15, command >> 4
             if command == 6:
-                # The game stops at this command; the header can exceed the emitted count.
-                return faces if 0 < len(faces) <= expected else None
+                # The engine stops at this command; the header count may be
+                # either smaller or larger than the emitted triangle count.
+                return faces if expected and faces else None
             if op == 0:
                 if command & 0x20:
                     return None
@@ -93,7 +94,7 @@ def _faces(data, entry, vertex_count):
                         faces.append(((cache[extra], cache[a], cache[c]), texture))
             else:
                 return None
-            if pos >= len(data) or len(faces) > expected:
+            if pos >= len(data) or len(faces) > 16384:
                 return None
     except IndexError:
         return None
