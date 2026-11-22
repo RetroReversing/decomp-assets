@@ -292,3 +292,20 @@ def test_contiguous_raw_songs_use_the_unique_wave_bank():
     broken=bytearray(image)
     broken[offsets[1]+4:offsets[1]+8]=bytes(4)
     assert not libmus_song._contiguous_raw_songs(broken,banks,lambda:None)
+
+
+def test_sixteen_byte_aligned_binary_song_run():
+    from decompassets.n64 import libmus_song, lzari
+
+    song, _ = lzari.unpack(_PACKED_SONG)
+    image = bytearray(fixture(pcm=True, loop=True) + bytes(64))
+    image.extend(bytes((-len(image)) % 16))
+    offsets = []
+    for _ in range(3):
+        offsets.append(len(image))
+        image.extend(song)
+        image.extend(b'\x7f' * ((-len(image)) % 16))
+    banks = [bank for bank in ptr_audio.regions(image) if bank.get('samples')]
+    rows = libmus_song._contiguous_raw_songs(image, banks, lambda: None)
+    assert [row['offset'] for row in rows] == offsets
+    assert any(wav(libmus_song.preview(image, rows[0], {'sample': 0}))[2])

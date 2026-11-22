@@ -513,7 +513,7 @@ def _archived_songs(image, banks, check):
 
 
 def _contiguous_raw_songs(image, banks, check):
-    """Find runs of two-byte-aligned binary songs tied to one validated bank."""
+    """Find runs of aligned binary songs tied to one validated bank."""
     banks = [bank for bank in banks if not bank.get('compressed_control')
              and bank.get('table_offset') is not None]
     if not banks:
@@ -540,7 +540,12 @@ def _contiguous_raw_songs(image, banks, check):
                 if end > len(image) or binary_song(image[at:end], waves) is None:
                     break
                 songs.append((at,score))
-                at = (end+1)&~1
+                next_two = (end+1)&~1
+                next_sixteen = (end+15)&~15
+                if start%16 == 0 and image[next_two:next_two+4] != b'\0\0\x02\x15':
+                    at = next_sixteen
+                else:
+                    at = next_two
             if len(songs) >= 3:
                 matches.append((bank,songs))
         if len(matches) != 1:
