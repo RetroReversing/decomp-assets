@@ -56,6 +56,7 @@ def regions(image, *, context=None, **kwargs):
         big_models,
         bind,
         blast_textures,
+        bnkb_audio,
         bolt,
         borg,
         borg_audio,
@@ -205,6 +206,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(ead_direct_audio.regions(image,**kwargs))
+    known.extend(bnkb_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
     known.extend(exs_models.regions(image,**kwargs))
     mio0_images = []
@@ -311,6 +313,7 @@ def preview(data, asset, selection):
         bind_models,
         bind_textures,
         blast_textures,
+        bnkb_audio,
         bolt,
         borg,
         borg_audio,
@@ -477,6 +480,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
+    if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.IMAGE:return mio0_graphics.preview_image(data,asset,selection)
     if asset.get('layout') == exs_models.LAYOUT:return exs_models.preview(data,asset,selection)
