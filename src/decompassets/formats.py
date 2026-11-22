@@ -48,6 +48,11 @@ def unpack(data):
 def unpack_extent(data):
     """Expand a stream and report the last input byte consumed."""
     data=data[:MAX_BYTES]
+    if data.startswith(b'\x10\xfb'):
+        from .refpack import unpack as unpack_refpack
+
+        result, consumed = unpack_refpack(data)
+        return result, 'RefPack', consumed
     if data.startswith(b'\x1f\x8b\x08') or len(data)>=2 and data[0]==0x78 and int.from_bytes(data[:2],'big')%31==0:
         codec='gzip' if data.startswith(b'\x1f\x8b') else 'zlib'
         try:
