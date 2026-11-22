@@ -146,6 +146,7 @@ def regions(image, *, context=None, **kwargs):
         rle_texture_tables,
         rnc_indexed_sprites,
         rnc_quad_models,
+        rnc_reloc_display,
         rnc_tiled_images,
         rnx,
         rzip_audio,
@@ -212,6 +213,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rnc_indexed_sprites.regions(image,**kwargs))
     known.extend(named_adpcm.regions(image,**kwargs))
     known.extend(rnc_quad_models.regions(image,**kwargs))
+    known.extend(rnc_reloc_display.regions(image,**kwargs))
+    known.extend(rnc_reloc_display.image_regions(image,**kwargs))
     known.extend(f3dex_tiles.regions(image,**kwargs))
     known.extend(fat_models.regions(image,**kwargs))
     known.extend(wad_resources.regions(image,**kwargs))
@@ -422,6 +425,7 @@ def preview(data, asset, selection):
         rnc_indexed_sprites,
         rnc_meshes,
         rnc_quad_models,
+        rnc_reloc_display,
         rnc_textures,
         rnc_tiled_images,
         rnx,
@@ -508,6 +512,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == rnc_indexed_sprites.LAYOUT:return rnc_indexed_sprites.preview(data,asset,selection)
     if asset.get('layout') == named_adpcm.LAYOUT:return named_adpcm.preview(data,asset,selection)
     if asset.get('layout') == rnc_quad_models.LAYOUT:return rnc_quad_models.preview(data,asset,selection)
+    if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
+    if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
