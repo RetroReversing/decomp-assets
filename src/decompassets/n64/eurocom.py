@@ -293,6 +293,38 @@ def _samples(image, start, end, check):
     return None
 
 
+def _standalone_samples(image, check):
+    """Find self-contained MusyX directories without requiring a speech archive."""
+    assets = []
+    window = 1024 * 1024
+    for start in range(0, len(image), window - 128):
+        check()
+        asset = _samples(image, start, len(image), check)
+        if not asset or any(old['offset'] == asset['offset'] for old in assets):
+            continue
+        samples = asset['samples']
+        if any(not sample['preview_available'] for sample in samples):
+            continue
+        # Predictor IDs occupy the high nibble in both halves of each frame.
+        # Checking every frame also proves that the declared sample extents fit.
+        valid = True
+        for sample in samples:
+            check()
+            size = musyx.byte_length(sample['samples'])
+            offset = sample['offset']
+            if any(image[pos + 8] >> 4 >= 8 or image[pos + 24] >> 4 >= 8
+                   for pos in range(offset + musyx.BOOK.size, offset + size, musyx.PAIR_BYTES)):
+                valid = False
+                break
+            sample['size'] = size
+        if not valid:
+            continue
+        asset['bank_end'] = max(s['offset'] + s['size'] for s in samples)
+        asset['reason'] = 'Ordered sample records resolve to bounded MusyX predictor books and frames.'
+        assets.append(asset)
+    return assets
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     blocks = {}
     for match in islice(EDL_TAG.finditer(image), 20000):
@@ -301,7 +333,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         if offset % 4 == 0 and (info := edl.header(image, offset)):
             blocks[offset] = info[:3]
     if not blocks:
-        return []
+        return _standalone_samples(image, check)
     found = _find_archive(image, blocks, check)
     if found is None:
         result = []
@@ -317,7 +349,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 continue
             result.append(_asset(offset, size, f'EDL method {method} stream', 'edl-stream',
                                  kind='compressed', expanded_size=decoded))
-        return result + edl_textures.regions(image, blocks, check) + edl_models.regions(image, blocks, check) + edl_indexed_textures.regions(image, blocks, check)
+        return (result + edl_textures.regions(image, blocks, check) + edl_models.regions(image, blocks, check)
+                + edl_indexed_textures.regions(image, blocks, check) + _standalone_samples(image, check))
     index, base, entries = found
     archive_end = entries[-1][0] + ENTRY.size
     counts = Counter(m for offset,(m,_,_) in blocks.items() if base <= offset < archive_end)
@@ -401,7 +434,9 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 assets.append(dict(offset=samples['data_base'], size=samples['bank_end']-samples['data_base'],
                                    kind='audio', label='MusyX sample payload', confidence='validated',
                                    reason='The ordered sample directory resolves to stored data offsets.'))
-    return assets + edl_indexed_textures.regions(image, blocks, check)
+    known = {asset['offset'] for asset in assets if asset.get('layout') == 'eurocom-samples'}
+    return (assets + edl_indexed_textures.regions(image, blocks, check)
+            + [asset for asset in _standalone_samples(image, check) if asset['offset'] not in known])
 
 
 def _texture_preview(image, asset, selection):
