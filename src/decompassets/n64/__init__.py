@@ -71,6 +71,7 @@ def regions(image, *, context=None, **kwargs):
         deflate_catalog_models,
         deflate_segment_models,
         deflate_sprites,
+        deflated_texture_table,
         dialogue,
         dialogue_links,
         diet_audio,
@@ -220,6 +221,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
     known.extend(indexed_archive_models.regions(image, **kwargs))
+    known.extend(deflated_texture_table.regions(image, **kwargs))
     known.extend(vol_textures.regions(image, **kwargs))
     known.extend(reloc_level_objects.regions(image, **kwargs))
     known.extend(romdisk_art.regions(image, **kwargs))
@@ -385,6 +387,7 @@ def preview(data, asset, selection):
         deflate_catalog_models,
         deflate_segment_models,
         deflate_sprites,
+        deflated_texture_table,
         dialogue,
         diet_audio,
         display_meshes,
@@ -577,6 +580,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == level_world.IMAGE:return level_world.preview(data,asset,selection)
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)
     if asset.get('layout') == vol_textures.LAYOUT:return vol_textures.preview(data,asset,selection)
+    if asset.get('layout') == deflated_texture_table.LAYOUT:return deflated_texture_table.preview(data,asset,selection)
     if asset.get('layout') == indexed_archive_models.LAYOUT:return indexed_archive_models.preview(data,asset,selection)
     if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
