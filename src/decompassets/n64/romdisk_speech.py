@@ -43,7 +43,7 @@ def regions(image, *, check=lambda: None, **kwargs):
             rows = clips(data)
             if rows:
                 result.append(dict(**member, kind='audio', media='audio', layout=LAYOUT,
-                                   label=member['name'], confidence='validated', audio_kind='speech',
+                                   label=member['name'], confidence='validated', audio_kind='speech', table_confidence='validated',
                                    sample_count=len(rows), samples=rows,
                                    reason='The archive member bounds an ordered directory of MORT clips.',
                                    preview_settings=dict(source='rom', format='auto', offset=member['offset'])))

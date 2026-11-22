@@ -18,6 +18,7 @@ def test_v1_bank_requires_complete_books_and_matching_frames():
     data = fixture()
     rows = ptr_audio_v1.regions(data)
     assert len(rows) == 1 and rows[0]['sample_count'] == 1
+    assert rows[0]['rate_basis'] == 'Preview rate'
     assert ptr_audio_v1.preview(data, rows[0], {})['mime'] == 'audio/wav'
     data[144] = 1
     assert ptr_audio_v1.regions(data) == []

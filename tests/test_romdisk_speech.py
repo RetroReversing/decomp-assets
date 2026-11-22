@@ -26,6 +26,7 @@ def test_romdisk_bounds_and_speech_preview():
         assert len(groups) == 1 and len(groups[0]) == 1
         rows = romdisk_speech.regions(data)
         assert len(rows) == 1 and rows[0]['sample_count'] == 1
+        assert rows[0]['table_confidence'] == 'validated'
         assert romdisk_speech.preview(data, rows[0], {})['mime'] == 'audio/wav'
         struct.pack_into('>I', data, 144, 255)
         assert romdisk.members(data) == []
