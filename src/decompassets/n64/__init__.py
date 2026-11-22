@@ -68,6 +68,7 @@ def regions(image, *, context=None, **kwargs):
         display_lists,
         emsh_links,
         eurocom,
+        fat_models,
         fat_textures,
         ffs,
         fla2,
@@ -167,6 +168,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(prefixed_texture_models.regions(image,**kwargs))
     known.extend(rle_font_atlas.regions(image,**kwargs))
     known.extend(fat_textures.regions(image,**kwargs))
+    known.extend(fat_models.regions(image,**kwargs))
     known.extend(wad_resources.regions(image,**kwargs))
     known.extend(wad_models.regions(image,**kwargs))
     known.extend(wad_audio.regions(image,**kwargs))
@@ -265,6 +267,7 @@ def preview(data, asset, selection):
         diet_audio,
         display_meshes,
         eurocom,
+        fat_models,
         fat_textures,
         ffs,
         fla2,
@@ -383,6 +386,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='mainfs':return mainfs.preview(data,asset,selection)
     if asset.get('layout')==offset_models.LAYOUT:return offset_models.preview(data,asset,selection)
     if asset.get('layout')==offset_textures.LAYOUT:return offset_textures.preview(data,asset,selection)
+    if asset.get('layout')==fat_models.LAYOUT:return fat_models.preview(data,asset,selection)
     if asset.get('layout')==fat_textures.LAYOUT:return fat_textures.preview(data,asset,selection)
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
