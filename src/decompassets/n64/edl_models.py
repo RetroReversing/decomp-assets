@@ -89,7 +89,7 @@ def regions(image, blocks, check):
         assets.append(dict(offset=offset, size=stored, label='EDL indexed polygon models',
                            layout='eurocom-edl-models', kind='3d model', media='model',
                            confidence='validated', reason='Consecutive polygon groups reference bounded vertices.',
-                           image_size=blocks[other][2], meshes=meshes,
+                           image_size=blocks[other][2], nodes=0, meshes=meshes,
                            vertices=sum(m['vertices'] for m in meshes),
                            triangles=sum(m['triangles'] for m in meshes),
                            preview_settings=dict(source='rom', format='auto', offset=offset)))
