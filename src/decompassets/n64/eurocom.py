@@ -11,6 +11,7 @@ from .. import formats
 from . import (
     edl,
     edl_indexed_textures,
+    edl_mesh_vertices,
     edl_models,
     edl_textures,
     eurocom_mesh,
@@ -350,7 +351,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             result.append(_asset(offset, size, f'EDL method {method} stream', 'edl-stream',
                                  kind='compressed', expanded_size=decoded))
         return (result + edl_textures.regions(image, blocks, check) + edl_models.regions(image, blocks, check)
-                + edl_indexed_textures.regions(image, blocks, check) + _standalone_samples(image, check))
+                + edl_indexed_textures.regions(image, blocks, check) + edl_mesh_vertices.regions(image, blocks, check)
+                + _standalone_samples(image, check))
     index, base, entries = found
     archive_end = entries[-1][0] + ENTRY.size
     counts = Counter(m for offset,(m,_,_) in blocks.items() if base <= offset < archive_end)
@@ -436,6 +438,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                                    reason='The ordered sample directory resolves to stored data offsets.'))
     known = {asset['offset'] for asset in assets if asset.get('layout') == 'eurocom-samples'}
     return (assets + edl_indexed_textures.regions(image, blocks, check)
+            + edl_mesh_vertices.regions(image, blocks, check)
             + [asset for asset in _standalone_samples(image, check) if asset['offset'] not in known])
 
 
@@ -539,6 +542,8 @@ def _records(image, asset):
 
 
 def preview(image, asset, selection):
+    if asset['layout'] == edl_mesh_vertices.LAYOUT:
+        return edl_mesh_vertices.preview(image, asset, selection)
     if asset['layout'] == edl_indexed_textures.LAYOUT:
         return edl_indexed_textures.preview(image, asset, selection)
     if asset['layout'] == 'eurocom-edl-models':
