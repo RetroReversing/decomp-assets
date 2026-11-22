@@ -57,3 +57,27 @@ def test_triangle_header_can_exceed_terminated_stream():
     assert edl_mesh_vertices.meshes(data)[0]['triangles'] == 1
     struct.pack_into('>H', data, 0x3c, 0)
     assert edl_mesh_vertices.meshes(data)[0]['triangles'] == 0
+
+
+def test_adjacent_texture_pack_resolves_mesh_material_and_uv():
+    raw = bytearray(0xa4)
+    struct.pack_into('>IIHHIII', raw, 0, 5, len(raw), 1, 1, 0x1c, 16, 0x2c)
+    struct.pack_into('>HHIIHH', raw, 0x28, 2, 8, 0, 0, 0, 0)
+    struct.pack_into('>I', raw, 0x40, 8)
+    struct.pack_into('>I', raw, 0x44, (0x84 - 0x44) << 8)
+    struct.pack_into('>I', raw, 0x48, 0x64 - 0x48)
+    texture = struct.pack('>4sII', b'EDL\x80', len(raw) + 12, len(raw)) + raw
+    data = _pack()
+    struct.pack_into('>H', data, 0x3c, 1)
+    data[0xa8:] = bytes((0, 0x1f, 0, 0, 0, 0, 9, 0, 0, 3, 0,
+                         0, 1, 2, 1, 2, 3, 2, 3, 4, 0x0e, 0x20, 0x08, 6))
+    model = struct.pack('>4sII', b'EDL\x80', len(data) + 12, len(data)) + data
+    offset = (len(texture) + 15) & ~15
+    rom = texture + bytes(offset - len(texture)) + model
+    asset, = edl_mesh_vertices.regions(rom, {0: (0, len(texture), len(texture) - 12),
+                                            offset: (0, len(model), len(data))}, lambda: None)
+    assert asset['texture_offset'] == 0
+    result = eurocom.preview(rom, asset, {})
+    assert result['materials'][1]['image'].startswith('data:image/png;base64,')
+    assert result['surfaces'][0]['material'] == 1
+    assert result['surfaces'][0]['uv'][0] == [0.25, 0.5]
