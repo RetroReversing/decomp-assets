@@ -346,6 +346,7 @@ def preview(data, asset, selection):
         siff_models,
         sized_lz_catalog,
         sn64,
+        sn64_music,
         stage_banks,
         stage_meshes,
         striped_images,
@@ -388,7 +389,8 @@ def preview(data, asset, selection):
     if asset.get('layout')==paged_lz_models.LAYOUT:return paged_lz_models.preview(data,asset,selection)
     if asset.get('layout')==paged_models.LAYOUT:return paged_models.preview(data,asset,selection)
     if asset.get('layout')==packed_anim.LAYOUT:return packed_anim.preview(data,asset,selection)
-    if asset.get('layout')=='sn64-sequences':return sn64.preview_directory(data,asset,selection)
+    if asset.get('layout')=='sn64-sequences':
+        return sn64_music.preview(data,asset,selection) if asset.get('samples') else sn64.preview_directory(data,asset,selection)
     if asset.get('layout')==cartridge_scores.LAYOUT:return cartridge_scores.preview(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)

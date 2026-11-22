@@ -88,7 +88,7 @@ def _samples(image, offset, check):
         sequence_end, sequences = parsed
     samples = []
     end = 0
-    for index, (relative,size,zero,_,loop_id,reserved) in enumerate(wave_rows):
+    for index, (relative,size,zero,pitch,loop_id,reserved) in enumerate(wave_rows):
         check()
         book_at = books+index*_BOOK.size
         order, predictors = struct.unpack_from('>II',image,book_at)
@@ -103,9 +103,14 @@ def _samples(image, offset, check):
                 return None
             if at%4096 < 9:
                 check()
-        samples.append(dict(label=f'Sample {index+1}',codec='N64 VADPCM',offset=first,
-                            size=size,encoded_size=encoded,samples=encoded//9*16,rate=22050,
-                            book_offset=book_at+8,predictors=predictors))
+        sample = dict(label=f'Sample {index+1}',codec='N64 VADPCM',offset=first,
+                      size=size,encoded_size=encoded,samples=encoded//9*16,rate=22050,
+                      book_offset=book_at+8,predictors=predictors, pitch_cents=pitch if pitch < 2**31 else pitch-2**32)
+        if loop_id != 0xffffffff:
+            loop_start, loop_end = struct.unpack_from('>II', image, loop+_LOOP.size+loop_id*48)
+            if 0 <= loop_start < loop_end <= sample['samples']:
+                sample['loop'] = dict(start=loop_start, end=loop_end, count=0xffffffff)
+        samples.append(sample)
         end = relative+size
     return control_end, sequence, sequence_end, wave_base, samples, sequences
 
@@ -128,10 +133,16 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             at = sample['offset']
             assets.append(dict(**asset,offset=at,size=sample['size'],label=sample['label'],samples=[sample],
                                preview_settings=dict(format='auto',source='rom',offset=at)))
-        assets.append(dict(kind='music sequence',media='metadata',layout='sn64-sequences',confidence='validated',
-                           label='SSEQ sequence directory',offset=sequence,size=sequence_end-sequence,sequences=sequences,
-                           reason='Each track entry fits the validated sequence directory paired with the wave table.',
-                           preview_settings=dict(format='auto',source='rom',offset=sequence)))
+        from . import sn64_music
+        voices = sn64_music.programs(image, offset, wave, samples)
+        playable = sn64_music.music_rows(image, sequences, voices) if voices else []
+        directory = dict(kind='music sequence',media='metadata',layout='sn64-sequences',confidence='validated',
+                         label='SSEQ sequence directory',offset=sequence,size=sequence_end-sequence,sequences=sequences,
+                         reason='Each track entry fits the validated sequence directory paired with the wave table.',
+                         preview_settings=dict(format='auto',source='rom',offset=sequence))
+        if playable:
+            directory.update(media='audio', audio_kind='indexed sample directory', control=offset, samples=playable)
+        assets.append(directory)
     return assets
 
 
