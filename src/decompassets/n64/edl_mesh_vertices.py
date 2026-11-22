@@ -102,16 +102,25 @@ def meshes(data):
         start = entry + 4 + relative
         end = entry + 28 + (packed >> 8)
         size = end - start
-        if (flags != 4 or packed & 255 or size < 40 or (size - 16) % 8
-                or not 0 <= start < end <= len(data) or size > 16 + 8192 * 8
-                or data[end - 4:end] != bytes(4)):
+        if (flags not in (4, 5, 6, 7) or packed & 255 or size < 36
+                or not 0 <= start < end <= len(data) or size > 16 + 8192 * 8):
+            continue
+        # Some arrays end immediately after the final position; others have
+        # four padding bytes before the command stream.
+        if (size - 12) % 8 == 0:
+            pad = 0
+        elif (size - 16) % 8 == 0 and data[end - 4:end] == bytes(4):
+            pad = 4
+        else:
             continue
         bounds = struct.unpack_from('>6h', data, start)
-        vertices = list(struct.iter_unpack('>3h2x', data[start + 12:end - 4]))
+        vertices = list(struct.iter_unpack('>3h2x', data[start + 12:end - pad if pad else end]))
         if not all(bounds[0] <= x <= bounds[3] and bounds[4] <= y <= bounds[1]
                    and bounds[2] <= z <= bounds[5] for x, y, z in vertices):
             continue
         faces = _faces(data, entry, len(vertices))
+        if (flags != 4 or not pad) and not faces:
+            continue
         result.append(dict(name=f'Mesh {i + 1}' if faces else f'Mesh {i + 1} (vertices)', descriptor=entry,
                            vertices=len(vertices), triangles=len(faces) if faces else 0))
     return result

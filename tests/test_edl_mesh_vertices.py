@@ -81,3 +81,15 @@ def test_adjacent_texture_pack_resolves_mesh_material_and_uv():
     assert result['materials'][1]['image'].startswith('data:image/png;base64,')
     assert result['surfaces'][0]['material'] == 1
     assert result['surfaces'][0]['uv'][0] == [0.25, 0.5]
+
+
+def test_unpadded_vertices_and_alternate_flags_need_valid_surface_commands():
+    data = _pack()
+    struct.pack_into('>HH', data, 0x3c, 1, 5)
+    struct.pack_into('>I', data, 0x58, (0xa4 - 0x58) << 8)
+    data[0xa4:] = bytes((0, 0x1f, 0, 0, 0, 0, 0, 3, 0,
+                         0, 0, 0, 1, 0, 0, 2, 0, 0, 0x0e, 0x20, 0x08, 6))
+    item, = edl_mesh_vertices.meshes(data)
+    assert item['vertices'] == 3 and item['triangles'] == 1
+    data[-1] = 15
+    assert edl_mesh_vertices.meshes(data) == []
