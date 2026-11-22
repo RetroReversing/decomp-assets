@@ -362,3 +362,36 @@ def test_parallel_control_and_wave_tables_resolve_nonadjacent_banks():
     broken = bytearray(image)
     struct.pack_into('>I', broken, 20, wave_start + 48)
     assert not any(asset['offset'] == first and asset['samples'] for asset in audio.regions(broken))
+
+
+def test_checked_offset_directory_pairs_sample_only_banks_including_pcm(monkeypatch):
+    from decompassets.n64 import offset_textures
+
+    chunks = []
+    boundaries = []
+    for raw in (False, True):
+        original, _, base = fixture(raw=raw)
+        control = bytearray(original[128:base])
+        control[224:226] = bytes([127,0])
+        control[232:234] = bytes([127,0])
+        wave = original[base:] + bytes(-len(original[base:]) % 16)
+        chunks.extend((control, wave))
+    body = b''.join(chunks)
+    total = 0
+    for chunk in chunks:
+        total += len(chunk)
+        boundaries.append(total)
+    table = b''.join(struct.pack('>I', value) for value in boundaries) + b'\xff'*4
+    table += bytes(128-len(table))
+    image = table+body
+    offsets = [0]*41
+    offsets[38:41] = [0,128,len(image)]
+    monkeypatch.setattr(offset_textures, 'catalogs', lambda image, check: iter([(0, offsets, [])]))
+    found = audio.regions(image)
+    banks = [item for item in found if len(item['samples']) == 2]
+    assert len(banks) == 2
+    assert all(item['table_confidence'] == 'validated' for item in banks)
+    assert {item['samples'][0]['codec'] for item in banks} == {'N64 VADPCM','PCM16 big endian'}
+    assert all(wav(audio.preview(image,item,{}))[1] for item in banks)
+    damaged = bytearray(image); struct.pack_into('>I', damaged, 4, boundaries[-1]+1)
+    assert not audio._offset_directory_tables(damaged, lambda: None)
