@@ -13,7 +13,19 @@ def _faces(data, entry, vertex_count):
     expected = struct.unpack_from('>H', data, entry)[0]
     packed = struct.unpack_from('>I', data, entry + 28)[0]
     pos = entry + 28 + (packed >> 8)
-    if pos + 7 > len(data) or data[pos:pos + 2] != b'\0\x1f':
+    if pos + 7 > len(data):
+        return None
+    if data[pos:pos + 2] == b'\0\x9f':
+        if pos + 28 > len(data) or vertex_count != 4 or expected != 2:
+            return None
+        texture = data[pos + 12]
+        texture = (texture + (packed & 255)) & 255 if texture != 255 else None
+        # The renderer writes these bytes as 10.5 texture coordinates scaled
+        # by 64, then applies its 0x8000 texture scale.
+        corners = [(i, data[pos + 14 + i], data[pos + 18 + i]) for i in range(4)]
+        return [((corners[0], corners[2], corners[1]), texture),
+                ((corners[1], corners[2], corners[3]), texture)]
+    if packed & 255 or data[pos:pos + 2] != b'\0\x1f':
         return None
     pos += 6
     cache, faces, texture = [], [], None
@@ -45,7 +57,7 @@ def _faces(data, entry, vertex_count):
                         pos += 1 if u & 0x80 else 3
                     if index >= vertex_count or pos > len(data):
                         return None
-                    cache.append((index, (u & 127) * 2, (v & 127) * 2))
+                    cache.append((index, u & 127, v & 127))
             elif op in (1, 7):
                 pos += 3
             elif op in (2, 8, 10):
@@ -102,7 +114,7 @@ def meshes(data):
         start = entry + 4 + relative
         end = entry + 28 + (packed >> 8)
         size = end - start
-        if (flags not in (4, 5, 6, 7) or packed & 255 or size < 36
+        if (flags not in (4, 5, 6, 7) or size < 36
                 or not 0 <= start < end <= len(data) or size > 16 + 8192 * 8):
             continue
         # Some arrays end immediately after the final position; others have
@@ -119,7 +131,7 @@ def meshes(data):
                    and bounds[2] <= z <= bounds[5] for x, y, z in vertices):
             continue
         faces = _faces(data, entry, len(vertices))
-        if (flags != 4 or not pad) and not faces:
+        if (flags != 4 or not pad or packed & 255) and not faces:
             continue
         result.append(dict(name=f'Mesh {i + 1}' if faces else f'Mesh {i + 1} (vertices)', descriptor=entry,
                            vertices=len(vertices), triangles=len(faces) if faces else 0))

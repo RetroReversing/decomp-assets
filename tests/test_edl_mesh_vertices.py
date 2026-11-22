@@ -80,7 +80,7 @@ def test_adjacent_texture_pack_resolves_mesh_material_and_uv():
     result = eurocom.preview(rom, asset, {})
     assert result['materials'][1]['image'].startswith('data:image/png;base64,')
     assert result['surfaces'][0]['material'] == 1
-    assert result['surfaces'][0]['uv'][0] == [0.25, 0.5]
+    assert result['surfaces'][0]['uv'][0] == [0.125, 0.25]
 
 
 def test_unpadded_vertices_and_alternate_flags_need_valid_surface_commands():
@@ -93,3 +93,21 @@ def test_unpadded_vertices_and_alternate_flags_need_valid_surface_commands():
     assert item['vertices'] == 3 and item['triangles'] == 1
     data[-1] = 15
     assert edl_mesh_vertices.meshes(data) == []
+
+
+def test_quad_commands_use_four_positions_and_texture_coordinates():
+    data = _pack()
+    struct.pack_into('>HH', data, 0x3c, 2, 6)
+    struct.pack_into('>3h2x', data, 0xa4, 0, 1, 2)
+    struct.pack_into('>I', data, 0x58, ((0xac - 0x58) << 8) | 1)
+    record = bytearray(28)
+    struct.pack_into('>H', record, 0, 0x9f)
+    record[12] = 3
+    record[14:22] = bytes((0, 0, 7, 7, 7, 0, 7, 0))
+    data[0xac:] = record
+    item, = edl_mesh_vertices.meshes(data)
+    assert item['vertices'] == 4 and item['triangles'] == 2
+    faces = edl_mesh_vertices._faces(data, item['descriptor'], 4)
+    assert faces[0] == (((0, 0, 7), (2, 7, 7), (1, 0, 0)), 4)
+    assert faces[1] == (((1, 0, 0), (2, 7, 7), (3, 7, 0)), 4)
+    assert edl_mesh_vertices._faces(data[:-1], item['descriptor'], 4) is None
