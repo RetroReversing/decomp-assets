@@ -99,6 +99,8 @@ def regions(image, *, context=None, **kwargs):
         inline_tiles,
         iwad_maps,
         iwad_sprites,
+        legacy_level_models,
+        legacy_level_world,
         level_bytecode,
         level_logos,
         level_world,
@@ -208,6 +210,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(fla2_models.regions(image, **kwargs))
     known.extend(ptr_audio_v1.regions(image, **kwargs))
     known.extend(romdisk_speech.regions(image, **kwargs))
+    known.extend(legacy_level_world.regions(image, **kwargs))
+    known.extend(legacy_level_models.regions(image, **kwargs))
     known.extend(level_logos.regions(image, **kwargs))
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
@@ -402,6 +406,8 @@ def preview(data, asset, selection):
         inline_tiles,
         iwad_maps,
         iwad_sprites,
+        legacy_level_models,
+        legacy_level_world,
         level_bytecode,
         level_logos,
         level_world,
@@ -555,6 +561,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == fla2_models.LAYOUT:return fla2_models.preview(data,asset,selection)
     if asset.get('layout') == ptr_audio_v1.LAYOUT:return ptr_audio_v1.preview(data,asset,selection)
     if asset.get('layout') == romdisk_speech.LAYOUT:return romdisk_speech.preview(data,asset,selection)
+    if asset.get('layout') == legacy_level_world.IMAGE:return legacy_level_world.preview(data,asset,selection)
+    if asset.get('layout') == legacy_level_models.LAYOUT:return legacy_level_models.preview(data,asset,selection)
     if asset.get('layout') == level_logos.LAYOUT:return level_logos.preview(data,asset,selection)
     if asset.get('layout') == level_world.IMAGE:return level_world.preview(data,asset,selection)
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)
