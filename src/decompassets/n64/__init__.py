@@ -78,6 +78,7 @@ def regions(image, *, context=None, **kwargs):
         eurocom,
         exs_images,
         exs_models,
+        f3dex_tiles,
         fat_models,
         fat_textures,
         ffs,
@@ -200,6 +201,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(prefixed_texture_models.regions(image,**kwargs))
     known.extend(rle_font_atlas.regions(image,**kwargs))
     known.extend(fat_textures.regions(image,**kwargs))
+    known.extend(f3dex_tiles.regions(image,**kwargs))
     known.extend(fat_models.regions(image,**kwargs))
     known.extend(wad_resources.regions(image,**kwargs))
     known.extend(wad_models.regions(image,**kwargs))
@@ -339,6 +341,7 @@ def preview(data, asset, selection):
         eurocom,
         exs_images,
         exs_models,
+        f3dex_tiles,
         fat_models,
         fat_textures,
         ffs,
@@ -481,6 +484,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
+    if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
     if asset.get('layout')=='uso-ci8-bank':return uso_textures.preview(data,asset,selection)
     if asset.get('layout') in (diet_audio.BANK,diet_audio.SONG):return diet_audio.preview(data,asset,selection)
