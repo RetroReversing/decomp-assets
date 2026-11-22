@@ -209,7 +209,7 @@ def binary_effects(data, waves):
         return None
     count, second, third, reserved, drum, instruments = _HEADER.unpack_from(data)
     start = 24+count*8
-    if (not (1 <= second <= count <= 256 and 1 <= third <= 256) or reserved or drum
+    if (not (1 <= second <= count <= 2048 and 1 <= third <= 2048) or reserved or drum
             or not start < instruments < len(data) or len(data)-instruments != third*2):
         return None
     lookup = struct.unpack_from(f'>{third}H', data, instruments)
@@ -411,6 +411,33 @@ def _raw_control_sequence(image, bank):
                 preview_settings=dict(format='auto',source='rom',offset=start))
 
 
+def _versioned_effects(image, bank):
+    """Read an uncompressed effects directory after a versioned control graph."""
+    end = bank['offset']+bank['size']
+    if image[end:end+12] != bytes.fromhex('000000000000000200000004'):
+        return None
+    start = end+12
+    if start+_HEADER.size > len(image):
+        return None
+    _, _, instruments, _, _, lookup = _HEADER.unpack_from(image, start)
+    size = lookup+2*instruments
+    if not _HEADER.size <= size <= _MAX_BYTES or start+size > len(image):
+        return None
+    waves = {sample['instrument'] for sample in bank['samples']}
+    scores = binary_effects(image[start:start+size], waves)
+    if not scores:
+        return None
+    return dict(offset=start, size=size, kind='audio sequence', media='audio',
+                audio_kind='indexed sample directory', control=bank['offset'], table_offset=bank['table_offset'],
+                sequence_packed=False, layout='libmus-binary-effects', confidence='validated',
+                label='libmus sequenced effects',
+                samples=[dict(label=f'Effect {i}', codec='Nintendo libmus') for i in range(1,len(scores)+1)],
+                channels=1, notes=sum(len(score['notes']) for score in scores),
+                loops=sum(score['loops'] for score in scores),
+                reason='The versioned effects directory resolves every track to the unique inferred wave bank.',
+                preview_settings=dict(format='auto', source='rom', offset=start))
+
+
 def _split_raw_sequences(image, banks, check):
     """Read the split music/effects layout with 64-byte cartridge alignment."""
     if len(banks) != 2:
@@ -577,6 +604,8 @@ def regions(image, banks, *, check=lambda: None):
     raw = [bank for bank in resolved if not bank.get('compressed_control')]
     assets.extend(_split_raw_sequences(image, raw, check))
     assets.extend(sequence for bank in raw if (sequence := _raw_control_sequence(image,bank)) is not None)
+    if len(raw) == 1 and (effects := _versioned_effects(image, raw[0])):
+        assets.append(effects)
     existing = {asset['offset'] for asset in assets}
     assets.extend(asset for asset in _contiguous_raw_songs(image, raw, check) if asset['offset'] not in existing)
     if len(raw) != 1:
