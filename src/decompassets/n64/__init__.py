@@ -130,6 +130,7 @@ def regions(image, *, context=None, **kwargs):
         prefixed_texture_catalog,
         prefixed_texture_models,
         ptr_audio,
+        ptr_audio_v1,
         rare_assets,
         rare_audio,
         rare_models,
@@ -199,6 +200,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
     known.extend(lzo_models.regions(image, **kwargs))
     known.extend(fla2_models.regions(image, **kwargs))
+    known.extend(ptr_audio_v1.regions(image, **kwargs))
     known.extend(b1_speech.regions(image,**kwargs))
     known.extend(display_meshes)
     known.extend(bind.regions(image,**kwargs))
@@ -420,6 +422,7 @@ def preview(data, asset, selection):
         prefixed_texture_catalog,
         prefixed_texture_models,
         ptr_audio,
+        ptr_audio_v1,
         rare_assets,
         rare_models,
         raw_deflate_lists,
@@ -532,6 +535,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == sprite_constructor.LAYOUT:return sprite_constructor.preview(data,asset,selection)
     if asset.get('layout') == lzo_models.LAYOUT:return lzo_models.preview(data,asset,selection)
     if asset.get('layout') == fla2_models.LAYOUT:return fla2_models.preview(data,asset,selection)
+    if asset.get('layout') == ptr_audio_v1.LAYOUT:return ptr_audio_v1.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.LAYOUT:return rnc_reloc_display.preview(data,asset,selection)
     if asset.get('layout') == rnc_reloc_display.IMAGE:return rnc_reloc_display.image_preview(data,asset,selection)
     if asset.get('layout')=='iguana-indexed-bitmaps':return iguana_textures.preview(data,asset,selection)
