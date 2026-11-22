@@ -12,7 +12,7 @@ _NAME = re.compile(rb'[a-z0-9_]{8}')
 
 def members(image):
     """An ordered directory bounds adjacent raw DEFLATE members."""
-    for match in _NAME.finditer(image[:min(len(image), 0x200000)]):
+    for match in re.finditer(rb'(?=[a-z0-9_]{8})', image[:min(len(image), 0x200000)]):
         at = match.start()
         if at % 4:
             continue
@@ -23,11 +23,13 @@ def members(image):
                 break
             lo, hi = struct.unpack_from('>II', image, pos+8)
             if (not 0x1000 <= lo < hi <= len(image) or (lo | hi) % 16
-                    or rows and rows[-1]['end'] != lo or any(item['name'] == name for item in rows)):
+                    or any(item['name'] == name for item in rows)):
                 break
             rows.append(dict(name=name, start=lo, end=hi))
         if len(rows) >= 16:
-            return rows
+            ranges = sorted((row['start'],row['end']) for row in rows)
+            if all(a[1] <= b[0] for a,b in zip(ranges,ranges[1:])):
+                return rows
     return []
 
 
