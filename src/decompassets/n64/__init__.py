@@ -171,6 +171,7 @@ def regions(image, *, context=None, **kwargs):
         sdf2_audio,
         sdf2_music,
         segmented_model_resources,
+        segmented_node_models,
         shpn_images,
         siff_models,
         sized_lz_catalog,
@@ -221,6 +222,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_world.regions(image, **kwargs))
     known.extend(level_world_models.regions(image, **kwargs))
     known.extend(indexed_archive_models.regions(image, **kwargs))
+    known.extend(segmented_node_models.regions(image, **kwargs))
     known.extend(deflated_texture_table.regions(image, **kwargs))
     known.extend(vol_textures.regions(image, **kwargs))
     known.extend(reloc_level_objects.regions(image, **kwargs))
@@ -489,6 +491,7 @@ def preview(data, asset, selection):
         sdf2_audio,
         sdf2_music,
         segmented_model_resources,
+        segmented_node_models,
         shpn_images,
         siff_models,
         sized_lz_catalog,
@@ -581,6 +584,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == level_world_models.LAYOUT:return level_world_models.preview(data,asset,selection)
     if asset.get('layout') == vol_textures.LAYOUT:return vol_textures.preview(data,asset,selection)
     if asset.get('layout') == deflated_texture_table.LAYOUT:return deflated_texture_table.preview(data,asset,selection)
+    if asset.get('layout') == segmented_node_models.LAYOUT:return segmented_node_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_archive_models.LAYOUT:return indexed_archive_models.preview(data,asset,selection)
     if asset.get('layout') in (reloc_level_objects.LAYOUT, reloc_level_objects.IMAGE):return reloc_level_objects.preview(data,asset,selection)
     if asset.get('layout') in (romdisk_art.IMAGE, romdisk_art.MODEL):return romdisk_art.preview(data,asset,selection)
