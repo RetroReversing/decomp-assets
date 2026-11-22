@@ -115,6 +115,7 @@ def regions(image, *, context=None, **kwargs):
         relative_materials,
         relative_meshes,
         relative_models,
+        relative_objects,
         relative_textures,
         reloc_files,
         resources,
@@ -164,6 +165,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(relative_textures.regions(image,**kwargs))
     known.extend(relative_models.regions(image,**kwargs))
+    known.extend(relative_objects.regions(image,**kwargs))
     known.extend(relative_audio.regions(image,**kwargs))
     known.extend(deflate_catalog.regions(image,**kwargs))
     known.extend(deflate_catalog_models.regions(image,**kwargs))
@@ -319,6 +321,7 @@ def preview(data, asset, selection):
         raw_deflate_lists,
         relative_audio,
         relative_models,
+        relative_objects,
         relative_textures,
         reloc_files,
         resources,
@@ -405,6 +408,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == relative_textures.LAYOUT:return relative_textures.preview(data,asset,selection)
     if asset.get('layout') == relative_models.LAYOUT:return relative_models.preview(data,asset,selection)
+    if asset.get('layout') == relative_objects.LAYOUT:return relative_objects.preview(data,asset,selection)
     if asset.get('layout') in (relative_audio.BANK, relative_audio.SONG):return relative_audio.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog.TEXTURE:return deflate_catalog.preview(data,asset,selection)
     if asset.get('layout') == deflate_catalog_models.MODEL:return deflate_catalog_models.preview(data,asset,selection)
