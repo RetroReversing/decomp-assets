@@ -128,6 +128,7 @@ def regions(image, *, context=None, **kwargs):
         rare_audio,
         rare_models,
         raw_deflate_lists,
+        refpack_triangles,
         relative_audio,
         relative_materials,
         relative_meshes,
@@ -207,6 +208,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(shpn_images.regions(image,**kwargs))
+    known.extend(refpack_triangles.regions(image,**kwargs))
     known.extend(ead_direct_audio.regions(image,**kwargs))
     known.extend(bnkb_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
@@ -386,6 +388,7 @@ def preview(data, asset, selection):
         rare_assets,
         rare_models,
         raw_deflate_lists,
+        refpack_triangles,
         relative_audio,
         relative_models,
         relative_objects,
@@ -483,6 +486,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == shpn_images.LAYOUT:return shpn_images.preview(data,asset,selection)
+    if asset.get('layout') == refpack_triangles.LAYOUT:return refpack_triangles.preview(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
     if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
