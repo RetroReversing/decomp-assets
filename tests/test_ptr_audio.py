@@ -309,3 +309,23 @@ def test_sixteen_byte_aligned_binary_song_run():
     rows = libmus_song._contiguous_raw_songs(image, banks, lambda: None)
     assert [row['offset'] for row in rows] == offsets
     assert any(wav(libmus_song.preview(image, rows[0], {'sample': 0}))[2])
+
+
+def test_versioned_raw_effects_allow_large_valid_directories():
+    from decompassets.n64 import libmus_song
+
+    count = 300
+    track = bytes.fromhex('81 00 30 20 80')
+    start = 24+count*8
+    lookup = start+len(track)*count
+    header = struct.pack('>6I', count, count, 1, 0, 0, lookup)
+    table = b''.join(struct.pack('>2I', start+len(track)*i, 100) for i in range(count))
+    raw = header+table+track*count+struct.pack('>H', 4)
+    bank = dict(offset=0, size=16, table_offset=0, samples=[{'instrument': 4}])
+    prefix = bytes.fromhex('000000000000000200000004')
+    image = bytes(16)+prefix+raw
+    asset = libmus_song._versioned_effects(image, bank)
+    assert len(asset['samples']) == count
+    assert asset['size'] == len(raw)
+    assert libmus_song._versioned_effects(bytes(28)+raw, bank) is None
+    assert libmus_song._versioned_effects(image[:-1], bank) is None
