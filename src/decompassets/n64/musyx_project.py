@@ -89,7 +89,7 @@ def _objects(image, start, end, tag):
             return None
         objects[identifier] = (start+_OBJECT.size, start+size)
         start += size
-    return objects if start == end and objects else None
+    return objects if start == end else None
 
 
 def find_pool(image, start, limit, required):
@@ -100,14 +100,14 @@ def find_pool(image, start, limit, required):
         macros, tables, keymaps, layers = _POOL.unpack_from(image, base)
         if not macros == _POOL.size < tables < keymaps < layers < limit-base:
             continue
-        for tail in (limit, limit-4):
+        for tail in range(limit, max(base + layers, limit - 64) - 1, -4):
             ends = (base+tables, base+keymaps, base+layers, tail)
             starts = (base+macros, *ends[:-1])
             if not ends[-2] < tail or any(image[end-4:end] != _END for end in ends):
                 continue
             sections = [_objects(image, lo, hi-4, tag)
                         for lo, hi, tag in zip(starts, ends, (0, 3, 1, 2))]
-            if all(sections) and required <= set().union(*sections):
+            if all(section is not None for section in sections) and required <= set().union(*sections):
                 return dict(offset=base, end=tail, objects=dict(zip(
                     ('macro', 'table', 'keymap', 'layer'), sections)))
     return None

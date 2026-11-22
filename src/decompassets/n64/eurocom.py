@@ -326,6 +326,64 @@ def _standalone_samples(image, check):
     return assets
 
 
+def _standalone_music(image, bank, check):
+    """Find song indexes whose IDs resolve to this sample bank's project and pool."""
+    record = struct.Struct('>IIHHI')
+    candidate = re.compile(rb'(?=(?:[\x00-\x03]...[\x00-\x03]...\x00[\x01-\xff]\x00.....){3})', re.S)
+    for hit in candidate.finditer(image, 0, bank['offset']):
+        start = hit.start()
+        if start % 4:
+            continue
+        lo, hi, group, song, _ = record.unpack_from(image, start)
+        if not bank['bank_end'] <= lo < hi <= len(image) or hi - lo > musyx_song.MAX_SONG_BYTES:
+            continue
+        check()
+        rows = []
+        for pos in range(start, min(bank['offset'] - record.size + 1, start + 512 * record.size), record.size):
+            lo, hi, group, song, _ = record.unpack_from(image, pos)
+            if not (bank['bank_end'] <= lo < hi <= len(image) and hi - lo <= musyx_song.MAX_SONG_BYTES
+                    and 0 < group < 256 and song < 256):
+                break
+            score = musyx_song.arrangement(image[lo:hi])
+            if not score:
+                break
+            streams = [musyx_song.events(image[lo:hi], a, b) for a, b in score['streams']]
+            if any(stream is None for stream in streams):
+                break
+            rows.append((lo, hi, group, song))
+        songs = list(dict.fromkeys(rows))
+        if len(songs) < 8 or len({(g, s) for _, _, g, s in songs}) != len(songs):
+            continue
+        ordered = sorted({(lo, hi) for lo, hi, _, _ in songs})
+        if any(a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
+            continue
+        project = musyx_project.locate(image, bank['offset'], songs, check)
+        if not project:
+            continue
+        required = musyx_project.used_programs(image, songs, project['groups'])
+        pool = musyx_project.find_pool(image, project['end'], bank['offset'], required) if required else None
+        if not pool:
+            continue
+        asset = _asset(start, len(rows) * record.size, 'MusyX song index', 'eurocom-songs',
+                       kind='music sequence', songs=songs, project_offset=project['offset'],
+                       project_groups=len(project['groups']), pool_offset=pool['offset'],
+                       pool_objects=sum(len(section) for section in pool['objects'].values()),
+                       used_program_objects=len(required), sample_index=bank['offset'])
+        asset.update(media='audio', audio_kind='indexed sample directory',
+                     samples=[dict(offset=lo, size=hi-lo, codec='MusyX sequence', label=str(song),
+                                   preview_available=True) for lo, hi, _, song in songs])
+        return asset
+    return None
+
+
+def _standalone_audio(image, check):
+    result = _standalone_samples(image, check)
+    for bank in list(result):
+        if music := _standalone_music(image, bank, check):
+            result.append(music)
+    return result
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     blocks = {}
     for match in islice(EDL_TAG.finditer(image), 20000):
@@ -334,7 +392,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         if offset % 4 == 0 and (info := edl.header(image, offset)):
             blocks[offset] = info[:3]
     if not blocks:
-        return _standalone_samples(image, check)
+        return _standalone_audio(image, check)
     found = _find_archive(image, blocks, check)
     if found is None:
         result = []
@@ -352,7 +410,7 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                                  kind='compressed', expanded_size=decoded))
         return (result + edl_textures.regions(image, blocks, check) + edl_models.regions(image, blocks, check)
                 + edl_indexed_textures.regions(image, blocks, check) + edl_mesh_vertices.regions(image, blocks, check)
-                + _standalone_samples(image, check))
+                + _standalone_audio(image, check))
     index, base, entries = found
     archive_end = entries[-1][0] + ENTRY.size
     counts = Counter(m for offset,(m,_,_) in blocks.items() if base <= offset < archive_end)
@@ -436,10 +494,10 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                 assets.append(dict(offset=samples['data_base'], size=samples['bank_end']-samples['data_base'],
                                    kind='audio', label='MusyX sample payload', confidence='validated',
                                    reason='The ordered sample directory resolves to stored data offsets.'))
-    known = {asset['offset'] for asset in assets if asset.get('layout') == 'eurocom-samples'}
+    known = {asset['offset'] for asset in assets if asset.get('layout') in ('eurocom-samples', 'eurocom-songs')}
     return (assets + edl_indexed_textures.regions(image, blocks, check)
             + edl_mesh_vertices.regions(image, blocks, check)
-            + [asset for asset in _standalone_samples(image, check) if asset['offset'] not in known])
+            + [asset for asset in _standalone_audio(image, check) if asset['offset'] not in known])
 
 
 def _texture_preview(image, asset, selection):
