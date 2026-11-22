@@ -4,11 +4,12 @@ import re
 import struct
 
 from .. import formats
-from . import display_meshes
+from . import display_meshes, packed_anim
 
 LAYOUT = 'segmented-model-resource'
 _MARKER = re.compile(b'\0\0\x08\x0b\x09\x04\x0a\0')
 _LIMIT = 4 * 1024 * 1024
+_DIRECTORY = re.compile(rb'\0\0\0\x02....\0\0\0\x03....(?:\xff{4}){5}', re.S)
 
 
 def _model(image, offset):
@@ -32,6 +33,83 @@ def _model(image, offset):
     return parsed[1], parsed[2], end + tail - offset
 
 
+def _prefix(source):
+    """Read only the file header before deciding whether to expand a member."""
+    ring = bytearray(b' ' * 0xfee + bytes(18))
+    written = bytearray(b'\1' * 0xfee + bytes(18))
+    destination, cursor, output = 0xfee, 0, bytearray()
+    try:
+        while len(output) < 24:
+            flags = source[cursor]
+            cursor += 1
+            for bit in range(8):
+                if flags & (1 << bit):
+                    values = [source[cursor]]
+                    cursor += 1
+                    for value in values:
+                        output.append(value)
+                        ring[destination] = value
+                        written[destination] = 1
+                        destination = (destination + 1) & 4095
+                else:
+                    low, high = source[cursor:cursor + 2]
+                    cursor += 2
+                    first = low | ((high & 0xf0) << 4)
+                    for i in range((high & 15) + 3):
+                        pointer = (first + i) & 4095
+                        if not written[pointer]:
+                            return None
+                        value = ring[pointer]
+                        output.append(value)
+                        ring[destination] = value
+                        written[destination] = 1
+                        destination = (destination + 1) & 4095
+                if len(output) >= 24:
+                    return output[:24]
+    except (IndexError, ValueError):
+        return None
+    return None
+
+
+def _compressed(image, check):
+    for hit in _DIRECTORY.finditer(image):
+        base = hit.start()
+        count, length = struct.unpack_from('>I4xI', image, base + 4)
+        if not 8 <= count <= 8192 or base + length > len(image) or 36 + 16 * count > length:
+            continue
+        rows = list(struct.iter_unpack('>4I', image[base + 36:base + 36 + 16 * count]))
+        if any((flag not in (0, 1, 17) or flag == 0 and (offset or size or expanded)
+                or flag and (not size or not expanded or offset < 36 + 16 * count
+                             or offset + size > length or expanded > _LIMIT))
+               for flag,offset,size,expanded in rows):
+            continue
+        for flag,offset,size,expanded in rows:
+            if flag != 17:
+                continue
+            check()
+            source = image[base + offset:base + offset + size]
+            head = _prefix(source)
+            if not head or head[16:24] != _MARKER.pattern:
+                continue
+            decoded = packed_anim._unpack(source, expanded, check)
+            if decoded is None:
+                continue
+            data = bytes(4) + decoded
+            found = _model(data, 4)
+            if found:
+                yield base + offset, size, expanded, found
+
+
+def _asset(offset, size, found, **extra):
+    vertices, faces, _ = found
+    mesh = dict(name='Mesh 1', vertices=len(vertices), triangles=len(faces))
+    return dict(offset=offset, size=size, kind='3d model', media='model', layout=LAYOUT,
+                label='Segmented display-list model', confidence='validated',
+                reason='Section lengths, vertex records and display-list indices agree.',
+                nodes=0, meshes=[mesh], vertices=len(vertices), triangles=len(faces),
+                preview_settings=dict(source='rom', format='auto', offset=offset), **extra)
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     result = []
     for hit in _MARKER.finditer(image):
@@ -40,19 +118,20 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         found = _model(image, offset)
         if not found:
             continue
-        vertices, faces, size = found
-        mesh = dict(name='Mesh 1', vertices=len(vertices), triangles=len(faces))
-        result.append(dict(offset=offset, size=size, kind='3d model', media='model', layout=LAYOUT,
-                           label='Segmented display-list model', confidence='validated',
-                           reason='Section lengths, vertex records and display-list indices agree.',
-                           nodes=0, meshes=[mesh], vertices=len(vertices), triangles=len(faces),
-                           preview_settings=dict(source='rom', format='auto', offset=offset)))
+        result.append(_asset(offset, found[2], found))
+    for offset,size,expanded,found in _compressed(image, check):
+        result.append(_asset(offset, size, found, expanded_size=expanded))
     return result
 
 
 def preview(image, asset, selection):
     formats.integer(selection.get('mesh', 0), 'Mesh', 0, 0)
-    found = _model(image, asset['offset'])
+    if 'expanded_size' in asset:
+        source = image[asset['offset']:asset['offset'] + asset['size']]
+        decoded = packed_anim._unpack(source, asset['expanded_size'], lambda: None)
+        found = _model(bytes(4) + decoded, 4) if decoded is not None else None
+    else:
+        found = _model(image, asset['offset'])
     if not found:
         raise formats.AssetError('The model data changed. Rescan ROM Explorer.')
     vertices, faces, _ = found
