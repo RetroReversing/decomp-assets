@@ -81,3 +81,19 @@ def test_texture_region_and_preview_from_relative_tables():
     result = preview(image, asset, {})
     assert result['media'] == 'image'
     assert result['details']['width'] == 32
+
+
+def test_indexed_texture_requires_the_following_palette_load():
+    from decompassets.n64.relative_textures import indexed_references
+
+    commands = struct.pack('>12I', 0xfd000000, 2, 0xf5400000, 0,
+                           0xf2000000, (31 * 4 << 12) | 15 * 4,
+                           0xfd000000, 3, 0xf0000000, 15 << 14, 0xdf000000, 0)
+    assert indexed_references(commands, 4) == {2: {((2, 0), 32, 16, 3)}}
+    assert not indexed_references(commands, 3)
+    bad = bytearray(commands)
+    struct.pack_into('>I', bad, 36, 14 << 14)
+    assert not indexed_references(bad, 4)
+    bad = bytearray(commands)
+    struct.pack_into('>I', bad, 16, 0xdf000000)
+    assert not indexed_references(bad, 4)
