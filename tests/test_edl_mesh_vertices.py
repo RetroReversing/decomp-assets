@@ -47,3 +47,13 @@ def test_compact_commands_decode_triangles_and_reject_bad_indices():
     assert 'Untextured' in result['note']
     data[-3] = 0xe0
     assert edl_mesh_vertices.meshes(data)[0]['triangles'] == 0
+
+
+def test_triangle_header_can_exceed_terminated_stream():
+    data = _pack()
+    struct.pack_into('>H', data, 0x3c, 2)
+    data[0xa8:] = bytes((0, 0x1f, 0, 0, 0, 0, 0, 3, 0,
+                         0, 0, 0, 1, 0, 0, 2, 0, 0, 0x0e, 0x20, 0x08, 6))
+    assert edl_mesh_vertices.meshes(data)[0]['triangles'] == 1
+    struct.pack_into('>H', data, 0x3c, 0)
+    assert edl_mesh_vertices.meshes(data)[0]['triangles'] == 0
