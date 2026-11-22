@@ -62,6 +62,7 @@ def regions(image, *, context=None, **kwargs):
         borg_audio,
         borg_dcm,
         borg_models,
+        bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
         dean_audio,
@@ -205,6 +206,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(prefixed_texture_models.regions(image,**kwargs))
     known.extend(rle_font_atlas.regions(image,**kwargs))
     known.extend(fat_textures.regions(image,**kwargs))
+    known.extend(bounded_lz_models.regions(image,**kwargs))
     known.extend(terminated_rgba_tiles.regions(image,**kwargs))
     known.extend(rnc_indexed_sprites.regions(image,**kwargs))
     known.extend(named_adpcm.regions(image,**kwargs))
@@ -335,6 +337,7 @@ def preview(data, asset, selection):
         borg_audio,
         borg_dcm,
         borg_models,
+        bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
         dean_audio,
@@ -497,6 +500,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
+    if asset.get('layout') == bounded_lz_models.LAYOUT:return bounded_lz_models.preview(data,asset,selection)
     if asset.get('layout') == terminated_rgba_tiles.LAYOUT:return terminated_rgba_tiles.preview(data,asset,selection)
     if asset.get('layout') == rnc_indexed_sprites.LAYOUT:return rnc_indexed_sprites.preview(data,asset,selection)
     if asset.get('layout') == named_adpcm.LAYOUT:return named_adpcm.preview(data,asset,selection)
