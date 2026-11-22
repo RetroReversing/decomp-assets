@@ -137,6 +137,7 @@ def regions(image, *, context=None, **kwargs):
         wad_resources,
         yay0_atlases,
         yay0_scenes,
+        zip_object_models,
         zlib_meshes,
         zlib_textures,
     )
@@ -164,6 +165,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(wad_resources.regions(image,**kwargs))
     known.extend(wad_models.regions(image,**kwargs))
     known.extend(wad_audio.regions(image,**kwargs))
+    known.extend(zip_object_models.regions(image,**kwargs))
     known.extend(ia_font_textures.regions(image,**kwargs))
     known.extend(indexed_resource_models.regions(image,**kwargs))
     known.extend(indexed_resource_textures.regions(image,**kwargs))
@@ -329,6 +331,7 @@ def preview(data, asset, selection):
         wad_resources,
         yay0_atlases,
         yay0_scenes,
+        zip_object_models,
         zlib_meshes,
         zlib_textures,
     )
@@ -381,6 +384,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_catalog.LAYOUT:return prefixed_texture_catalog.preview(data,asset,selection)
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == ia_font_textures.LAYOUT:return ia_font_textures.preview(data,asset,selection)
+    if asset.get('layout') == zip_object_models.LAYOUT:return zip_object_models.preview(data,asset,selection)
     if asset.get('layout') == wad_audio.LAYOUT:return wad_audio.preview(data,asset,selection)
     if asset.get('layout') == wad_models.LAYOUT:return wad_models.preview(data,asset,selection)
     if asset.get('layout') == wad_resources.TEXTURE:return wad_resources.preview(data,asset,selection)
