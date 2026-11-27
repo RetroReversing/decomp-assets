@@ -3,7 +3,7 @@ import struct
 from itertools import pairwise
 
 from .. import formats
-from . import display_lists, display_meshes, mwo_graphics, table_lz_graphics
+from . import display_lists, display_meshes, mwo_graphics, ring12_graphics, table_lz_graphics
 from .paired_resource_textures import _COMMAND, _LOAD
 
 MODEL = "runtime-packed-model"
@@ -31,6 +31,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     snapshots = list(snapshots)
     candidates = [(start,end,'mwo') for start,end in descriptors(image, check)]
     candidates += [(start,end,'table-lz') for start,end in table_lz_graphics.descriptors(image, check)]
+    candidates += [(start,end,'ring12') for start,end in ring12_graphics.descriptors(image, check)]
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -52,7 +53,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
         if number % 16 == 0:
             check(); progress(dict(phase='Checking runtime packed textures', done=number, total=len(candidates)))
         parsed = (mwo_graphics.inflate(image[start:end]) if codec == 'mwo'
-                  else table_lz_graphics.inflate(memoryview(image)[start:end], check))
+                  else table_lz_graphics.inflate(memoryview(image)[start:end], check) if codec == 'table-lz'
+                  else ring12_graphics.inflate(memoryview(image)[start:end], check))
         if not parsed:
             continue
         data, used = parsed
@@ -60,40 +62,46 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
         if expanded > _MAX_EXPANDED:
             break
         if (len(data) < 64 or codec == 'mwo' and any(image[start+used:end])
-                or codec == 'table-lz' and end-start-used > 15):
+                or codec in ('table-lz', 'ring12') and end-start-used > 15):
             continue
         items = {}
         bases = {}
         for ram, command_start, command_end, pointer, shift, prefix in observations:
-            # A later resource can have replaced the block header. A unique
-            # observed texel prefix identifies its original address instead.
-            offset = data.find(prefix)
-            if offset < 0 or data.find(prefix, offset+1) >= 0:
+            # Sparse/repeated graphics can share a prefix. Try only a small
+            # bounded set; the complete texels and palette must still match.
+            offsets = []
+            at = data.find(prefix)
+            while at >= 0 and len(offsets) < 5:
+                offsets.append(at)
+                at = data.find(prefix, at+1)
+            if not offsets or len(offsets) > 4 or codec != 'ring12' and len(offsets) != 1:
                 continue
-            base = pointer+shift-offset
-            if base < 0 or base+len(data) > len(ram):
-                continue
-            bases[(id(ram), base)] = ram
-            group = dict(start=max(0, command_start-64) & ~7,
-                         end=min(len(ram)-8, command_end+128) & ~7)
-            for item in mwo_graphics.texture_items(ram, group, data, base):
-                options = item['preview_settings']
-                pixel = options['offset']
-                count = item['texel_bytes']
-                if ram[base+pixel:base+pixel+count] != data[pixel:pixel+count]:
+            for offset in offsets:
+                base = pointer+shift-offset
+                if base < 0 or base+len(data) > len(ram):
                     continue
-                if item['palettes']:
-                    palette = options['palette_offset']
-                    size = 2*item['palette_entries'][0]
-                    if ram[base+palette:base+palette+size] != data[palette:palette+size]:
+                bases[(id(ram), base)] = ram
+                group = dict(start=max(0, command_start-64) & ~7,
+                             end=min(len(ram)-8, command_end+128) & ~7)
+                for item in mwo_graphics.texture_items(ram, group, data, base):
+                    options = item['preview_settings']
+                    pixel = options['offset']
+                    count = item['texel_bytes']
+                    if ram[base+pixel:base+pixel+count] != data[pixel:pixel+count]:
                         continue
-                key = tuple(options.values())
-                items.setdefault(key, item)
+                    if item['palettes']:
+                        palette = options['palette_offset']
+                        size = 2*item['palette_entries'][0]
+                        if ram[base+palette:base+palette+size] != data[palette:palette+size]:
+                            continue
+                    key = tuple(options.values())
+                    items.setdefault(key, item)
         if items:
             textures = list(items.values())
             first = textures[0]
             found.append(dict(offset=start, size=used, expanded_size=len(data), kind='image',
-                              layout=mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES,
+                              layout=(mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES
+                                      if codec == 'table-lz' else ring12_graphics.TEXTURES), codec=codec,
                               label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
                               levels=first['levels'], preview_settings=dict(first['preview_settings'] | {
@@ -145,7 +153,9 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
 
 def preview_model(image, asset, selection):
     start = asset['offset']
-    packed = (table_lz_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'table-lz'
+    codec = asset.get('codec')
+    packed = (table_lz_graphics.inflate(image[start:start+asset['size']]) if codec == 'table-lz'
+              else ring12_graphics.inflate(image[start:start+asset['size']]) if codec == 'ring12'
               else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
     item = asset['meshes'][index]
