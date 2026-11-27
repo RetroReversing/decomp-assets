@@ -8,7 +8,10 @@ _ROOT = 626
 _LIMIT = 4 * 1024 * 1024
 
 
-def unpack(source, size, check=lambda: None, *, prefix=None, fill=32):
+def unpack(source, size, check=lambda: None, *, prefix=None, fill=32, lsb_variant=False):
+    # Some N64 streams use 128-byte lookahead and transmit bits least-first.
+    # Based on the GPL-3.0 decoder in Erick194/HexenN64Tool, HexenLZHuff.cpp.
+    _NCHAR, _T, _ROOT = (382, 763, 762) if lsb_variant else (314, 627, 626)
     if not 0 < size <= _LIMIT:
         raise AssetError('The Huffman output size is invalid.')
     freq = [0] * (_T + 1)
@@ -79,13 +82,14 @@ def unpack(source, size, check=lambda: None, *, prefix=None, fill=32):
         if position + n > len(source) * 8:
             raise AssetError('The Huffman stream is truncated.')
         value = 0
-        for _ in range(n):
-            value = (value << 1) | ((source[position // 8] >> (7 - position % 8)) & 1)
+        for i in range(n):
+            bit = (source[position // 8] >> (position % 8 if lsb_variant else 7 - position % 8)) & 1
+            value = value | (bit << i) if lsb_variant else (value << 1) | bit
             position += 1
         return value
 
-    window = bytearray(bytes([fill]) * 4036 + bytes(60))
-    cursor = 4036
+    cursor = 3968 if lsb_variant else 4036
+    window = bytearray(bytes([fill]) * cursor + bytes(4096 - cursor))
     output = bytearray()
     target = min(size, prefix) if prefix is not None else size
     while len(output) < target:

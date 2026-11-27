@@ -54,6 +54,7 @@ def regions(image, *, context=None, **kwargs):
         arithmetic_descriptors,
         audio,
         b1_speech,
+        be_iwad_images,
         big_models,
         bind,
         blast_textures,
@@ -278,6 +279,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(mio0_graphics.regions(image,images=mio0_images,**kwargs))
     known.extend(mio0_images)
     known.extend(ia_font_textures.regions(image,**kwargs))
+    known.extend(be_iwad_images.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
     known.extend(iwad_maps.regions(image,**kwargs))
     known.extend(indexed_resource_models.regions(image,**kwargs))
@@ -372,6 +374,7 @@ def preview(data, asset, selection):
         arithmetic_descriptors,
         audio,
         b1_speech,
+        be_iwad_images,
         big_audio,
         big_models,
         big_sam_audio,
@@ -642,6 +645,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_catalog.LAYOUT:return prefixed_texture_catalog.preview(data,asset,selection)
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == ia_font_textures.LAYOUT:return ia_font_textures.preview(data,asset,selection)
+    if asset.get('layout') == be_iwad_images.LAYOUT:return be_iwad_images.preview(data,asset,selection)
     if asset.get('layout') in (iwad_sprites.LAYOUT, iwad_sprites.TEXTURE):return iwad_sprites.preview(data,asset,selection)
     if asset.get('layout') == iwad_maps.LAYOUT:return iwad_maps.preview(data,asset,selection)
     if asset.get('layout') == zip_object_textures.LAYOUT:return zip_object_textures.preview(data,asset,selection)
