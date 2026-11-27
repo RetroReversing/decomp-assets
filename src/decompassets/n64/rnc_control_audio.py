@@ -22,7 +22,7 @@ def _control(image, offset, check):
 
 def _wave_table(image, end, info, check):
     extents = info['extents']
-    if len(extents) < 64 or extents[0][0] != 0 or any(start % 8 for start, _ in extents):return None
+    if len(extents) < 32 or extents[0][0] != 0 or any(start % 8 for start, _ in extents):return None
     gaps = []
     for (at, size), (nxt, _) in zip(extents, extents[1:]):
         gap = nxt-at-size
@@ -30,16 +30,22 @@ def _wave_table(image, end, info, check):
         if gap:gaps.append((at+size, gap))
     span = max(at+size for at, size in extents)
     probes = [at for at, size in gaps if size == 6]
-    if len(probes) < 12 or span > len(image):return None
-    probes = [probes[i*len(probes)//12] for i in range(12)]
+    if len(probes) < 8 or span > len(image):return None
+    count = min(12, len(probes))
+    probes = [probes[i*len(probes)//count] for i in range(count)]
     matches = []
     for base in range((end+7)&~7, len(image)-span+1, 8):
         if not base & 0xffff:check()
         if not all(image[base+p:base+p+6] == _ZERO for p in probes):continue
         if any(any(image[base+p:base+p+size]) for p,size in gaps):continue
-        candidate = dict(offset=0, size=0, samples=info['samples'])
-        if audio._fits(image, candidate, base, [audio.MAX_HEADER_CHECKS], check):
-            matches.append(base)
+        # Some sound records use another frame encoding despite a familiar book.
+        # Keep only individually checked frames; the padding independently fixes
+        # the table, and many complete samples must corroborate it.
+        budget = [audio.MAX_HEADER_CHECKS]
+        valid = [sample for sample in info['samples']
+                 if audio._fits(image, dict(offset=0, size=0, samples=[sample]), base, budget, check)]
+        if len(valid) >= 32 and len(valid)*2 >= len(info['samples']):
+            matches.append((base, valid))
             if len(matches)>1:return None
     return matches[0] if matches else None
 
@@ -52,9 +58,10 @@ def regions(image, *, check=lambda: None, **kwargs):
         control = _control(image, at, check)
         if control is None:continue
         _, packed, info = control
-        wave = _wave_table(image, at+packed, info, check)
-        if wave is None:continue
-        samples = [dict(sample, offset=wave+sample['relative_offset']) for sample in info['samples']]
+        table = _wave_table(image, at+packed, info, check)
+        if table is None:continue
+        wave, valid = table
+        samples = [dict(sample, offset=wave+sample['relative_offset']) for sample in valid]
         supported = {(sample['relative_offset'], sample['size']) for sample in samples}
         reason = ('A checksum-verified compressed control bank and unique zero-padded wave table agree on every '
                   'supported ADPCM frame. Other samples need further validation.')

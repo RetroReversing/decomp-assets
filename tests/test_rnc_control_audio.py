@@ -10,8 +10,7 @@ from decompassets.n64 import audio, rnc_control_audio
 from .test_rnc import literal_block
 
 
-def cartridge():
-    count = 64
+def cartridge(count=64):
     sounds = 336
     envelope = sounds+16*count
     keymap = envelope+16
@@ -69,3 +68,18 @@ def test_partial_banks_cannot_be_used_as_programs():
         assert 'only as samples' in str(error)
     else:
         raise AssertionError('Partial sample banks must not expose incomplete programs')
+
+
+def test_invalid_sample_frames_are_excluded_from_an_otherwise_verified_bank():
+    image, base = cartridge()
+    broken = bytearray(image)
+    broken[base] = 1  # Predictor 1 is outside this sample's one-entry book.
+    asset, = rnc_control_audio.regions(broken)
+    assert len(asset['samples']) == 62 and asset['unsupported_samples'] == 2
+    assert all(sample['offset'] != base for sample in asset['samples'])
+
+
+def test_smaller_bank_needs_at_least_32_verified_samples():
+    image, _ = cartridge(count=33)
+    asset, = rnc_control_audio.regions(image)
+    assert len(asset['samples']) == 32 and asset['unsupported_samples'] == 1
