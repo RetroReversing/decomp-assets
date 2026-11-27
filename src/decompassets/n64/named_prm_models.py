@@ -32,7 +32,7 @@ def mesh(data):
         if at+4 > len(data):
             return None
         kind, flags = struct.unpack_from('>HH', data, at)
-        size, indices = {5:(24,3), 7:(28,4)}.get(kind, (0,0))
+        size, indices = {1:(16,3), 2:(28,3), 4:(32,4), 5:(24,3), 7:(28,4)}.get(kind, (0,0))
         if not size or flags != 1 or at+size > len(data):
             return None
         ids = struct.unpack_from('>'+'H'*indices, data, at+4)

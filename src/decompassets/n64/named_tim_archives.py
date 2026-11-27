@@ -11,7 +11,7 @@ _NAME = re.compile(rb'[A-Za-z0-9_-]{1,12}\.(?:tim|cmp|prm)\0', re.I)
 _SAFE = re.compile(rb'[A-Za-z0-9_-]{1,12}\.[A-Za-z0-9]{1,3}\Z')
 
 
-def members(image, start):
+def directory(image, start):
     if not 0 <= start <= len(image)-2:
         return []
     count = int.from_bytes(image[start:start+2], 'little')
@@ -20,7 +20,6 @@ def members(image, start):
     if not 2 <= count <= 128 or end > len(image):
         return []
     cursor = end
-    images = []
     records = []
     names = set()
     for i in range(count):
@@ -36,10 +35,14 @@ def members(image, start):
             tim = bind_textures._tim(image[cursor:cursor+stored])
             if not tim:
                 return []
-            images.append((name.decode('ascii'), cursor, stored, tim[1], tim[2]))
         records.append((name.decode('ascii'), cursor, stored))
         cursor += stored
-    return records if len(images) >= 2 else []
+    return records
+
+
+def members(image, start):
+    records = directory(image, start)
+    return records if sum(name.lower().endswith('.tim') for name, _, _ in records) >= 2 else []
 
 
 def archive(image, start):
@@ -51,7 +54,7 @@ def archive(image, start):
     return images
 
 
-def archives(image, check):
+def candidates(image, check):
     seen = set()
     for match in _NAME.finditer(image):
         start = match.start()-2
@@ -59,8 +62,14 @@ def archives(image, check):
             continue
         seen.add(start)
         check()
-        rows = members(image, start)
+        rows = directory(image, start)
         if rows:
+            yield start, rows
+
+
+def archives(image, check):
+    for start, rows in candidates(image, check):
+        if sum(name.lower().endswith('.tim') for name, _, _ in rows) >= 2:
             yield start, rows
 
 

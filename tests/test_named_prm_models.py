@@ -44,3 +44,15 @@ def test_unknown_primitive_bad_index_and_changed_model_are_rejected():
     asset, = named_prm_models.regions(image)
     with pytest.raises(formats.AssetError):
         named_prm_models.preview(image[:-1],asset,{})
+
+
+@pytest.mark.parametrize('kind,size,indices', [(1,16,3), (2,28,3), (4,32,4), (5,24,3), (7,28,4)])
+def test_supported_primitive_kinds_require_bounded_vertex_indices(kind, size, indices):
+    data = bytearray(model()[:0x90+4*8])
+    struct.pack_into('>H',data,32,1)
+    record = struct.pack('>HH',kind,1)+struct.pack('>'+'H'*indices,*range(indices))
+    data.extend(record+bytes(size-len(record)))
+    result = named_prm_models.mesh(data)
+    assert result and len(result[1]) == (2 if indices == 4 else 1)
+    struct.pack_into('>H',data,0x90+4*8+4,4)
+    assert not named_prm_models.mesh(data)
