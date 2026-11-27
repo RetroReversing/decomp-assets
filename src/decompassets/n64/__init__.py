@@ -125,6 +125,7 @@ def regions(image, *, context=None, **kwargs):
         models,
         mwo_graphics,
         named_adpcm,
+        named_file_models,
         named_file_textures,
         named_resource_images,
         named_resource_models,
@@ -286,6 +287,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(be_iwad_images.regions(image,**kwargs))
     known.extend(be_iwad_maps.regions(image,**kwargs))
     known.extend(named_file_textures.regions(image,**kwargs))
+    known.extend(named_file_models.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
     known.extend(iwad_maps.regions(image,**kwargs))
     known.extend(indexed_resource_models.regions(image,**kwargs))
@@ -454,6 +456,7 @@ def preview(data, asset, selection):
         models,
         mwo_graphics,
         named_adpcm,
+        named_file_models,
         named_file_textures,
         named_resource_images,
         named_resource_models,
@@ -654,6 +657,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == ia_font_textures.LAYOUT:return ia_font_textures.preview(data,asset,selection)
     if asset.get('layout') == be_iwad_maps.LAYOUT:return be_iwad_maps.preview(data,asset,selection)
+    if asset.get('layout') == named_file_models.LAYOUT:return named_file_models.preview(data,asset,selection)
     if asset.get('layout') == named_file_textures.LAYOUT:return named_file_textures.preview(data,asset,selection)
     if asset.get('layout') == be_iwad_images.LAYOUT:return be_iwad_images.preview(data,asset,selection)
     if asset.get('layout') in (iwad_sprites.LAYOUT, iwad_sprites.TEXTURE):return iwad_sprites.preview(data,asset,selection)
