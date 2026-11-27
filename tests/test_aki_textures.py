@@ -20,6 +20,7 @@ def test_indexed_textures_show_the_inline_palette():
         data = image(bits)
         asset, = aki_textures.regions(data)
         result = n64.preview(data, asset, {})
+        assert 'validated TEX header' in result['details']['note']
         rgba = pixels(base64.b64decode(result['data_url'].split(',')[1]))
         assert rgba[:8] == bytes([255, 0, 0, 255, 0, 255, 0, 255])
 
