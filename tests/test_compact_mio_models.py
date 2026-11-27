@@ -40,3 +40,4 @@ def test_model_banks_expose_aggregate_geometry_counts():
     banks = models.regions(image)
     assert len(banks) == 8
     assert all((bank['vertices'], bank['triangles']) == (4, 2) for bank in banks)
+    assert all('nodes' not in bank for bank in banks)
