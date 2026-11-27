@@ -174,6 +174,7 @@ def regions(image, *, context=None, **kwargs):
         rnc_indexed_sprites,
         rnc_quad_models,
         rnc_reloc_display,
+        rnc_rgba_tiles,
         rnc_tiled_images,
         rnx,
         romdisk_art,
@@ -352,6 +353,7 @@ def regions(image, *, context=None, **kwargs):
     compressed_meshes = []
     known.extend(rnc_tiled_images.regions(image,models=compressed_meshes,**kwargs))
     known.extend(rnc_chunk_models.regions(image,**kwargs))
+    known.extend(rnc_rgba_tiles.regions(image,**kwargs))
     known.extend(compressed_meshes)
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
@@ -519,6 +521,7 @@ def preview(data, asset, selection):
         rnc_meshes,
         rnc_quad_models,
         rnc_reloc_display,
+        rnc_rgba_tiles,
         rnc_textures,
         rnc_tiled_images,
         rnx,
@@ -665,6 +668,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
     if asset.get('layout') == zlib_poly_models.LAYOUT:return zlib_poly_models.preview(data,asset,selection)
     if asset.get('layout') == rnc_chunk_models.LAYOUT:return rnc_chunk_models.preview(data,asset,selection)
+    if asset.get('layout') == rnc_rgba_tiles.LAYOUT:return rnc_rgba_tiles.preview(data,asset,selection)
     if asset.get('layout') == mort_streams.LAYOUT:return mort_streams.preview(data,asset,selection)
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
