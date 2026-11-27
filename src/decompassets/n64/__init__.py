@@ -51,6 +51,7 @@ def regions(image, *, context=None, **kwargs):
     """
     from . import (
         adjacent_display_models,
+        aki_textures,
         archived_models,
         arithmetic_assets,
         arithmetic_descriptors,
@@ -314,6 +315,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(siff_models.regions(image,**kwargs))
     known.extend(segmented_model_resources.regions(image,**kwargs))
     known.extend(rnc_segmented_resources.regions(image,**kwargs))
+    known.extend(aki_textures.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
     known.extend(stage_meshes.regions(image, stages, kwargs.get("check", lambda: None)))
@@ -406,6 +408,7 @@ def regions(image, *, context=None, **kwargs):
 def preview(data, asset, selection):
     """A preview of one asset `regions` found: an image, a sound, a model or a table, chosen by `selection`."""
     from . import (
+        aki_textures,
         archived_models,
         arithmetic_assets,
         arithmetic_descriptors,
@@ -726,6 +729,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
     if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
+    if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
     if asset.get('layout') in (rnc_segmented_resources.MODEL,rnc_segmented_resources.TEXTURE):return rnc_segmented_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
