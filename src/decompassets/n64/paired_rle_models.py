@@ -1,4 +1,4 @@
-"""Local F3DEX meshes in paired-address compressed resources."""
+"""Local F3DEX and F3DEX2 meshes in paired-address compressed resources."""
 
 from .. import formats
 from . import display_meshes, paired_rle_images
@@ -13,7 +13,7 @@ def meshes(data, check=lambda: None):
     result = []
     accepted_end = 0
     for at in range(0, len(data)-8, 8):
-        if at < accepted_end or data[at] != 4:
+        if at < accepted_end or data[at] not in (1, 4):
             continue
         check()
         # The source has file-relative vertex addresses; require all loaded

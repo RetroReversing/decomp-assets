@@ -8,7 +8,7 @@ from decompassets import n64
 from decompassets.n64 import paired_rle_images as images
 
 
-def fixture():
+def fixture(*, variant=False):
     raw = bytearray(b'\0\1' * (images._PIXELS//2))
     raw[31*128:31*128+2] = bytes.fromhex('f801')
     raw[:2] = bytes.fromhex('07c1')
@@ -17,13 +17,15 @@ def fixture():
         part = raw[at:at+31]
         stream.append(0x80+len(part))
         stream.extend(part)
-    block = struct.pack('>I', len(stream)+4) + stream + b'\0'
+    block = struct.pack('>I', len(stream)+4) + stream + (b'' if variant else b'\0')
     data = bytearray(0x1000+len(block)+16*8)
-    data[0x400:0x400+len(images._DECODER[0])] = images._DECODER[0]
-    data[0x500:0x500+len(images._DECODER[1])] = images._DECODER[1]
+    signatures = images._DECODER_VARIANT if variant else images._DECODER
+    data[0x400:0x400+len(signatures[0])] = signatures[0]
+    data[0x500:0x500+len(signatures[1])] = signatures[1]
     pointers = [0x1000, 0x1000+len(block)] + [0x1000+len(block)+8*i for i in range(1, 16)]
     for i, pointer in enumerate(pointers):
-        struct.pack_into('>II', data, 0x100+i*8, pointer, pointer | 0x80000000)
+        struct.pack_into('>II', data, 0x100+i*8, pointer,
+                         pointer if variant and i == 4 else pointer | 0x80000000)
     data[0x1000:0x1000+len(block)] = block
     return bytes(data), bytes(raw)
 
@@ -67,3 +69,10 @@ def test_rom_scanner_accepts_a_memory_mapped_image(tmp_path):
     path.write_bytes(image)
     with path.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
         assert images.regions(mapped) == images.regions(image)
+
+
+def test_variant_loader_and_uncompressed_directory_entry():
+    image, raw = fixture(variant=True)
+    assets = images.regions(image)
+    assert len(assets) == 1
+    assert images.decode(image[assets[0]['offset']:assets[0]['offset']+assets[0]['size']]) == raw
