@@ -42,6 +42,9 @@ def test_unloaded_vertex_and_corrupt_section_are_rejected():
     data[op+6+6+1] = 0x10  # second vertex refers outside the first cache
     assert not refpack_first_cache.mesh(data)
     data = fixture()
+    data[op+6] = 0x50  # another command is not proven to load a vertex slot
+    assert not refpack_first_cache.mesh(data)
+    data = fixture()
     tag = data.index(b'@VERTICES\0')
     data[tag-8:tag-4] = (0xffffffff).to_bytes(4,'big')
     assert not refpack_first_cache.mesh(data)
