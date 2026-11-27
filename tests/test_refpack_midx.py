@@ -38,3 +38,21 @@ def test_preview_revalidates_the_stream():
     asset, = refpack_midx.regions(image)
     with pytest.raises(formats.AssetError):
         refpack_midx.preview(image[:-3], asset, {})
+
+
+def test_raw_adjacent_sequences_preview_and_stop_at_their_own_end():
+    data = b'prefix' + score() + b'padding' + score() + b'after'
+    rows = [row for row in refpack_midx.regions(data) if row['layout'] == refpack_midx.RAW_LAYOUT]
+    assert len(rows) == 2
+    for row in rows:
+        result = refpack_midx.preview(data, row, {})
+        assert 'Synthetic' in result['details']['note']
+        with wave.open(io.BytesIO(base64.b64decode(result['data_url'].split(',')[1]))) as audio:
+            assert any(audio.readframes(audio.getnframes()))
+    with pytest.raises(formats.AssetError):
+        refpack_midx.preview(data[:rows[0]['offset']+rows[0]['size']-1], rows[0], {})
+
+
+def test_raw_signatures_with_incomplete_or_invalid_events_are_not_sequences():
+    data = b'MIDx\0\x90\x45' + b'junk' + b'MIDx\0\x90\xff\x40\0\xf0\x2f'
+    assert not refpack_midx.regions(data)
