@@ -30,3 +30,17 @@ def test_reject_truncated_or_invalid_header():
     assert not aki_textures.regions(data[:-1])
     assert not aki_textures.regions(data[:9] + b'\x04' + data[10:])
     assert not aki_textures.regions(data[:12] + b'\x01' + data[13:])
+
+
+def test_bounded_compressed_texture_preview():
+    from .test_aki_models import literal
+
+    data = literal(image())
+    asset, = aki_textures.regions(data)
+    assert asset['layout'] == aki_textures.COMPRESSED
+    assert asset['size'] == len(data)
+    result = n64.preview(data, asset, {})
+    rgba = pixels(base64.b64decode(result['data_url'].split(',')[1]))
+    assert rgba[:8] == bytes([255, 0, 0, 255, 0, 255, 0, 255])
+    assert not aki_textures.regions(data[:-1])
+    assert not aki_textures.regions(b'\x00\xff\xff\xff' + data[4:])

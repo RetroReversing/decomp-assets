@@ -21,15 +21,18 @@ def mesh():
         struct.pack('bbb', *v) + bytes(5) for v in vertices) + bytes([0, 1, 2, 0, 2, 1])
 
 
-def cartridge(first_encoded=False):
+def cartridge(first_encoded=False, compressed_textures=False):
     files = [texture(), texture(), texture(), mesh(), literal(mesh())] + [b'\0\0']*252
+    if compressed_textures:
+        files[:3] = [literal(entry) for entry in files[:3]]
     if first_encoded:
         files.insert(0, literal(bytes(8)) + bytes(2))
     data = bytearray()
     offsets = []
     for i, entry in enumerate(files):
         if len(data) % 2:data.append(0)
-        offsets.append(len(data) | (i == (5 if first_encoded else 4) or first_encoded and i == 0))
+        offsets.append(len(data) | (i == (5 if first_encoded else 4) or first_encoded and i == 0
+                                    or compressed_textures and i < 3))
         data.extend(entry)
     if len(data) % 2:data.append(0)
     offsets.append(len(data))
@@ -58,3 +61,10 @@ def test_reject_invalid_mesh_stream_and_directory():
 def test_overlapping_header_candidate_does_not_hide_directory():
     data = cartridge(first_encoded=True)
     assert len(aki_models.regions(data)) == 2
+
+
+def test_directory_can_be_verified_by_compressed_textures():
+    data = cartridge(compressed_textures=True)
+    found = aki_models.regions(data)
+    assert len(found) == 2
+    assert n64.preview(data, found[0], {})['triangles'] == 2
