@@ -10,7 +10,7 @@ from .. import formats
 from . import aki_textures
 
 LAYOUT = 'aki-directory-model'
-_START = re.compile(b'\0\0\0[\0\1](?=\0\0(?:[\x01-\xff][\x00-\xff]|\0[\x10-\xff])|\0\1\0\0)')
+_START = re.compile(b'(?=\0\0\0[\0\1](?:\0\0(?:[\x01-\xff][\x00-\xff]|\0[\x10-\xff])|\0\1\0\0))')
 _MAX_MESH = 8 + 127*8 + 127*3
 
 
