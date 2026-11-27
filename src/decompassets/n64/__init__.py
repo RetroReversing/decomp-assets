@@ -194,6 +194,7 @@ def regions(image, *, context=None, **kwargs):
         rnx,
         romdisk_art,
         romdisk_speech,
+        runtime_textures,
         rzip_audio,
         rzip_catalog,
         rzip_models,
@@ -400,6 +401,7 @@ def regions(image, *, context=None, **kwargs):
     iguana_models = []
     known.extend(paired_resources.regions(image,**kwargs))
     known.extend(constructed_resource_textures.regions(image,context=context,**kwargs))
+    known.extend(runtime_textures.regions(image, (context or {}).get("runtime_snapshots", ()), check=kwargs.get("check", lambda: None)))
     known.extend(paired_rle_images.regions(image,**kwargs))
     known.extend(paired_rle_models.regions(image,**kwargs))
     known.extend(iain.regions(image,**kwargs))
@@ -566,6 +568,7 @@ def preview(data, asset, selection):
         rnx_atlas,
         romdisk_art,
         romdisk_speech,
+        runtime_textures,
         rzip_audio,
         rzip_catalog,
         rzip_models,
@@ -651,6 +654,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==constructed_resource_textures.LAYOUT:return constructed_resource_textures.preview(data,asset,selection)
+    if asset.get('layout')==runtime_textures.LAYOUT:return runtime_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
     if asset.get('layout') == bounded_lz_models.LAYOUT:return bounded_lz_models.preview(data,asset,selection)
