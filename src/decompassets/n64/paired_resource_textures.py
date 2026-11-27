@@ -18,14 +18,14 @@ _FORMATS = {
 }
 
 
-def _offset(pointer, size, limit):
+def _offset(pointer, size, limit, local_segment):
     segment, offset = divmod(pointer, 0x1000000)
-    if segment == 6 and offset % 8 == 0 and offset + size <= limit:
+    if segment == local_segment and offset % 8 == 0 and offset + size <= limit:
         return offset
     return None
 
 
-def _palette(data, start, stop, kind, palette_index):
+def _palette(data, start, stop, kind, palette_index, local_segment):
     # Some lists load a full TLUT even for a CI4 tile. The render tile then
     # selects one 16-entry palette from that load with its palette field.
     command = _PALETTE.match(data, start)
@@ -38,11 +38,15 @@ def _palette(data, start, stop, kind, palette_index):
     first_entry = palette_index * 16 if kind == 'ci4' else 0
     if first_entry + entries > count:
         return None
-    return _offset(pointer + first_entry * 2, entries * 2, stop)
+    return _offset(pointer + first_entry * 2, entries * 2, stop, local_segment)
 
 
 def textures(data):
     found = {}
+    segments = paired_resources.local_segments(data)
+    if len(segments) > 1:
+        return []
+    local_segment = next(iter(segments), 6)
     for match in _LOAD.finditer(data):
         start, end = match.span()
         if start % 8:
@@ -64,13 +68,13 @@ def textures(data):
         load_bits = 4 << (load[0] >> 19 & 3)
         if load_size * load_bits < byte_count * 8:
             continue
-        offset = _offset(source[1], byte_count, start)
+        offset = _offset(source[1], byte_count, start, local_segment)
         if offset is None:
             continue
         settings = dict(format=fmt, width=width, height=height, offset=offset)
         palette = None
         if kind == 2:
-            palette = _palette(data, end, start, fmt, (tile[1] >> 20) & 15)
+            palette = _palette(data, end, start, fmt, (tile[1] >> 20) & 15, local_segment)
             if palette is None:
                 continue
             settings.update(palette_offset=palette, palette_format='rgba5551-be')
