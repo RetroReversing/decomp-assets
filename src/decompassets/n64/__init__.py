@@ -108,6 +108,7 @@ def regions(image, *, context=None, **kwargs):
         iain,
         iguana_audio,
         iguana_textures,
+        img_textures,
         indexed_archive_models,
         indexed_pic_images,
         indexed_resource_models,
@@ -324,6 +325,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rnc_segmented_resources.regions(image,**kwargs))
     known.extend(rnc_inline_meshes.regions(image,**kwargs))
     known.extend(aki_textures.regions(image,**kwargs))
+    known.extend(img_textures.regions(image,**kwargs))
     known.extend(aki_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
@@ -476,6 +478,7 @@ def preview(data, asset, selection):
         iguana_audio,
         iguana_models,
         iguana_textures,
+        img_textures,
         indexed_archive_models,
         indexed_pic_images,
         indexed_resource_models,
@@ -748,6 +751,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
     if asset.get('layout') == aki_models.LAYOUT:return aki_models.preview(data,asset,selection)
     if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
+    if asset.get('layout') == img_textures.LAYOUT:return img_textures.preview(data,asset,selection)
     if asset.get('layout') == rnc_inline_meshes.LAYOUT:return rnc_inline_meshes.preview(data,asset,selection)
     if asset.get('layout') in (rnc_segmented_resources.MODEL,rnc_segmented_resources.TEXTURE):return rnc_segmented_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
