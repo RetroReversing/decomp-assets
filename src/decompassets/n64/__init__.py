@@ -206,6 +206,7 @@ def regions(image, *, context=None, **kwargs):
         sized_lz_catalog,
         sn64,
         sprite_constructor,
+        sprite_sheets,
         stage_banks,
         stage_meshes,
         striped_images,
@@ -326,6 +327,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rnc_inline_meshes.regions(image,**kwargs))
     known.extend(aki_textures.regions(image,**kwargs))
     known.extend(img_textures.regions(image,**kwargs))
+    known.extend(sprite_sheets.regions(image,**kwargs))
     known.extend(aki_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
@@ -578,6 +580,7 @@ def preview(data, asset, selection):
         sn64,
         sn64_music,
         sprite_constructor,
+        sprite_sheets,
         stage_banks,
         stage_meshes,
         striped_images,
@@ -752,6 +755,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == aki_models.LAYOUT:return aki_models.preview(data,asset,selection)
     if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
     if asset.get('layout') == img_textures.LAYOUT:return img_textures.preview(data,asset,selection)
+    if asset.get('layout') == sprite_sheets.LAYOUT:return sprite_sheets.preview(data,asset,selection)
     if asset.get('layout') == rnc_inline_meshes.LAYOUT:return rnc_inline_meshes.preview(data,asset,selection)
     if asset.get('layout') in (rnc_segmented_resources.MODEL,rnc_segmented_resources.TEXTURE):return rnc_segmented_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
