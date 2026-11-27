@@ -44,6 +44,7 @@ def regions(image, snapshots, *, check=lambda: None):
     loaded RGBA palette proven against the captured RAM and the ROM. Segmented
     pointers and other runtime-generated data need additional evidence.
     """
+    snapshots = list(snapshots)
     found = {}
     for ram in snapshots:
         for match in _LOAD.finditer(ram):
@@ -91,7 +92,8 @@ def regions(image, snapshots, *, check=lambda: None):
                 asset.update(palette_offset=palette[0], palette_little_endian=palette[1])
                 asset['reason'] += ' The adjacent palette matches the runtime TLUT load.'
             found[key] = asset
-    return list(found.values())
+    from . import runtime_tiled_textures
+    return list(found.values()) + runtime_tiled_textures.regions(image, snapshots, check=check)
 
 
 def preview(image, asset, selection):
