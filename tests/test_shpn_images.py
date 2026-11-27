@@ -73,3 +73,48 @@ def test_zero_size_without_a_named_palette_is_not_guessed():
     raw = shared_palette_fixture()
     raw[24:28] = b'xxxx'
     assert not shpn_images.frames(raw)
+
+
+def test_raw_banks_keep_independent_bounds_and_support_shared_palettes():
+    first, second = fixture(), shared_palette_fixture()
+    data = b'prefix' + first + b'padding' + second + b'after'
+    banks = [bank for bank in shpn_images.regions(data) if bank['layout'] == shpn_images.RAW_LAYOUT]
+    assert len(banks) == 2 and banks[0]['size'] == len(first) and banks[1]['palettes'] == 2
+    for bank in banks:
+        result = shpn_images.preview(data, bank, {})
+        assert result['media'] == 'image'
+    broken = bytearray(data)
+    broken[banks[0]['offset']+4:banks[0]['offset']+8] = (99999999).to_bytes(4, 'big')
+    assert not any(bank['offset'] == len(b'prefix') for bank in shpn_images.regions(broken))
+
+
+def test_raw_magic_inside_compressed_stream_is_not_a_second_bank():
+    packed = literal(fixture())
+    banks = shpn_images.regions(packed)
+    assert len(banks) == 1 and banks[0]['layout'] == shpn_images.LAYOUT
+
+
+def test_odd_width_rows_keep_their_byte_padding():
+    raw = fixture()
+    raw[24+4:24+8] = b'\x00\x03\x00\x03'
+    # The original eight-byte allocation contains six packed bytes, two per row.
+    bank, = shpn_images.regions(raw)
+    result = shpn_images.preview(raw, bank, {})
+    assert result['details']['width'] == result['details']['height'] == 3
+    assert result['details']['bytes'] == 6
+
+
+def test_independently_compressed_pixels_decode_with_inline_palette():
+    raw = fixture()
+    pixels = bytes(raw[40:48])
+    packed = literal(pixels)
+    image = raw[:40] + packed + raw[48:]
+    image[24] = 0xe3
+    image[25:28] = (16+len(packed)).to_bytes(3, 'big')
+    image[4:8] = len(image).to_bytes(4, 'big')
+    bank, = shpn_images.regions(image)
+    result = shpn_images.preview(image, bank, {})
+    assert result['details']['width'] == result['details']['height'] == 4
+    assert base64.b64decode(result['data_url'].split(',')[1]).startswith(b'\x89PNG')
+    image[40] = 0
+    assert not shpn_images.regions(image)
