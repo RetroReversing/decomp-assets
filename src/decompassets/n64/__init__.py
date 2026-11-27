@@ -125,6 +125,7 @@ def regions(image, *, context=None, **kwargs):
         models,
         mwo_graphics,
         named_adpcm,
+        named_file_effects,
         named_file_models,
         named_file_textures,
         named_resource_images,
@@ -347,6 +348,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
+    known.extend(named_file_effects.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
     known.extend(borg.regions(image,rows=borg_rows,**kwargs))
     known.extend(borg_models.regions(image,borg_rows,**kwargs))
