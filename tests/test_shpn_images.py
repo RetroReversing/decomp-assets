@@ -39,3 +39,37 @@ def test_rejects_wrong_palette_size():
     data = fixture()
     data[24+24+4:24+24+6] = b'\0\x08'
     assert shpn_images.frames(data) == []
+
+
+def shared_palette_fixture():
+    image_at = 40
+    pal_at = image_at+20
+    cpal_at = pal_at+16+512
+    data = bytearray(b'SHPN'+bytes(4)+(3).to_bytes(4,'big')+b'GIMX')
+    for name,at in ((b'body',image_at),(b'pal ',pal_at),(b'cpal',cpal_at)):
+        data.extend(name+at.to_bytes(4,'big'))
+    data.extend(b'\x66\0\0\0\0\x02\0\x02'+bytes(8)+bytes([0,1,1,0]))
+    for first in (bytes.fromhex('f801'),bytes.fromhex('07c1')):
+        data.extend(b'\x27\0\0\0\x01\x00\0\x01'+bytes(8)+first+bytes(510))
+    data[4:8] = len(data).to_bytes(4,'big')
+    return data
+
+
+def test_named_shared_palettes_and_zero_sized_images():
+    from .test_rom_assets import pixels
+
+    raw = shared_palette_fixture()
+    bank, = shpn_images.regions(literal(raw))
+    assert bank['frames'] == 1 and bank['palettes'] == 2
+    one = shpn_images.preview(literal(raw),bank,{'palette':0})
+    two = shpn_images.preview(literal(raw),bank,{'palette':1})
+    assert pixels(base64.b64decode(one['data_url'].split(',')[1]))[:4] == bytes([255,0,0,255])
+    assert pixels(base64.b64decode(two['data_url'].split(',')[1]))[:4] == bytes([0,255,0,255])
+    raw[36:40] = (61).to_bytes(4,'big')  # overlapping/out-of-order palette entry
+    assert not shpn_images.frames(raw)
+
+
+def test_zero_size_without_a_named_palette_is_not_guessed():
+    raw = shared_palette_fixture()
+    raw[24:28] = b'xxxx'
+    assert not shpn_images.frames(raw)
