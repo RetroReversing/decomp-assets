@@ -132,6 +132,7 @@ def regions(image, *, context=None, **kwargs):
         level_world,
         level_world_models,
         libmus_song,
+        ljam_textures,
         lz_banks,
         lz_standard_midi,
         lz_texture_directories,
@@ -320,6 +321,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(shpn_images.regions(image,**kwargs))
     known.extend(rnc_shpn_images.regions(image,**kwargs))
+    known.extend(ljam_textures.regions(image,**kwargs))
     known.extend(rnc_pgd_models.regions(image,**kwargs))
     known.extend(named_tim_archives.regions(image,**kwargs))
     known.extend(named_cmp_textures.regions(image,**kwargs))
@@ -538,6 +540,7 @@ def preview(data, asset, selection):
         level_world,
         level_world_models,
         libmus_song,
+        ljam_textures,
         lz_banks,
         lz_directory_models,
         lz_standard_midi,
@@ -749,6 +752,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') in (shpn_images.LAYOUT, shpn_images.RAW_LAYOUT):return shpn_images.preview(data,asset,selection)
     if asset.get('layout') == rnc_shpn_images.LAYOUT:return rnc_shpn_images.preview(data,asset,selection)
+    if asset.get('layout') in (ljam_textures.LAYOUT,ljam_textures.BMP_LAYOUT):return ljam_textures.preview(data,asset,selection)
     if asset.get('layout') == rnc_pgd_models.LAYOUT:return rnc_pgd_models.preview(data,asset,selection)
     if asset.get('layout') == named_tim_archives.LAYOUT:return named_tim_archives.preview(data,asset,selection)
     if asset.get('layout') == named_cmp_textures.LAYOUT:return named_cmp_textures.preview(data,asset,selection)
