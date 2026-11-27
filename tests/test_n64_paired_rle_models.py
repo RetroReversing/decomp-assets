@@ -2,15 +2,19 @@
 import mmap
 import struct
 
+import pytest
+
 from decompassets import n64
 from decompassets.n64 import paired_rle_images, paired_rle_models
 
 
-def fixture():
+def fixture(*, modern=False):
     raw = bytearray(128)
     for i, (x, y) in enumerate(((0, 0), (10, 0), (0, 10))):
         struct.pack_into('>3h', raw, i*16, x, y, 0)
-    struct.pack_into('>6I', raw, 64, 0x04000c2f, 0, 0xb1000204, 0x00000204, 0xb8000000, 0)
+    commands = ((0x01003006, 0, 0x06000204, 0x00000204, 0xdf000000, 0) if modern
+                else (0x04000c2f, 0, 0xb1000204, 0x00000204, 0xb8000000, 0))
+    struct.pack_into('>6I', raw, 64, *commands)
     encoded = bytearray()
     for at in range(0, len(raw), 31):
         part = raw[at:at+31]
@@ -27,8 +31,9 @@ def fixture():
     return bytes(data)
 
 
-def test_closed_relative_mesh_is_discovered_and_previewed_in_mapped_rom(tmp_path):
-    image = fixture()
+@pytest.mark.parametrize('modern', [False, True])
+def test_closed_relative_mesh_is_discovered_and_previewed_in_mapped_rom(tmp_path, modern):
+    image = fixture(modern=modern)
     path = tmp_path/'rom.bin'
     path.write_bytes(image)
     with path.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as mapped:

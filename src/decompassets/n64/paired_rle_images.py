@@ -13,14 +13,18 @@ _DECODER = (
     bytes.fromhex('925300000c001c3f0240202100409021327000ff2e0200801040001a02402021'),
     bytes.fromhex('2e0200a0104000133262001f305100ff022010213042ffff1040002d02378821'),
 )
-_PAIR = re.compile(rb'(?=\x00...\x80...)', re.S)
+_DECODER_VARIANT = (
+    bytes.fromhex('925100000c0020d40240202d0040902d0011160004400019323000ff00108082'),
+    bytes.fromhex('322300ff2c6200a0104000143222001f2442ffff0040882d3042ffff1056002f'),
+)
+_PAIR = re.compile(rb'(?=\x00(?!\x00\x00\x00)...[\x00\x80]...)', re.S)
 
 
 def decode(data, *, max_output=_PIXELS, expected=_PIXELS):
     """Decode a bounded, single-plane block; unsupported interleaved planes stay raw."""
-    if len(data) < 5 or int.from_bytes(data[:4], 'big') != len(data)-1:
+    if len(data) < 5 or int.from_bytes(data[:4], 'big') not in (len(data)-1, len(data)):
         return None
-    end, at = len(data)-1, 4
+    end, at = int.from_bytes(data[:4], 'big'), 4
     out = bytearray()
     while at < end:
         control = data[at]
@@ -71,23 +75,25 @@ def _directories(image, check):
         at = start
         while at+8 <= len(image) and len(pointers) < 4096:
             first, second = struct.unpack_from('>II', image, at)
-            if second != first | 0x80000000 or first >= len(image) or pointers and first <= pointers[-1]:
+            if second not in (first, first | 0x80000000) or first >= len(image) or pointers and first <= pointers[-1]:
                 break
             pointers.append(first)
             at += 8
-        end = at
         if len(pointers) >= 16 and pointers[0] >= at:
+            end = at
             yield pointers
 
 
 def blocks(image, check=lambda: None):
     """Yield bounded records only in a directory backed by the matching loader."""
-    if not all(image.find(signature) >= 0 for signature in _DECODER):
+    if not any(all(image.find(signature) >= 0 for signature in group)
+               for group in (_DECODER, _DECODER_VARIANT)):
         return
     for pointers in _directories(image, check):
         for start, end in zip(pointers, pointers[1:]):
             check()
-            if not 5 <= end-start <= 0x40000 or int.from_bytes(image[start:start+4], 'big') != end-start-1:
+            if (not 5 <= end-start <= 0x40000
+                    or int.from_bytes(image[start:start+4], 'big') not in (end-start-1, end-start)):
                 continue
             yield start, end
 
