@@ -163,7 +163,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                               vertices=sum(m['vertices'] for m in meshes), triangles=sum(m['triangles'] for m in meshes),
                               preview_settings=dict(source='rom', format='auto', offset=start),
                               reason='Captured display lists and their vertex loads match this decoded resource.'))
-    return found
+    from . import runtime_direct_models
+    return found + runtime_direct_models.regions(image, snapshots, check=check)
 
 
 def preview_model(image, asset, selection):
