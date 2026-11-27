@@ -76,6 +76,7 @@ def regions(image, *, context=None, **kwargs):
         bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
+        chunked_zlib,
         constructed_resource_textures,
         dean_audio,
         deflate_catalog,
@@ -326,6 +327,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(segmented_model_resources.regions(image,**kwargs))
     known.extend(rnc_segmented_resources.regions(image,**kwargs))
     known.extend(rnc_inline_meshes.regions(image,**kwargs))
+    known.extend(chunked_zlib.regions(image,**kwargs))
     known.extend(aki_textures.regions(image,**kwargs))
     known.extend(img_textures.regions(image,**kwargs))
     known.extend(sprite_sheets.regions(image,**kwargs))
@@ -450,6 +452,7 @@ def preview(data, asset, selection):
         bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
+        chunked_zlib,
         constructed_resource_textures,
         dean_audio,
         deflate_catalog,
@@ -757,6 +760,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
     if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
     if asset.get('layout') == aki_models.LAYOUT:return aki_models.preview(data,asset,selection)
+    if asset.get('layout') == chunked_zlib.LAYOUT:return chunked_zlib.preview(data,asset,selection)
     if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
     if asset.get('layout') == img_textures.LAYOUT:return img_textures.preview(data,asset,selection)
     if asset.get('layout') == sprite_sheets.LAYOUT:return sprite_sheets.preview(data,asset,selection)

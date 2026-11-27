@@ -129,6 +129,9 @@ def texture_pixels(data,options):
     # Four-bit rows have byte padding when their pixel width is odd.
     row_bytes=(width*_bits(fmt)+7)//8
     raw=_take(data,offset,row_bytes*height)
+    flip=options.get('flip_y',False)
+    if not isinstance(flip,bool):raise AssetError('Choose whether to flip the preview vertically.')
+    rows=range(height-1,-1,-1) if flip else range(height)
     if fmt in ('ci4','ci8'):
         palette_format=options.get('palette_format','rgba5551-be')
         if palette_format not in PALETTES:raise AssetError('Choose a supported palette format.')
@@ -136,12 +139,12 @@ def texture_pixels(data,options):
         palette_offset=integer(options.get('palette_offset',0),'Palette offset',0,len(data))
         palette=_rgba(_take(data,palette_offset,entries*_bits(palette_format)//8),palette_format,entries)
         pixels=bytearray()
-        for y in range(height):
+        for y in rows:
             row=raw[y*row_bytes:(y+1)*row_bytes]
             for x in range(width):
                 idx=row[x] if fmt=='ci8' else (row[x//2]>>(4 if x%2==0 else 0))&15
                 pixels.extend(palette[idx*4:idx*4+4])
-    else:pixels=b''.join(_rgba(raw[y*row_bytes:(y+1)*row_bytes],fmt,width) for y in range(height))
+    else:pixels=b''.join(_rgba(raw[y*row_bytes:(y+1)*row_bytes],fmt,width) for y in rows)
     return bytes(pixels),dict(width=width,height=height,format=options['format'],bytes=row_bytes*height,
                                                 note='Manual row-major interpretation. Dimensions, palette and format do not establish the original asset type.')
 

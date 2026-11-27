@@ -132,6 +132,11 @@ def preview(data, asset, selection):
 
 def decode(data):
     """Return None for other codecs so the common preview reader can handle them."""
+    # This format has no magic; every page and both enclosing lengths must
+    # validate before its decoded bytes are offered to the manual preview.
+    from . import chunked_zlib
+    if record := chunked_zlib.unpack(data):
+        return record[0], chunked_zlib.CODEC
     if data[:3] == b'EDL':
         from . import edl
         return edl.unpack(data), 'Eurocom EDL'
