@@ -467,6 +467,8 @@ def preview(data, asset, selection):
         big_audio,
         big_models,
         big_sam_audio,
+        big_tagged_models,
+        big_tagged_textures,
         big_textures,
         bind_models,
         bind_textures,
@@ -678,6 +680,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == big_sam_audio.LAYOUT:return big_sam_audio.preview(data,asset,selection)
     if asset.get('layout') == big_audio.LAYOUT:return big_audio.preview(data,asset,selection)
     if asset.get('layout') == big_textures.LAYOUT:return big_textures.preview(data,asset,selection)
+    if asset.get('layout') == big_tagged_textures.LAYOUT:return big_tagged_textures.preview(data,asset,selection)
+    if asset.get('layout') == big_tagged_models.LAYOUT:return big_tagged_models.preview(data,asset,selection)
     if asset.get('layout') == big_models.LAYOUT:return big_models.preview(data,asset,selection)
     if asset.get('layout') == graphbin.LAYOUT:return graphbin.preview(data,asset,selection)
     if asset.get('layout') in (tagged_deflate.IMAGE,tagged_deflate.MODEL):return tagged_deflate.preview(data,asset,selection)
