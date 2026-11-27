@@ -50,3 +50,23 @@ def test_runtime_model_preview_uses_captured_commands_and_matching_vertices():
     assert runtime_packed_graphics.preview_model(image, model, {})['triangles'] == 1
     ram[0x810] ^= 1
     assert not any(asset['kind'] == '3d model' for asset in runtime_packed_graphics.regions(image, [ram]))
+
+
+def test_runtime_mio0_texture_and_preview_need_matching_pixels():
+    from decompassets.n64 import table_lz_graphics
+
+    _, ram = fixture()
+    pixels = bytes(ram[0x800:0x900])
+    # An all-literal MIO0 stream still has separate mask, link, and literal offsets.
+    mask = b'\xff' * ((len(pixels) + 7) // 8)
+    start = 0x100
+    stream = (b'MIO0' + len(pixels).to_bytes(4, 'big')
+              + (16 + len(mask)).to_bytes(4, 'big') * 2 + mask + pixels)
+    image = bytes(start) + stream
+    assets = runtime_packed_graphics.regions(image, [ram])
+    asset = next(a for a in assets if a.get('codec') == 'mio0')
+    assert asset['offset'] == start and asset['size'] == len(stream)
+    assert table_lz_graphics.preview(image, asset, {})['mime'] == 'image/png'
+    ram[0x880] ^= 1
+    assert not runtime_packed_graphics.regions(image, [ram])
+    assert runtime_packed_graphics.unpack_mio(stream[:-1]) is None
