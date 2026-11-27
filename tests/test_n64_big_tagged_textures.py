@@ -56,6 +56,7 @@ def test_tagged_paged_mesh_and_invalid_triangle():
 
     image = _model_archive()
     model, = big_models.regions(image, images=[])
+    assert model['vertices'] == 3 and model['triangles'] == 1
     preview = big_tagged_models.preview(image, model, {})
     assert preview['vertices'] == [(0,0,0), (10,0,0), (0,20,10)]
     assert preview['surfaces'][0]['indices'] == (0,1,2)
