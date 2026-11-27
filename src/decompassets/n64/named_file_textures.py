@@ -36,6 +36,7 @@ def tables(image, check=lambda: None):
             continue
         delta = second[0] - first[0]
         bases = [first[0] - pos for pos in names if pos + delta in names and names[pos] < names[pos+delta]]
+        best_rows, best_end = [], at
         for base in bases:
             rows, last_end, last_name = [], None, ''
             cursor = at
@@ -46,11 +47,12 @@ def tables(image, check=lambda: None):
                 rows.append((name, *row[1:]))
                 last_name, last_end = name, row[6]
                 cursor += 28
-            if len(rows) >= 8:
-                check()
-                covered = cursor
-                yield at, rows
-                break
+            if len(rows) > len(best_rows):
+                best_rows, best_end = rows, cursor
+        if len(best_rows) >= 8:
+            check()
+            covered = best_end
+            yield at, best_rows
 
 
 def _textures(image, row):

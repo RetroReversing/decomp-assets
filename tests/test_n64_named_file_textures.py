@@ -24,3 +24,14 @@ def test_named_table_textures_and_bounds():
     damaged = bytearray(data)
     struct.pack_into('>I', damaged, 20, len(data) + 16)
     assert len(named_file_textures.regions(damaged)) == 0
+
+
+def test_longest_consistent_name_mapping_wins():
+    data = bytearray(fixture())
+    for i in range(5):
+        name = f'AAAA{i:04}.TEX'.encode()
+        at = 0x300 + i * 16
+        data[at:at+len(name)+1] = name + b'\0'
+    table, rows = next(named_file_textures.tables(data))
+    assert table == 0
+    assert len(rows) == 8 and rows[0][0] == 'FILE0000.TEX'
