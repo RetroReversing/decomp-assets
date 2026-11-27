@@ -50,3 +50,20 @@ def test_f3dex_lighting_and_matrix_pop_allow_a_closed_local_mesh():
     assert display_meshes.preview(image, asset, {})['surfaces'][0]['indices'] == (0, 1, 2)
     struct.pack_into('>I', image, 64, 0x03870010)
     assert not display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
+
+
+def test_fast3d_loads_and_triangles_use_ten_byte_cache_indices():
+    image = bytearray(128)
+    for index, (x, y) in enumerate(((0, 0), (1, 0), (0, 1))):
+        struct.pack_into('>3h', image, 16*index, x, y, 0)
+    # Load three vertices into cache slots 4–6, then address them in units of ten.
+    struct.pack_into('>6I', image, 64, 0x04240030, 0x01000000,
+                     0xbf000000, 0x0028323c, 0xb8000000, 0)
+    group = dict(start=64, end=88)
+    asset, = display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
+    assert asset['label'] == 'Fast3D display-list mesh'
+    assert display_meshes.preview(image, asset, {})['surfaces'][0]['indices'] == (0, 1, 2)
+    struct.pack_into('>I', image, 76, 0x0028323d)
+    assert not display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
+    struct.pack_into('>I', image, 76, 0x00283246)
+    assert not display_meshes.regions(image, group, {1: 0}, {1: {64}}, lambda: None)
