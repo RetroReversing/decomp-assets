@@ -49,5 +49,6 @@ def preview(image, asset, selection):
     out = formats.preview(image, dict(format=f'ci{bits}', width=width, height=height,
                                       offset=at+16+2*colours, palette_offset=at+16,
                                       palette_format='rgba5551-be'))
+    out['details']['note'] = 'Indexed pixels and palette from the validated TEX header; runtime use is not established.'
     out['settings'] = dict(format='auto', source='rom', offset=at)
     return out
