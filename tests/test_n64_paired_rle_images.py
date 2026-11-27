@@ -1,5 +1,6 @@
 """Bounded paired-directory images and their vertical tile layout."""
 import base64
+import mmap
 import struct
 import zlib
 
@@ -58,3 +59,11 @@ def test_unproven_directory_and_corrupt_stream_are_not_previews():
     damaged = bytearray(image)
     damaged[0x1000+4:0x1000+6] = b'\x00\x00'  # invalid zero-distance backreference
     assert images.regions(damaged) == []
+
+
+def test_rom_scanner_accepts_a_memory_mapped_image(tmp_path):
+    image, _ = fixture()
+    path = tmp_path/'game.bin'
+    path.write_bytes(image)
+    with path.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
+        assert images.regions(mapped) == images.regions(image)

@@ -81,7 +81,7 @@ def _directories(image, check):
 
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
-    if not all(signature in image for signature in _DECODER):
+    if not all(image.find(signature) >= 0 for signature in _DECODER):
         return []
     result = []
     for pointers in _directories(image, check):
