@@ -211,6 +211,7 @@ def regions(image, *, context=None, **kwargs):
         zip_object_textures,
         zlib_indexed_images,
         zlib_meshes,
+        zlib_poly_models,
         zlib_textures,
     )
     display_meshes = []
@@ -353,6 +354,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(zlib_textures.regions(image,**kwargs))
     known.extend(zlib_indexed_images.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
+    known.extend(zlib_poly_models.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
@@ -555,6 +557,7 @@ def preview(data, asset, selection):
         zip_object_textures,
         zlib_indexed_images,
         zlib_meshes,
+        zlib_poly_models,
         zlib_textures,
     )
     if asset.get('layout','').startswith('eurocom-') or asset.get('layout')=='edl-stream':
@@ -654,6 +657,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='reloc-file':return reloc_files.preview(data,asset,selection)
     if asset.get('layout') in (lz_banks.BANK, lz_banks.SONGS):return lz_banks.preview(data,asset,selection)
     if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
+    if asset.get('layout') == zlib_poly_models.LAYOUT:return zlib_poly_models.preview(data,asset,selection)
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_indexed_images.LAYOUT:return zlib_indexed_images.preview(data,asset,selection)
