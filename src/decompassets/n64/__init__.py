@@ -210,6 +210,7 @@ def regions(image, *, context=None, **kwargs):
         segmented_node_models,
         shpn_images,
         siff_models,
+        sized_archive_audio,
         sized_lz_catalog,
         sn64,
         sprite_constructor,
@@ -421,6 +422,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
     known.extend(iguana_audio.regions(image,**kwargs))
+    known.extend(sized_archive_audio.regions(image,**kwargs))
     known.extend(rnc_control_audio.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
