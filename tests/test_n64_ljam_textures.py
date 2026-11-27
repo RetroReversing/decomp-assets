@@ -47,3 +47,27 @@ def test_directory_rejects_cycles_and_out_of_bounds_files():
     image = bytearray(_archive())
     struct.pack_into('<I', image, 48, len(image)-4)
     assert not ljam_textures.regions(image)
+
+
+def test_packed_bitmap_framed_lz_and_palette():
+    # Two indexed pixels followed by a back-reference; one block, stream order.
+    header = struct.pack('<BBHH', 8, 1, 4, 1)
+    palette = bytes.fromhex('0000ff 00ff00')
+    block = bytes.fromhex('00 60 01 0f02 0000')
+    image = header+palette+struct.pack('<HH', 4, len(block))+block
+    # The compressed form must be smaller than its expanded block.
+    assert ljam_textures._bmp(image, 0, len(image)) is None
+    # Raw block: two red, two green pixels.
+    image = header+palette+struct.pack('<HH', 4, 4)+bytes.fromhex('00000101')
+    width, height, rgba = ljam_textures._bmp(image, 0, len(image))
+    assert (width, height) == (4, 1)
+    assert rgba == bytes.fromhex('ff0000ff ff0000ff 00ff00ff 00ff00ff')
+    assert ljam_textures._bmp(image[:-1], 0, len(image)-1) is None
+    assert ljam_textures._bmp(bytes([0x88])+image[1:], 0, len(image)) is None
+    # A literal and an overlapping reference expand to 20 palette indices.
+    header = struct.pack('<BBHH', 8, 0, 20, 1)
+    block = bytes.fromhex('00 c0 0001 01 0000')
+    image = header+palette[:3]+struct.pack('<HH', 20, len(block))+block
+    assert ljam_textures._bmp(image, 0, len(image))[2] == bytes.fromhex('ff0000ff')*20
+    malformed = header+palette[:3]+struct.pack('<HH', 20, len(block))+bytes.fromhex('00 c0 0002 01 0000')
+    assert ljam_textures._bmp(malformed, 0, len(malformed)) is None

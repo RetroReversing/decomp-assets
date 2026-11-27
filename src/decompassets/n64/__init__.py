@@ -752,7 +752,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') in (shpn_images.LAYOUT, shpn_images.RAW_LAYOUT):return shpn_images.preview(data,asset,selection)
     if asset.get('layout') == rnc_shpn_images.LAYOUT:return rnc_shpn_images.preview(data,asset,selection)
-    if asset.get('layout') == ljam_textures.LAYOUT:return ljam_textures.preview(data,asset,selection)
+    if asset.get('layout') in (ljam_textures.LAYOUT,ljam_textures.BMP_LAYOUT):return ljam_textures.preview(data,asset,selection)
     if asset.get('layout') == rnc_pgd_models.LAYOUT:return rnc_pgd_models.preview(data,asset,selection)
     if asset.get('layout') == named_tim_archives.LAYOUT:return named_tim_archives.preview(data,asset,selection)
     if asset.get('layout') == named_cmp_textures.LAYOUT:return named_cmp_textures.preview(data,asset,selection)
