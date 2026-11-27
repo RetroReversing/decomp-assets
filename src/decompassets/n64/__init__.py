@@ -54,6 +54,7 @@ def regions(image, *, context=None, **kwargs):
         arithmetic_descriptors,
         audio,
         b1_speech,
+        be_iwad_audio,
         be_iwad_images,
         be_iwad_maps,
         big_models,
@@ -280,6 +281,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(mio0_graphics.regions(image,images=mio0_images,**kwargs))
     known.extend(mio0_images)
     known.extend(ia_font_textures.regions(image,**kwargs))
+    known.extend(be_iwad_audio.regions(image,**kwargs))
     known.extend(be_iwad_images.regions(image,**kwargs))
     known.extend(be_iwad_maps.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))

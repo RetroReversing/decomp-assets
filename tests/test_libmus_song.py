@@ -35,3 +35,17 @@ def test_archive_selects_two_songs_against_their_sample_bank():
     assert len(assets) == 4 and len(assets[0]['samples']) == 2
     assert any(wav(libmus_song.preview(image, assets[0], {'sample': 1}))[2])
     assert not libmus_song.regions(image, [])
+
+
+def test_original_pointer_song_validates_channel_tracks():
+    first = bytes.fromhex('95 ff 81 01 85 78 30 18 96')
+    second = bytes.fromhex('81 01 32 18 80')
+    data = bytearray(160)
+    struct.pack_into('>4I', data, 0, 16, 80, 148, 144)
+    struct.pack_into('>2I', data, 16, 160, 160 + len(first))
+    data.extend(first + second)
+    score = libmus_song.v1_song(data, {1})
+    assert score['channels'] == 2 and score['loops'] == 1
+    assert [(note.key, note.wave) for note in score['notes']] == [(48, 1), (50, 1)]
+    assert libmus_song.v1_song(data, {2}) is None
+    assert libmus_song.v1_song(data[:-1], {1}) is None

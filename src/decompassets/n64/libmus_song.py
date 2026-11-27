@@ -7,7 +7,7 @@ import struct
 from dataclasses import dataclass, replace
 
 from .. import formats, rnc
-from . import audio, compact_midi_render, lzari, ptr_audio, raw_deflate_lists
+from . import audio, be_iwad_images, compact_midi_render, lzari, ptr_audio, ptr_audio_v1, raw_deflate_lists
 from .compact_midi import Event
 
 _HEADER = struct.Struct('>6I')
@@ -167,6 +167,31 @@ def song(data, waves):
     except ValueError:
         return None
     return dict(extent=extent, notes=events, tempos=tempos, loops=loops, channels=len(tracks)) if events else None
+
+
+def v1_song(data, waves):
+    """Read sixteen channel pointers in the original four-pointer libmus header."""
+    if len(data) < 16:
+        return None
+    channels, volume, envelopes, drums = struct.unpack_from('>4I', data)
+    if (channels != 16 or volume != 80 or not 144 <= envelopes < len(data)
+            or not 144 <= drums < len(data)):
+        return None
+    tracks = [at for at, in struct.iter_unpack('>I', data[channels:volume]) if at]
+    volumes = [at for at, in struct.iter_unpack('>I', data[volume:volume+64]) if at]
+    if (len(tracks) < 2 or tracks != sorted(set(tracks)) or tracks[-1] >= len(data)
+            or tracks[0] <= max(envelopes, drums) or any(at >= len(data) for at in volumes)):
+        return None
+    notes, tempos, loops = [], [], 0
+    try:
+        for start, end in zip(tracks, tracks[1:]+[len(data)]):
+            _, voice, tempo, looping = _track(data, start, end, waves)
+            notes.extend(voice)
+            tempos.extend(tempo)
+            loops += looping
+    except ValueError:
+        return None
+    return dict(notes=notes, tempos=tempos, loops=loops, channels=len(tracks)) if notes else None
 
 
 _BINARY_HEADER = struct.Struct('>10I')
@@ -642,7 +667,11 @@ def _play(image, asset, selection):
     base = asset['table_offset']
     books = None
     try:
-        if span := asset.get('compressed_control'):
+        if asset.get('control_version') == 1:
+            bank = ptr_audio_v1.bank(image, asset['control'])
+            if bank is None:
+                raise audio.BankError('Invalid pointer bank.')
+        elif span := asset.get('compressed_control'):
             start, size = span
             books = ptr_audio.decoded_control(image, asset)
             bank = {**ptr_audio.bank(books, 0), 'offset':start, 'size':size}
@@ -658,7 +687,14 @@ def _play(image, asset, selection):
     score = None
     if 0 <= start < start+size <= len(image):
         raw = image[start:start+size]
-        if asset['layout'] == 'libmus-raw-song':
+        if asset.get('sequence_codec') == 'be-iwad':
+            for archive, rows in be_iwad_images.archives(image):
+                if (archive == asset['directory'] and 0 <= asset['member'] < len(rows)
+                        and archive + rows[asset['member']][0] == start):
+                    raw = be_iwad_images.unpack(image, archive, rows[asset['member']])
+                    score = v1_song(raw, waves) if raw else None
+                    break
+        elif asset['layout'] == 'libmus-raw-song':
             score = song(raw,waves)
         else:
             try:
@@ -687,7 +723,7 @@ def _play(image, asset, selection):
     voices = []
     for note in score['notes']:
         sample = waves[note.wave]
-        pitch = note.key + _signed(sample['base_note_byte']-48) + sample['detune']/100
+        pitch = note.key + _signed(sample.get('base_note_byte',0)-48) + sample.get('detune',0)/100
         gain = (note.volume*note.velocity/127**2)**2 if pitch <= 12 else 0
         if asset['layout'] == 'libmus-binary-effects' and not sample.get('loop', {}).get('count'):
             # An effect can hold a note until its wave ends. Stop nonlooping
@@ -700,6 +736,8 @@ def _play(image, asset, selection):
                                            rate=compact_midi_render.RATE, length=len(pcm)))
     details.update(stats, format='Nintendo libmus', sample=index,
                    note='Single-pass sample-backed preview. Envelopes, ties and modulation can differ.')
+    if asset.get('control_version') == 1:
+        details['note'] += ' Original sample tuning is unavailable; pitches use an estimated reference note.'
     return dict(media='audio', mime='audio/wav', details=details,
                 data_url='data:audio/wav;base64,'+base64.b64encode(payload).decode(),
                 settings={**asset['preview_settings'], 'sample':index})
