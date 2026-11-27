@@ -40,3 +40,35 @@ def test_duplicate_or_changed_vertices_do_not_prove_mapping():
     image,ram = _fixture()
     ram[0x110] ^= 1
     assert not models.regions(image,[ram])
+
+
+def _segmented_fixture():
+    image, ram = _fixture()
+    ram[0x200:0x240] = bytes(0x40)
+    task = [1, 0, 0x80000080, 0x100, 0x80000088, 0x1000, 0x80000090, 0x100,
+            0, 0, 0, 0, 0x80000200, 0, 0, 0]
+    struct.pack_into('>16I', ram, 0x20, *task)
+    root = [(0xdb060010, 0x80000100), (0xde000000, 0x80000300), (0xdf000000, 0)]
+    child = [(0x01004008, 0x04000000), (0x05000204, 0), (0x05000206, 0),
+             (0x05000406, 0), (0xdf000000, 0)]
+    for base, commands in ((0x200, root), (0x300, child)):
+        for i, pair in enumerate(commands):
+            struct.pack_into('>II', ram, base+8*i, *pair)
+    return image, ram
+
+
+def test_segmented_task_mesh_uses_the_executed_segment_binding():
+    image, ram = _segmented_fixture()
+    assets = models.regions(image, [ram])
+    assert len(assets) == 1
+    assert assets[0]['triangles'] == 3
+    assert models.preview(image, assets[0], {})['triangles'] == 3
+    # A stale, unexecuted setup cannot establish a binding for the nested list.
+    struct.pack_into('>I', ram, 0x200, 0)
+    assert not models.regions(image, [ram])
+
+
+def test_segmented_task_rejects_ambiguous_cartridge_vertices():
+    image, ram = _segmented_fixture()
+    image[0x600:0x640] = image[0x500:0x540]
+    assert not models.regions(image, [ram])
