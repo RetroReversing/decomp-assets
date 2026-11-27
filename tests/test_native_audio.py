@@ -470,3 +470,35 @@ def test_large_parallel_control_and_wave_tables_are_not_truncated():
     assert all(bank['table_confidence'] == 'validated' for bank in banks)
     assert [bank['table_offset'] for bank in banks] == wave_starts
     assert wav(audio.preview(image, banks[-1], {'sample': 1}))[1]
+
+
+def test_uncached_record_pairs_controls_with_preceding_samples():
+    image = bytearray(0x500)
+    info = {'offset': 0x300, 'size': 0x40,
+            'samples': [{'relative_offset': 0, 'size': 0x80}, {'relative_offset': 0x80, 'size': 0x78}]}
+    record = (0xb0000300, 0xb0000348, 0xb0000200, 0xb0000300, 0xb0000200, 0xb0000200)
+    struct.pack_into('>6I', image, 0x40, *record)
+    assert audio._uncached_tables(image, info, lambda: None) == (0x348, 0x200, 0x300)
+    struct.pack_into('>I', image, 0x54, 0xb0000210)
+    assert audio._uncached_tables(image, info, lambda: None) is None
+    struct.pack_into('>6I', image, 0x40, *record)
+    info['samples'][1]['size'] = 0x88
+    assert audio._uncached_tables(image, info, lambda: None) is None
+
+
+def test_uncached_record_exposes_and_checks_preceding_adpcm():
+    original, _, old_wave = fixture()
+    control = original[128:old_wave]
+    waves = original[old_wave:]
+    image = bytearray(0x500)
+    image[0x100:0x100+len(waves)] = waves
+    image[0x200:0x200+len(control)] = control
+    struct.pack_into('>6I', image, 0x40, 0xb0000200, 0xb0000200+len(control),
+                     0xb0000100, 0xb0000200, 0xb0000100, 0xb0000100)
+    banks = [a for a in audio.regions(image) if a.get('label') == 'N64 sound-bank controls' and a.get('samples')]
+    assert len(banks) == 1
+    assert banks[0]['table_offset'] == 0x100
+    assert banks[0]['table_confidence'] == 'validated'
+    assert wav(audio.preview(image, banks[0], {}))[1]
+    image[0x100] = 0x0f
+    assert not [a for a in audio.regions(image) if a.get('audio_kind') == 'sample bank']
