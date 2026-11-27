@@ -109,6 +109,7 @@ def regions(image, *, context=None, **kwargs):
         ia_font_textures,
         iain,
         iguana_audio,
+        iguana_skin_models,
         iguana_textures,
         img_textures,
         indexed_archive_models,
@@ -424,6 +425,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
     known.extend(iguana_audio.regions(image,**kwargs))
+    known.extend(iguana_skin_models.regions(image,**kwargs))
     known.extend(sized_archive_audio.regions(image,**kwargs))
     known.extend(rnc_control_audio.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
@@ -500,6 +502,7 @@ def preview(data, asset, selection):
         iain_textures,
         iguana_audio,
         iguana_models,
+        iguana_skin_models,
         iguana_textures,
         img_textures,
         indexed_archive_models,
@@ -674,6 +677,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==cartridge_scores.LAYOUT:return cartridge_scores.preview(data,asset,selection)
     if asset.get('layout')==paired_audio.SEQUENCE_LAYOUT:return paired_audio.preview(data,asset,selection)
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
+    if asset.get('layout')==iguana_skin_models._LAYOUT:return iguana_skin_models.preview(data,asset,selection)
     if asset.get('layout')==iain_models.LAYOUT:return iain_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
