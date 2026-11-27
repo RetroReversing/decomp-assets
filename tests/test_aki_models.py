@@ -21,13 +21,15 @@ def mesh():
         struct.pack('bbb', *v) + bytes(5) for v in vertices) + bytes([0, 1, 2, 0, 2, 1])
 
 
-def cartridge():
+def cartridge(first_encoded=False):
     files = [texture(), texture(), texture(), mesh(), literal(mesh())] + [b'\0\0']*252
+    if first_encoded:
+        files.insert(0, literal(bytes(8)) + bytes(2))
     data = bytearray()
     offsets = []
     for i, entry in enumerate(files):
         if len(data) % 2:data.append(0)
-        offsets.append(len(data) | (i == 4))
+        offsets.append(len(data) | (i == (5 if first_encoded else 4) or first_encoded and i == 0))
         data.extend(entry)
     if len(data) % 2:data.append(0)
     offsets.append(len(data))
@@ -51,3 +53,8 @@ def test_reject_invalid_mesh_stream_and_directory():
     assert aki_models._mesh(mesh()[:-1] + b'\x09') is None
     assert aki_models._decode(literal(mesh())[:-1]) is None
     assert not aki_models.regions(data.replace(b'TEX\0', b'NOPE'))
+
+
+def test_overlapping_header_candidate_does_not_hide_directory():
+    data = cartridge(first_encoded=True)
+    assert len(aki_models.regions(data)) == 2
