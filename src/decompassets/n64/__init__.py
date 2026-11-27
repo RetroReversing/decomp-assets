@@ -3,6 +3,7 @@
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - rnc_textures.py: descriptor-table texture banks inside byte-sum RNC blocks.
 - rnc_segmented_resources.py: display lists, textures and vertices in checked consecutive RNC blocks.
+- rnc_inline_meshes.py: local display-list meshes in checked RNC blocks with inline vertices.
 - texture_packs.py: texture packs with a trailing count, inside archives.
 - relative_directory.py, relative_textures.py: compressed resource tables and display-list textures.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
@@ -179,6 +180,7 @@ def regions(image, *, context=None, **kwargs):
         rnc_adpcm,
         rnc_chunk_models,
         rnc_indexed_sprites,
+        rnc_inline_meshes,
         rnc_quad_models,
         rnc_reloc_display,
         rnc_rgba_tiles,
@@ -316,6 +318,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(siff_models.regions(image,**kwargs))
     known.extend(segmented_model_resources.regions(image,**kwargs))
     known.extend(rnc_segmented_resources.regions(image,**kwargs))
+    known.extend(rnc_inline_meshes.regions(image,**kwargs))
     known.extend(aki_textures.regions(image,**kwargs))
     known.extend(aki_models.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
@@ -538,6 +541,7 @@ def preview(data, asset, selection):
         rnc_chunk_models,
         rnc_display_models,
         rnc_indexed_sprites,
+        rnc_inline_meshes,
         rnc_meshes,
         rnc_quad_models,
         rnc_reloc_display,
@@ -734,6 +738,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
     if asset.get('layout') == aki_models.LAYOUT:return aki_models.preview(data,asset,selection)
     if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
+    if asset.get('layout') == rnc_inline_meshes.LAYOUT:return rnc_inline_meshes.preview(data,asset,selection)
     if asset.get('layout') in (rnc_segmented_resources.MODEL,rnc_segmented_resources.TEXTURE):return rnc_segmented_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
