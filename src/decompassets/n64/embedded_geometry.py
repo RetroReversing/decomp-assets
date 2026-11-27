@@ -25,6 +25,47 @@ def record(image, at):
     return size, vertices, points_at
 
 
+def faces(image, at, info):
+    """Decode consecutive checked vertex-cache loads and packed triangle groups."""
+    size, vertices, _ = info
+    coords = struct.unpack_from('>H', image, at+14)[0]
+    uv_offset = struct.unpack_from('>I', image, at+28)[0]
+    pos = at+4+uv_offset+coords*4+4
+    end = at+4+size
+    result = []
+    while pos < end:
+        command = image[pos]
+        if command >> 5 != 1:
+            break
+        count = (command & 31)+1
+        pos += 1
+        if pos+count*2 > end:
+            break
+        cache = list(image[pos:pos+count*2:2])
+        texcoords = image[pos+1:pos+count*2:2]
+        if any(index >= vertices for index in cache) or any(index >= coords for index in texcoords):
+            break
+        pos += count*2
+        if image[pos:pos+2] == b'\xc0\x00':
+            pos += 2
+        if pos >= end or image[pos] >> 5 != 4:
+            break
+        count = image[pos] & 31
+        pos += 1
+        if not count or pos+count*2 > end:
+            break
+        group = []
+        for i in range(count):
+            word = struct.unpack_from('>H', image, pos+i*2)[0]
+            indices = ((word >> 10) & 31, (word >> 5) & 31, word & 31)
+            if word & 0x8000 or any(index >= len(cache) for index in indices):
+                return result
+            group.append(tuple(cache[index] for index in indices))
+        result.extend(group)
+        pos += count*2
+    return result
+
+
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     result = []
     for match in _HEADER.finditer(image):
@@ -33,8 +74,10 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
             continue
         check()
         size, count, _ = info
+        triangles = faces(image, at, info)
         result.append(dict(offset=at, size=size+4, kind='3d model', media='model', layout=LAYOUT,
-                           confidence='inferred', vertices=count, triangles=0, label='Embedded geometry · vertex cloud',
+                           confidence='inferred', vertices=count, triangles=len(triangles),
+                           label='Embedded geometry · local mesh' if triangles else 'Embedded geometry · vertex cloud',
                            reason='The record bounds and position and coordinate arrays agree.',
                            preview_settings=dict(source='rom', format='auto', offset=at)))
     return result
@@ -46,7 +89,12 @@ def preview(image, asset, selection):
         raise formats.AssetError('The geometry record changed. Scan ROM Explorer again.')
     _, count, start = info
     vertices = [struct.unpack_from('>3h', image, start+8*i) for i in range(count)]
-    return dict(media='model', vertices=vertices, triangles=0, edges=[], points=list(range(count)),
-                details=dict(format='Embedded geometry positions', vertices=count, triangles=0),
-                note='Vertex cloud only. Faces, materials, placement and animation have not been reconstructed.',
+    triangles = faces(image, asset['offset'], info)
+    edges = {tuple(sorted((face[i-1],face[i]))) for face in triangles for i in range(3)}
+    note = ('Partial local mesh. Additional faces, materials, placement and animation are separate.' if triangles else
+            'Vertex cloud only. Faces, materials, placement and animation have not been reconstructed.')
+    return dict(media='model', vertices=vertices, triangles=len(triangles), edges=sorted(edges), points=list(range(count)),
+                surfaces=[dict(indices=face, uv=[[0,0]]*3, colors=[[255]*4]*3, material=0) for face in triangles],
+                materials=[], details=dict(format='Embedded geometry', vertices=count, triangles=len(triangles)),
+                note=note,
                 settings=asset['preview_settings'])
