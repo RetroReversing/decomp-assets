@@ -29,7 +29,9 @@ def test_checked_directory_previews_texture():
     regions = textures.regions(image)
     assert len(regions) == 1
     assert regions[0]['texture_count'] == 8
-    assert regions[0]['textures'][0]['settings']['width'] == 4
+    assert regions[0]['textures'][0]['preview_settings']['width'] == 4
+    item = regions[0]['textures'][0]
+    assert item['frames'] == 1 and item['levels'][0]['height'] == 4
     result = textures.preview(image, regions[0], {'texture': 0})
     assert result['media'] == 'image'
 
