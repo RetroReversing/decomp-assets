@@ -49,6 +49,7 @@ def regions(image, *, context=None, **kwargs):
     raise to stop) and `progress` (given a dict) are passed to each recogniser.
     """
     from . import (
+        adjacent_display_models,
         archived_models,
         arithmetic_assets,
         arithmetic_descriptors,
@@ -167,6 +168,7 @@ def regions(image, *, context=None, **kwargs):
         reloc_files,
         reloc_level_objects,
         resources,
+        rgba_runtime_headers,
         rle_font_atlas,
         rle_texture_tables,
         rnc_adpcm,
@@ -354,6 +356,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(rnc_tiled_images.regions(image,models=compressed_meshes,**kwargs))
     known.extend(rnc_chunk_models.regions(image,**kwargs))
     known.extend(rnc_rgba_tiles.regions(image,**kwargs))
+    known.extend(rgba_runtime_headers.regions(image,**kwargs))
+    known.extend(adjacent_display_models.regions(image,**kwargs))
     known.extend(compressed_meshes)
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
@@ -512,6 +516,7 @@ def preview(data, asset, selection):
         reloc_files,
         reloc_level_objects,
         resources,
+        rgba_runtime_headers,
         rle_font_atlas,
         rle_texture_tables,
         rnc_adpcm,
@@ -669,6 +674,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_poly_models.LAYOUT:return zlib_poly_models.preview(data,asset,selection)
     if asset.get('layout') == rnc_chunk_models.LAYOUT:return rnc_chunk_models.preview(data,asset,selection)
     if asset.get('layout') == rnc_rgba_tiles.LAYOUT:return rnc_rgba_tiles.preview(data,asset,selection)
+    if asset.get('layout') == rgba_runtime_headers.LAYOUT:return rgba_runtime_headers.preview(data,asset,selection)
     if asset.get('layout') == mort_streams.LAYOUT:return mort_streams.preview(data,asset,selection)
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
