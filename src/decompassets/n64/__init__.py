@@ -599,6 +599,7 @@ def preview(data, asset, selection):
         rnx_atlas,
         romdisk_art,
         romdisk_speech,
+        runtime_packed_graphics,
         runtime_textures,
         rzip_audio,
         rzip_catalog,
@@ -823,6 +824,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==inline_tiles.LAYOUT:return inline_tiles.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
+    if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)
