@@ -606,6 +606,7 @@ def preview(data, asset, selection):
         rnx_atlas,
         romdisk_art,
         romdisk_speech,
+        runtime_direct_models,
         runtime_packed_graphics,
         runtime_textures,
         runtime_tiled_textures,
@@ -837,6 +838,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
+    if asset.get('layout') == runtime_direct_models.LAYOUT:return runtime_direct_models.preview(data,asset,selection)
     if asset.get('layout') in (table_lz_graphics.TEXTURES,ring12_graphics.TEXTURES,runtime_packed_graphics.MIO_TEXTURES):return table_lz_graphics.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
