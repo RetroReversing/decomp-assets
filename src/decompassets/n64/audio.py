@@ -462,6 +462,35 @@ def _offset_directory_tables(image, check):
     return result
 
 
+def _uncached_tables(image, info, check):
+    """Pair controls and preceding samples from a repeated cartridge-address record."""
+    control = info['offset']
+    if not 0 <= control < 0x10000000:
+        return None
+    marker = struct.pack('>I', 0xb0000000 + control)
+    found = set()
+    at = 0
+    for _ in range(64):
+        at = image.find(marker, at)
+        if at < 0:
+            break
+        check()
+        start = at
+        at += 4
+        if start % 4 or start + 24 > len(image):
+            continue
+        first, end, wave, repeated, wave2, wave3 = struct.unpack_from('>6I', image, start)
+        end -= 0xb0000000
+        wave -= 0xb0000000
+        if (first != repeated or wave2 != wave3 or wave2 != wave + 0xb0000000
+                or not control + info['size'] <= end <= min(len(image), control + info['size'] + 16)
+                or not 0 <= wave < control or wave % 8
+                or any(s['relative_offset'] + s['size'] > control-wave for s in info['samples'])):
+            continue
+        found.add((end, wave, control))
+    return next(iter(found)) if len(found) == 1 else None
+
+
 def _following_sample_directory(image, info):
     """Validate a count and complete relative sample extents after a control graph."""
     at = info['offset'] + info['size']
@@ -533,7 +562,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
         sample_directory = _following_sample_directory(image, info) if not relocated else None
-        partition = parallel.get(offset) or directory.get(offset)
+        partition = parallel.get(offset) or directory.get(offset) or _uncached_tables(image, info, check)
         if sample_directory:
             _, base, offsets = sample_directory
             partition = (offset+info['size'], base, base+offsets[-1])
@@ -585,6 +614,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
                  'A checked cartridge directory pairs bounded control and sample ranges.' if offset in directory else
+                 'Repeated cartridge addresses pair the controls with the preceding sample table.' if partition and not sample_directory and offset not in parallel else
                  'The following offset directory bounds every sample in the control graph.' if sample_directory else
                  'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
