@@ -101,3 +101,28 @@ def test_zip_data_descriptors_and_duplicate_end_records_are_bounded():
     members=asset_archives.zip_members(image)
     assert len(members)==1 and asset_archives.member_bytes(image,members[0])==pack()
     assert len(texture_packs.regions(image))==1
+
+
+def test_concatenated_packs_preview_each_member_and_reject_bad_boundaries():
+    first = pack(((16, 8, 4, 1, 1),))
+    second = pack(((256, 4, 4, 1, 1),))
+    pad = lambda data: data + b'\x04' * (-len(data) % 8)
+    raw = pad(first) + pad(second)
+    items = texture_packs.layouts(raw)
+    assert len(items) == 2
+    assert items[1]['frame_offsets'][0] >= len(pad(first))
+    image = archive(raw)
+    asset = texture_packs.regions(image)[0]
+    assert len(asset['textures']) == 2
+    for index in (0, 1):
+        result = texture_packs.preview(image, asset, {'texture': index})
+        assert result['mime'] == 'image/png'
+    corrupted = bytearray(raw)
+    corrupted[len(first)] ^= 1
+    assert texture_packs.layouts(bytes(corrupted)) is None
+    assert texture_packs.layouts(raw[:-1]) is None
+    bad_footer = bytearray(raw)
+    bad_footer[len(first)-1] = 2
+    assert texture_packs.layouts(bytes(bad_footer)) is None
+    with pytest.raises(RuntimeError, match='Stopped'):
+        texture_packs.layouts(raw, check=lambda: (_ for _ in ()).throw(RuntimeError('Stopped')))
