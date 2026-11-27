@@ -1,4 +1,4 @@
-"""Indexed images and palettes in bounded RefPack SHPN containers."""
+"""Indexed and direct-color images in bounded SHPN containers."""
 from .. import formats, refpack
 
 LAYOUT = 'refpack-shpn-images'
@@ -31,7 +31,20 @@ def frames(data, palette_index=0):
     for i in range(count):
         name = data[16+i*8:20+i*8].decode('ascii', errors='replace').strip()
         at = int.from_bytes(data[20+i*8:24+i*8], 'big')
-        if at < 16+8*count or at+16 > len(data) or data[at] not in (0x63, 0x66, 0xe3, 0xe6):
+        if at < 16+8*count or at+16 > len(data):
+            continue
+        if data[at] == 0x68:
+            # Direct RGBA16 entries are bounded by the next directory offset.
+            if offsets != sorted(set(offsets)) or any(x < 16+8*count or x >= len(data) for x in offsets):
+                continue
+            width, height = int.from_bytes(data[at+4:at+6], 'big'), int.from_bytes(data[at+6:at+8], 'big')
+            end = offsets[i+1] if i+1 < count else len(data)
+            if (data[at+1:at+4] != bytes(3) or not 1 <= width <= 1024 or not 1 <= height <= 1024
+                    or at+16+width*height*2 > end):
+                continue
+            result.append((name,at+16,width,height,0,16,False,0))
+            continue
+        if data[at] not in (0x63, 0x66, 0xe3, 0xe6):
             continue
         bits = 4 if data[at] in (0x63, 0xe3) else 8
         compressed = bool(data[at] & 0x80)
@@ -99,7 +112,7 @@ def regions(image, *, check=lambda: None, **kwargs):
             continue
         check()
         alternate = frames(data,1)
-        palettes = 2 if len(alternate) == len(images) and any(a[4] != b[4] for a,b in zip(images,alternate)) else 1
+        palettes = (2 if len(alternate) == len(images) and any(a[4] != b[4] for a,b in zip(images,alternate)) else 1) if any(a[5] != 16 for a in images) else 0
         found.append(dict(offset=start, size=consumed, kind='image', layout=LAYOUT,
                           label=f'SHPN texture bank ({len(images)} images)', confidence='validated',
                           frames=len(images), palettes=palettes, width=images[0][2], height=images[0][3],
@@ -120,7 +133,7 @@ def regions(image, *, check=lambda: None, **kwargs):
         if not images:
             continue
         alternate = frames(data, 1)
-        palettes = 2 if len(alternate) == len(images) and any(a[4] != b[4] for a,b in zip(images,alternate)) else 1
+        palettes = (2 if len(alternate) == len(images) and any(a[4] != b[4] for a,b in zip(images,alternate)) else 1) if any(a[5] != 16 for a in images) else 0
         found.append(dict(offset=start, size=size, kind='image', layout=RAW_LAYOUT,
                           label=f'SHPN texture bank ({len(images)} images)', confidence='validated',
                           frames=len(images), palettes=palettes, width=images[0][2], height=images[0][3],
@@ -138,13 +151,15 @@ def preview(image, asset, selection):
             data, _ = refpack.unpack(memoryview(image)[asset['offset']:])
         except (ValueError, IndexError) as error:
             raise formats.AssetError('The compressed texture changed. Rescan ROM Explorer.') from error
-    palette = formats.integer(selection.get('palette',0),'Palette',0,asset.get('palettes',1)-1)
-    images = frames(data,palette)
+    palette_index = formats.integer(selection.get('palette',0),'Palette',0,max(0,asset.get('palettes',1)-1))
+    images = frames(data,palette_index)
     if not images or len(images) != asset['frames']:
         raise formats.AssetError('The texture bank changed. Rescan ROM Explorer.')
     index = formats.integer(selection.get('frame', 0), 'Frame', 0, len(images)-1)
     name, at, width, height, palette, bits, compressed, size = images[index]
-    if compressed:
+    if bits == 16:
+        result = formats.preview(data, dict(format='rgba5551-be', offset=at, width=width, height=height))
+    elif compressed:
         raw, _ = refpack.unpack(memoryview(data)[at:at+size-16])
         colors = 1 << bits
         pixels = bytes(raw) + bytes(data[palette:palette+colors*2])
@@ -153,7 +168,7 @@ def preview(image, asset, selection):
     else:
         result = formats.preview(data, dict(format=f'ci{bits}', offset=at, width=width, height=height,
                                             palette_offset=palette, palette_format='rgba5551-be'))
-    result['settings'] = {**asset['preview_settings'], 'frame': index, 'palette': palette}
+    result['settings'] = {**asset['preview_settings'], 'frame': index, 'palette': palette_index}
     note = asset['reason'] + (' Pixel bytes were decoded from a bounded RefPack stream.' if compressed else '')
     result['details'].update(name=name, note=note)
     return result
