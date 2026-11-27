@@ -148,6 +148,7 @@ def regions(image, *, context=None, **kwargs):
         paired_audio,
         paired_resources,
         paired_rle_images,
+        paired_rle_models,
         parallel_midi,
         prefixed_texture_catalog,
         prefixed_texture_models,
@@ -381,6 +382,7 @@ def regions(image, *, context=None, **kwargs):
     iguana_models = []
     known.extend(paired_resources.regions(image,**kwargs))
     known.extend(paired_rle_images.regions(image,**kwargs))
+    known.extend(paired_rle_models.regions(image,**kwargs))
     known.extend(iain.regions(image,**kwargs))
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
@@ -501,6 +503,7 @@ def preview(data, asset, selection):
         paired_resource_models,
         paired_resource_textures,
         paired_rle_images,
+        paired_rle_models,
         parallel_midi,
         prefixed_texture_catalog,
         prefixed_texture_models,
@@ -600,6 +603,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (rnc_tiled_images.LAYOUT,rnc_tiled_images.BANK,rnc_display_models.LAYOUT):return rnc_tiled_images.preview(data,asset,selection)
     if asset.get('layout')==striped_images.LAYOUT:return striped_images.preview(data,asset,selection)
     if asset.get('layout')==paired_rle_images.LAYOUT:return paired_rle_images.preview(data,asset,selection)
+    if asset.get('layout')==paired_rle_models.LAYOUT:return paired_rle_models.preview(data,asset,selection)
     if asset.get('layout')==named_resource_images.LAYOUT:return named_resource_images.preview(data,asset,selection)
     if asset.get('layout')==packed_tim.LAYOUT:return packed_tim.preview(data,asset,selection)
     if asset.get('layout')==lz_texture_directories.LAYOUT:return lz_texture_directories.preview(data,asset,selection)
