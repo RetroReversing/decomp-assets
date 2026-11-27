@@ -2,7 +2,8 @@
 import re
 import struct
 
-from . import audio
+from ..formats import AssetError
+from . import audio, dean_codec
 
 _ANCHOR = re.compile(rb'~audio~\\music\.ctl\x00', re.I)
 _NAME = re.compile(rb'[!-~]{1,120}\x00')
@@ -64,6 +65,7 @@ def directories(image, *, check=lambda: None):
 
 def regions(image, *, check=lambda: None, progress=lambda _: None):
     result = []
+    codebooks = dean_codec.table_offset(image)
     for directory in directories(image, check=check):
         start, end = directory[b'~audio~/music.ctl']
         wave, wave_end = directory[b'~audio~/music.tbl']
@@ -77,16 +79,28 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                                           (start + middle, second, end)):
             try:
                 bank = audio.bank(image, offset, relocation_base=relocation, control_end=limit,
-                                  sample_only=True, partial_samples=True, check=check)
+                                  sample_only=True, partial_samples=True, dean_codebooks=codebooks, check=check)
             except audio.BankError:
                 continue
+            bank['corroborated'] = True
             if (any(relative + size > wave_end - wave for relative, size in bank['extents'])
                     or not audio._fits(image, bank, wave, [audio.MAX_HEADER_CHECKS], check)):
                 continue
-            samples = [dict(sample, offset=wave + sample['relative_offset']) for sample in bank['samples']]
+            samples = []
+            for sample in bank['samples']:
+                check()
+                sample = dict(sample, offset=wave + sample['relative_offset'])
+                if sample['codec'] == 'Acclaim DEAN':
+                    try:
+                        dean_codec.decode(image, codebooks, image[sample['offset']:sample['offset']+sample['size']], 1)
+                    except AssetError:
+                        continue
+                samples.append(sample)
+            if not samples:
+                continue
             result.append(dict(offset=offset, size=bank['size'], label='Archive audio samples', kind='audio',
                                media='audio', audio_kind='sample bank', confidence='validated', samples=samples,
                                table_offset=wave, table_confidence='validated',
-                               reason='Named archive members, relocated control pointers, bounded sample extents and ADPCM frame selectors agree. Unsupported codecs are omitted.',
+                               reason='Named archive members, relocated control pointers, bounded sample extents and codec checks agree. Playback uses the bank rate; game pitch may differ.',
                                preview_settings=dict(format='auto', source='rom', offset=offset)))
     return result

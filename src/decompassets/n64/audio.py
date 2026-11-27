@@ -35,7 +35,7 @@ class KeyMapError(BankError):
     """A bank has sample controls but no usable MIDI note mapping."""
 
 
-def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, sample_only=False, partial_samples=False, check=lambda: None):
+def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, sample_only=False, partial_samples=False, dean_codebooks=None, check=lambda: None):
     """Check relocation flags, pointer graphs, predictor books and record extents."""
     if partial_samples and not sample_only:raise BankError('Partial banks are available only as samples.')
     if relocated and (offset < len(B1_WRAPPER) or image[offset-len(B1_WRAPPER):offset] != B1_WRAPPER):
@@ -102,14 +102,27 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
                 extents.add((base,length))
                 if len(extents)>4096:raise BankError('Bank sample limit reached.')
             if codec==0:
+                order,predictors=struct.unpack('>II',take(book,8))
+                if order!=2 or not 1<=predictors<=8:
+                    if dean_codebooks is not None and (order, predictors) == (1, 1):
+                        tag, block, frames, declared = struct.unpack('>4sIII', take(book+8,16))
+                        if (tag == b'DEAN' and block == 256 and 2 <= frames <= 65536
+                                and length <= declared <= length+8 and declared <= MAX_BYTES):
+                            # The ALWaveTable length is rounded down to nine-byte
+                            # ADPCM frames; the DEAN header keeps its exact size.
+                            if partial_samples:
+                                extents.discard((base, length))
+                                extents.add((base, declared))
+                            sample.update(codec='Acclaim DEAN', dean_codebooks=dean_codebooks,
+                                          dean_frames=frames, size=declared, samples=(frames-1)*128)
+                            samples[sample_key] = sample
+                            continue
+                    if partial_samples:continue
+                    raise BankError('Unsupported ADPCM book.')
                 # Some bank builders retain an even-byte pad after odd frame counts.
                 if length%9 not in (0,1) or length<9 or length%9==1 and length%2:
                     if partial_samples:continue
                     raise BankError('ADPCM needs complete nine-byte frames, with at most an even-byte pad.')
-                order,predictors=struct.unpack('>II',take(book,8))
-                if order!=2 or not 1<=predictors<=8:
-                    if partial_samples:continue
-                    raise BankError('Unsupported ADPCM book.')
                 take(book,8+order*predictors*16)
                 sample.update(book_offset=offset+book+8,predictors=predictors,samples=length//9*16,encoded_size=length//9*9)
             else:
@@ -677,6 +690,10 @@ def preview(image, asset, selection, *, book_image=None):
     if not 0<=offset<offset+length<=len(image):raise AssetError('The detected sample exceeds the current image. Refresh ROM Explorer.')
     limit=min(sample['samples'],rate*MAX_SECONDS,(MAX_BYTES-44)//2)
     raw=image[offset:offset+sample.get('encoded_size',length)]
+    if sample['codec'] == 'Acclaim DEAN':
+        from . import dean_audio
+        return dean_audio.render_clip(image, sample['dean_codebooks'], raw, rate, sample['dean_frames'],
+                                      dict(source='rom', format='auto', offset=asset['offset'], sample=index))
     if sample['codec'] in ('N64 VADPCM', 'N64 VADPCM (2-bit)'):
         books=image if book_image is None else book_image
         at=sample['book_offset'];count=sample['predictors']*16
