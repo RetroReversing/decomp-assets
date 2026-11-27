@@ -143,8 +143,10 @@ def regions(image, *, context=None, **kwargs):
         named_file_effects,
         named_file_models,
         named_file_textures,
+        named_prm_models,
         named_resource_images,
         named_resource_models,
+        named_tim_archives,
         native_scene,
         nested_scenes,
         offset_models,
@@ -305,6 +307,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(shpn_images.regions(image,**kwargs))
+    known.extend(named_tim_archives.regions(image,**kwargs))
+    known.extend(named_prm_models.regions(image,**kwargs))
     known.extend(refpack_triangles.regions(image,**kwargs))
     known.extend(refpack_stadium.regions(image,**kwargs))
     known.extend(refpack_opcodes.regions(image,**kwargs))
@@ -525,8 +529,10 @@ def preview(data, asset, selection):
         named_adpcm,
         named_file_models,
         named_file_textures,
+        named_prm_models,
         named_resource_images,
         named_resource_models,
+        named_tim_archives,
         nested_scenes,
         offset_models,
         offset_textures,
@@ -706,6 +712,8 @@ def preview(data, asset, selection):
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == shpn_images.LAYOUT:return shpn_images.preview(data,asset,selection)
+    if asset.get('layout') == named_tim_archives.LAYOUT:return named_tim_archives.preview(data,asset,selection)
+    if asset.get('layout') == named_prm_models.LAYOUT:return named_prm_models.preview(data,asset,selection)
     if asset.get('layout') == refpack_triangles.LAYOUT:return refpack_triangles.preview(data,asset,selection)
     if asset.get('layout') == refpack_stadium.LAYOUT:return refpack_stadium.preview(data,asset,selection)
     if asset.get('layout') == refpack_opcodes.LAYOUT:return refpack_opcodes.preview(data,asset,selection)
