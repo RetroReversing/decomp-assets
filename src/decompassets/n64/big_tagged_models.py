@@ -62,7 +62,7 @@ def from_archive(archive, data, check=lambda: None):
         if lo not in groups:
             groups[lo] = dict(offset=lo, size=hi-lo, kind='3d model', media='model', layout=LAYOUT,
                               label='Paged tagged model', confidence='validated', archive=archive[0],
-                              members=[member], meshes=[mesh], nodes=1, triangles=len(faces),
+                              members=[member], meshes=[mesh], nodes=1, vertices=len(points), triangles=len(faces),
                               reason='Bounded tagged vertex and triangle records resolve every index.',
                               preview_settings=dict(source='rom', format='auto', offset=lo, mesh=0))
         else:
@@ -70,6 +70,7 @@ def from_archive(archive, data, check=lambda: None):
             group['members'].append(member)
             group['meshes'].append(mesh)
             group['nodes'] += 1
+            group['vertices'] += len(points)
             group['triangles'] += len(faces)
             group['size'] = max(group['size'], hi-lo)
     return list(groups.values())
