@@ -107,7 +107,9 @@ def regions(image, *, check=lambda: None, **kwargs):
                 check()
             data = unpack(image, start, end, size) if size else None
             if data and (settings := texture(data)):
-                items.append(dict(offset=start, size=end-start, unpacked=size, settings=settings,
+                items.append(dict(offset=start, size=end-start, unpacked=size, preview_settings=settings,
+                                  frames=1, palettes=int(settings['format'] == 'ci4'),
+                                  levels=[dict(width=settings['width'], height=settings['height'], offset=0)],
                                   label=f"{settings['format']} {settings['width']}×{settings['height']}"))
         for pos in range(0, len(items), 128):
             group = items[pos:pos+128]
@@ -116,7 +118,9 @@ def regions(image, *, check=lambda: None, **kwargs):
                               label=f'{len(group)} compact MIO textures', confidence='validated',
                               reason='Chunk directory bounds the data; each decoded display list specifies its pixels and tile.',
                               textures=group, texture_count=len(group), frames=1, palettes=1, levels=[],
-                              preview_settings=dict(source='rom', format='auto', offset=start)))
+                              preview_settings=dict(source='rom', format='auto', offset=start,
+                                                    width=group[0]['preview_settings']['width'],
+                                                    height=group[0]['preview_settings']['height'])))
     return found
 
 
@@ -124,9 +128,9 @@ def preview(image, asset, selection):
     i = formats.integer(selection.get('texture', 0), 'Texture', 0, len(asset['textures'])-1)
     item = asset['textures'][i]
     data = unpack(image, item['offset'], item['offset']+item['size'], item['unpacked'])
-    if data is None or texture(data) != item['settings']:
+    if data is None or texture(data) != item['preview_settings']:
         raise formats.AssetError('The compressed texture changed. Scan ROM Explorer again.')
-    result = formats.preview(data, item['settings'])
+    result = formats.preview(data, item['preview_settings'])
     result['details'].update(texture=i, note=asset['reason'])
     result['settings'] = dict(asset['preview_settings'], texture=i, frame=0, palette=0, mip=0)
     return result
