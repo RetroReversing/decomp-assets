@@ -608,6 +608,7 @@ def preview(data, asset, selection):
         romdisk_speech,
         runtime_packed_graphics,
         runtime_textures,
+        runtime_tiled_textures,
         rzip_audio,
         rzip_catalog,
         rzip_models,
@@ -696,6 +697,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==constructed_resource_textures.LAYOUT:return constructed_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==runtime_textures.LAYOUT:return runtime_textures.preview(data,asset,selection)
+    if asset.get('layout')==runtime_tiled_textures.LAYOUT:return runtime_tiled_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
     if asset.get('layout') == bounded_lz_models.LAYOUT:return bounded_lz_models.preview(data,asset,selection)
