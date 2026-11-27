@@ -38,6 +38,8 @@ def regions(image, *, check=lambda: None, **kwargs):
                 found.append(dict(offset=start, size=end-start, unpacked=size, kind='3d model', media='model',
                                   layout=LAYOUT, label=f'{len(items)} compact MIO meshes',
                                   confidence='validated', meshes=items, nodes=len(items),
+                                  vertices=sum(item['vertices'] for item in items),
+                                  triangles=sum(item['triangles'] for item in items),
                                   reason='A bounded compressed member contains closed F3DEX lists with resolved local vertices and triangles.',
                                   preview_settings=dict(format='auto', source='rom', offset=start)))
     return found

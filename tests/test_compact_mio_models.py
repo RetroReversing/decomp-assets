@@ -27,3 +27,16 @@ def test_meshes_require_bounded_vertices_and_closed_triangles():
     assert result['triangles'] == 2
     struct.pack_into('>I', data, 68, 0x0100fff0)
     assert models.meshes(data) == []
+
+
+def test_model_banks_expose_aggregate_geometry_counts():
+    data = _mesh()
+    packed = _packed(data)
+    image = bytearray(0x3000)
+    for i in range(8):
+        start = 0x1800 + i*len(packed)
+        image[start:start+len(packed)] = packed
+        struct.pack_into('>3I', image, 0x1000+i*12, start, start+len(packed), len(data))
+    banks = models.regions(image)
+    assert len(banks) == 8
+    assert all((bank['vertices'], bank['triangles']) == (4, 2) for bank in banks)
