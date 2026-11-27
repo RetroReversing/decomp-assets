@@ -1,4 +1,4 @@
-"""Local meshes from closed F3DEX and F3DEX2 lists with corroborated ROM address mappings."""
+"""Local meshes from closed Fast3D, F3DEX and F3DEX2 lists with corroborated mappings."""
 
 import struct
 
@@ -19,6 +19,7 @@ def geometry(image, offset, end, displacements, *, extra_state=None, vertex_end=
     vertex_end = len(image) if vertex_end is None else min(vertex_end,len(image))
     cache, vertices, lookup, faces = [None]*64, [], {}, []
     dialect = None
+    legacy = False
     for at in range(offset, min(end, offset+_MAX_COMMANDS*8), 8):
         if at+8 > len(image):
             return None
@@ -35,23 +36,28 @@ def geometry(image, offset, end, displacements, *, extra_state=None, vertex_end=
         if legacy_move or (w0, w1) == (0xbd000000, 0):
             if dialect == 2:
                 return None
-            dialect = 1
+            legacy = True
             continue
         if cmd in (1, 4):
-            variant = 2 if cmd == 1 else 1
-            if dialect is not None and dialect != variant:
+            fast_count = ((w0 >> 20) & 15) + 1
+            fast = cmd == 4 and (w0 & 0xffff) == fast_count * 16
+            variant = 2 if cmd == 1 else 3 if fast else 1
+            if legacy and variant == 2 or dialect is not None and dialect != variant:
                 return None
             dialect = variant
             if dialect == 2:
                 count = _vertex_count(w0)
                 dest = ((w0 >> 1)&127)-count
                 length = count * _VERTEX.size
+            elif dialect == 3:
+                count, dest = fast_count, (w0 >> 16) & 15
+                length = count * 16
             else:
                 count, dest = (w0 >> 10)&63, (w0 >> 17)&127
                 length = (w0 & 1023) + 1
                 if w0 & 0x10000 or (length != count * 16 and not (allow_padded_load and length == (count + 1) * 16)):
                     return None
-            limit = 64 if dialect == 2 else 32
+            limit = 64 if dialect == 2 else 16 if dialect == 3 else 32
             space = _space(w1)
             if space is None and not w1 >> 24 and 0 in displacements:
                 space = 0  # a recogniser explicitly established file-relative addresses
@@ -71,14 +77,16 @@ def geometry(image, offset, end, displacements, *, extra_state=None, vertex_end=
                 cache[slot] = lookup[pointer]
         elif cmd in (0xbf, 0xb1, 5, 6, 7):
             modern = cmd in (5, 6, 7)
-            if dialect != (2 if modern else 1) or w1 >> 24 or cmd == 0xbf and w0 & 0xffffff or cmd == 5 and w1:
+            if (dialect != (2 if modern else 1) and not (dialect == 3 and cmd == 0xbf)
+                    or w1 >> 24 or cmd == 0xbf and w0 & 0xffffff or cmd == 5 and w1):
                 return None
             words = (w0,) if cmd == 5 else (w1,) if cmd == 0xbf else (w0, w1)
             for word in words:
                 slots = tuple((word >> shift)&255 for shift in (16, 8, 0))
-                if any(slot%2 or slot//2 >= len(cache) or cache[slot//2] is None for slot in slots):
+                divisor = 10 if dialect == 3 else 2
+                if any(slot % divisor or slot//divisor >= len(cache) or cache[slot//divisor] is None for slot in slots):
                     return None
-                faces.append(tuple(cache[slot//2] for slot in slots))
+                faces.append(tuple(cache[slot//divisor] for slot in slots))
         elif cmd not in _STATE:
             return None
     return None
@@ -100,7 +108,12 @@ def regions(image, group, displacements, pointers, check):
             continue
         end, vertices, faces = parsed
         accepted_end = end
-        format_name = 'F3DEX2' if image[end-8] == 0xdf else 'F3DEX'
+        if image[end-8] == 0xdf:
+            format_name = 'F3DEX2'
+        else:
+            vertex = next((_COMMAND.unpack_from(image, at)[0] for at in range(offset, end, 8) if image[at] == 4), 0)
+            count = ((vertex >> 20) & 15) + 1
+            format_name = 'Fast3D' if (vertex & 0xffff) == count*16 else 'F3DEX'
         result.append(dict(offset=offset, size=end-offset, label=f'{format_name} display-list mesh', kind='3d model',
                            confidence='inferred', media='model', layout='f3dex-mesh', vertices=len(vertices),
                            triangles=len(faces), address_maps=sorted(displacements.items()),
@@ -115,7 +128,7 @@ def preview(image, asset, selection, *, extra_state=None, vertex_flag_mask=0, al
                       vertex_end=asset.get('vertex_end'), extra_state=extra_state, vertex_flag_mask=vertex_flag_mask,
                       allow_padded_load=allow_padded_load)
     if parsed is None:
-        raise formats.AssetError('The F3DEX list changed. Rescan ROM Explorer.')
+        raise formats.AssetError('The display list changed. Rescan ROM Explorer.')
     _, vertices, faces = parsed
     edges = {tuple(sorted((face[i], face[(i+1)%3]))) for face in faces for i in range(3)}
     return dict(media='model', vertices=vertices, triangles=len(faces), edges=sorted(edges),
