@@ -229,7 +229,7 @@ def binary_song(data, waves):
     return dict(notes=events, tempos=tempos, loops=loops, channels=count, extent=extent) if events else None
 
 
-def binary_effects(data, waves):
+def binary_effects(data, waves, *, allow_empty=False):
     if len(data) < 24:
         return None
     count, second, third, reserved, drum, instruments = _HEADER.unpack_from(data)
@@ -247,12 +247,12 @@ def binary_effects(data, waves):
     try:
         for at,end in zip(tracks, (*tracks[1:],instruments)):
             _,notes,tempos,loops = _track(data,at,end,waves,instruments=lookup,effects=True)
-            if not notes:
+            if not notes and not allow_empty:
                 return None
             scores.append(dict(notes=notes,tempos=tempos,loops=loops,channels=1))
     except ValueError:
         return None
-    return scores
+    return scores if any(score['notes'] for score in scores) else None
 
 
 def _effects_region(image, bank, waves, check):
@@ -708,7 +708,7 @@ def _play(image, asset, selection):
                 elif asset.get('sequence_packed',True):
                     raw, _ = lzari.unpack(raw,order=asset.get('sequence_byte_order','big'),limit=_MAX_BYTES)
                 if asset['layout'] == 'libmus-binary-effects':
-                    scores = binary_effects(raw,set(waves))
+                    scores = binary_effects(raw,set(waves),allow_empty=asset.get('allow_empty',False))
                     if scores and index < len(scores):
                         score = scores[index]
                 else:

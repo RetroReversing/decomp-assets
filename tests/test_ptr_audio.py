@@ -329,3 +329,16 @@ def test_versioned_raw_effects_allow_large_valid_directories():
     assert asset['size'] == len(raw)
     assert libmus_song._versioned_effects(bytes(28)+raw, bank) is None
     assert libmus_song._versioned_effects(image[:-1], bank) is None
+
+
+def test_named_effect_directory_may_have_an_empty_slot():
+    from decompassets.n64 import libmus_song
+
+    empty = b'\x80'
+    track = bytes.fromhex('81 00 30 18 80')
+    header = struct.pack('>10I', 2, 1, 1, 0, 0, 40+len(empty)+len(track), 40, 100, 41, 100)
+    raw = header+empty+track+struct.pack('>H', 4)
+    assert libmus_song.binary_effects(raw, {4}) is None
+    scores = libmus_song.binary_effects(raw, {4}, allow_empty=True)
+    assert not scores[0]['notes'] and scores[1]['notes'][0].wave == 4
+    assert libmus_song.binary_effects(raw, {3}, allow_empty=True) is None
