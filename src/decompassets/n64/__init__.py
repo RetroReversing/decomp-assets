@@ -140,6 +140,7 @@ def regions(image, *, context=None, **kwargs):
         mort_streams,
         mwo_graphics,
         named_adpcm,
+        named_cmp_textures,
         named_file_effects,
         named_file_models,
         named_file_textures,
@@ -309,6 +310,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(shpn_images.regions(image,**kwargs))
     known.extend(named_tim_archives.regions(image,**kwargs))
+    known.extend(named_cmp_textures.regions(image,**kwargs))
     known.extend(named_prm_models.regions(image,**kwargs))
     known.extend(refpack_triangles.regions(image,**kwargs))
     known.extend(refpack_stadium.regions(image,**kwargs))
@@ -529,6 +531,7 @@ def preview(data, asset, selection):
         mort_streams,
         mwo_graphics,
         named_adpcm,
+        named_cmp_textures,
         named_file_models,
         named_file_textures,
         named_prm_models,
@@ -715,6 +718,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') == shpn_images.LAYOUT:return shpn_images.preview(data,asset,selection)
     if asset.get('layout') == named_tim_archives.LAYOUT:return named_tim_archives.preview(data,asset,selection)
+    if asset.get('layout') == named_cmp_textures.LAYOUT:return named_cmp_textures.preview(data,asset,selection)
     if asset.get('layout') == named_prm_models.LAYOUT:return named_prm_models.preview(data,asset,selection)
     if asset.get('layout') == refpack_triangles.LAYOUT:return refpack_triangles.preview(data,asset,selection)
     if asset.get('layout') == refpack_stadium.LAYOUT:return refpack_stadium.preview(data,asset,selection)
