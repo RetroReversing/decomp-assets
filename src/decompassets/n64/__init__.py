@@ -78,6 +78,7 @@ def regions(image, *, context=None, **kwargs):
         chunked_package_images,
         chunked_polygon_meshes,
         chunked_zlib,
+        compact_mio_models,
         compact_mio_textures,
         constructed_resource_textures,
         dean_audio,
@@ -284,6 +285,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(diet_audio.regions(image,**kwargs))
     known.extend(relative_textures.regions(image,**kwargs))
     known.extend(compact_mio_textures.regions(image,**kwargs))
+    known.extend(compact_mio_models.regions(image,**kwargs))
     known.extend(relative_models.regions(image,**kwargs))
     known.extend(relative_objects.regions(image,**kwargs))
     known.extend(relative_audio.regions(image,**kwargs))
@@ -476,6 +478,7 @@ def preview(data, asset, selection):
         chunked_package_images,
         chunked_polygon_meshes,
         chunked_zlib,
+        compact_mio_models,
         compact_mio_textures,
         constructed_resource_textures,
         dean_audio,
@@ -764,6 +767,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_indexed_images.LAYOUT:return zlib_indexed_images.preview(data,asset,selection)
     if asset.get('layout') == relative_textures.LAYOUT:return relative_textures.preview(data,asset,selection)
     if asset.get('layout') == compact_mio_textures.LAYOUT:return compact_mio_textures.preview(data,asset,selection)
+    if asset.get('layout') == compact_mio_models.LAYOUT:return compact_mio_models.preview(data,asset,selection)
     if asset.get('layout') == relative_models.LAYOUT:return relative_models.preview(data,asset,selection)
     if asset.get('layout') == relative_objects.LAYOUT:return relative_objects.preview(data,asset,selection)
     if asset.get('layout') in (relative_audio.BANK, relative_audio.SONG):return relative_audio.preview(data,asset,selection)
