@@ -36,3 +36,13 @@ def test_bad_checksum_or_unexpected_extra_data_is_not_an_image():
     assert zlib_indexed_images.image_at(image[:-1], 16) is None
     data = zlib.decompress(image[16:]) + b'\0'
     assert zlib_indexed_images.image_at(b'\0'*16 + zlib.compress(data), 16) is None
+
+
+def test_four_bit_palette_image():
+    palette = bytes([255, 0, 0, 255, 0, 255, 0, 255]) + bytes(14*4)
+    data = struct.pack('>IIHHI', 0x80000000, 0, 2, 2, 0) + palette + bytes([0x01, 0x10])
+    image = bytes(16) + zlib.compress(data)
+    asset = next(a for a in n64.regions(image) if a.get('layout') == zlib_indexed_images.LAYOUT)
+    assert asset['palette_entries'] == [16]
+    assert asset['preview_settings']['format'] == 'ci4'
+    assert n64.preview(image, asset, {})['media'] == 'image'
