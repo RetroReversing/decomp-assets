@@ -12,6 +12,8 @@ from .. import formats as asset_formats
 from ..formats import AssetError
 
 MAX_EXPANDED=64*1024*1024
+MAX_PACKS=4096
+MAX_TEXTURES=16384
 
 
 def layout(data):
@@ -42,6 +44,66 @@ def layout(data):
     return items
 
 
+def _extent(data, start):
+    """Find a pack's footer from its header count and bounded record extents."""
+    if start + 8 > len(data) or data[start+1:start+4] != b'\x02\0\0':
+        return None
+    count = data[start]
+    if not count:
+        return None
+    cursor = start + (8+4*count+7)//8*8
+    for _ in range(count):
+        cursor = start + (cursor-start+7)//8*8
+        if cursor + 32 > len(data):
+            return None
+        fmt, width, height, palettes, frames = struct.unpack_from('>HHHBB', data, cursor+4)
+        if (fmt not in (0x10, 0x100, 0xa0) or not 1 <= width <= 2048 or not 1 <= height <= 2048
+                or width*height > 1024*1024 or not palettes or not frames
+                or palettes > 1 and frames > 1 or fmt == 0xa0 and (palettes, frames) != (1, 1)
+                or fmt == 0x100 and frames > 1 or fmt == 0x10 and width % 2):
+            return None
+        cursor += 32 + 4*(palettes+frames) + (0 if fmt == 0xa0 else palettes*fmt*2)
+        pixel_bytes = width*height*(4 if fmt == 0xa0 else 1) if fmt != 0x10 else width*height//2
+        for _ in range(frames):
+            if frames > 1 or palettes > 1:
+                cursor = start + (cursor-start+7)//8*8
+            cursor += pixel_bytes
+        if cursor >= len(data):
+            return None
+    return cursor+1 if data[cursor] == count else None
+
+
+def layouts(data, *, check=lambda: None):
+    """Read one complete pack or an entirely bounded, padded sequence of packs."""
+    if items := layout(data):
+        return items
+    start = 0
+    packs = 0
+    result = []
+    while start < len(data):
+        check()
+        if packs >= MAX_PACKS:
+            return None
+        end = _extent(data, start)
+        if end is None or not (items := layout(data[start:end])):
+            return None
+        for item in items:
+            item['frame_offsets'] = [offset+start for offset in item['frame_offsets']]
+            item['palette_offsets'] = [offset+start for offset in item['palette_offsets']]
+            item['preview_settings']['offset'] += start
+            if 'palette_offset' in item['preview_settings']:
+                item['preview_settings']['palette_offset'] += start
+        result.extend(items)
+        if len(result) > MAX_TEXTURES:
+            return None
+        packs += 1
+        aligned = (end+7)//8*8
+        if aligned > len(data) or data[end:aligned] != b'\x04'*(aligned-end):
+            return None
+        start = aligned
+    return result if packs >= 2 else None
+
+
 def regions(image, *, check=lambda:None, progress=lambda _:None):
     """Inspect every bounded archive member; only matching packs are fully expanded."""
     members=asset_archives.zip_members(image,check=check);expanded=0;result=[]
@@ -54,7 +116,7 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             if expanded+member['expanded']>MAX_EXPANDED:break
             expanded+=member['expanded'];raw=asset_archives.member_bytes(image,member)
         except AssetError:continue
-        items=layout(raw)
+        items=layouts(raw, check=check)
         if not items:continue
         result.append(dict(offset=member['offset'],size=member['size'],kind='image',label=member['name'],confidence='validated',layout='trailer-count-texture-pack',archive=member,textures=items,
                            **items[0],reason='ZIP member CRC and complete stream checked. Trailer-count texture records, palette sizes, frame sizes and all payload extents agree. Runtime use is not established.'))
@@ -65,7 +127,7 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
 
 def preview(image,asset,selection):
     """Revalidate the member and its layout before applying local texture/frame choices."""
-    raw=asset_archives.member_bytes(image,asset['archive']);items=layout(raw)
+    raw=asset_archives.member_bytes(image,asset['archive']);items=layouts(raw)
     if not items:raise AssetError('The archived texture layout changed. Rescan the ROM.')
     texture=asset_formats.integer(selection.get('texture',0),'Texture',0,len(items)-1)
     selected=items[texture]
