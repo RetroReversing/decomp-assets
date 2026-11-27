@@ -20,3 +20,28 @@ def test_checked_directories_and_selectable_sample(monkeypatch):
     assert ead_direct_audio.preview(data, banks[0], {'sample': 0})['media'] == 'audio'
     struct.pack_into('>I', data, 0xa4, 0x141)
     assert not list(ead_direct_audio.directories(data))
+
+
+def test_consecutive_tables_and_payloads_provide_checked_sample_banks():
+    data = bytearray(0x270)
+    struct.pack_into('>H', data, 0x20, 3)
+    for index in range(3):
+        struct.pack_into('>II8B', data, 0x30 + index*16, index*0x60, 0x60, 2, 0, 0, 255, 1, 0, 0, 0)
+    struct.pack_into('>3H', data, 0x60, 6, 8, 10)
+    data[0x66:0x6c] = bytes((1, 0, 1, 1, 1, 2))
+    struct.pack_into('>H', data, 0x70, 3)
+    for index in range(3):
+        struct.pack_into('>II8B', data, 0x80 + index*16, index*0x10, 0x10, 2, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into('>H', data, 0xb0, 2)
+    for index in range(2):
+        struct.pack_into('>II8B', data, 0xc0 + index*16, index*0x20, 0x20, 2, 0, 0, 0, 0, 0, 0, 0)
+    for index in range(3):
+        control = 0xe0 + index*0x60
+        struct.pack_into('>6I', data, control+16, 9, 0, 72, 32, 2, 1)
+        struct.pack_into('>3I', data, control+72, 0, 16, 0)
+    banks = ead_direct_audio.regions(data)
+    assert len(banks) == 1 and banks[0]['samples'][0]['offset'] == 0x200
+    assert ead_direct_audio.preview(data, banks[0], {'sample': 0})['media'] == 'audio'
+    # A broken font map prevents a coincidental set of tables from claiming audio.
+    data[0x67] = 3
+    assert not list(ead_direct_audio.contiguous_directories(data))
