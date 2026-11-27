@@ -80,6 +80,7 @@ def regions(image, *, context=None, **kwargs):
         diet_audio,
         display_lists,
         ead_direct_audio,
+        embedded_ci8,
         emsh_links,
         eurocom,
         exs_images,
@@ -232,6 +233,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(level_world_models.regions(image, **kwargs))
     known.extend(indexed_archive_models.regions(image, **kwargs))
     known.extend(indexed_pic_images.regions(image, **kwargs))
+    known.extend(embedded_ci8.regions(image, **kwargs))
     known.extend(grid_tile_meshes.regions(image, **kwargs))
     known.extend(indexed_sprite_banks.regions(image, **kwargs))
     known.extend(segmented_node_models.regions(image, **kwargs))
@@ -414,6 +416,7 @@ def preview(data, asset, selection):
         diet_audio,
         display_meshes,
         ead_direct_audio,
+        embedded_ci8,
         eurocom,
         exs_images,
         exs_models,
@@ -662,6 +665,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == prefixed_texture_models.LAYOUT:return prefixed_texture_models.preview(data,asset,selection)
     if asset.get('layout') == ia_font_textures.LAYOUT:return ia_font_textures.preview(data,asset,selection)
     if asset.get('layout') == be_iwad_maps.LAYOUT:return be_iwad_maps.preview(data,asset,selection)
+    if asset.get('layout') == embedded_ci8.LAYOUT:return embedded_ci8.preview(data,asset,selection)
     if asset.get('layout') == indexed_pic_images.LAYOUT:return indexed_pic_images.preview(data,asset,selection)
     if asset.get('layout') == named_file_models.LAYOUT:return named_file_models.preview(data,asset,selection)
     if asset.get('layout') == named_file_textures.LAYOUT:return named_file_textures.preview(data,asset,selection)
