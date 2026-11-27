@@ -796,7 +796,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == aki_models.LAYOUT:return aki_models.preview(data,asset,selection)
     if asset.get('layout') == chunked_polygon_meshes.LAYOUT:return chunked_polygon_meshes.preview(data,asset,selection)
     if asset.get('layout') == chunked_zlib.LAYOUT:return chunked_zlib.preview(data,asset,selection)
-    if asset.get('layout') == aki_textures.LAYOUT:return aki_textures.preview(data,asset,selection)
+    if asset.get('layout') in (aki_textures.LAYOUT, aki_textures.COMPRESSED):return aki_textures.preview(data,asset,selection)
     if asset.get('layout') == img_textures.LAYOUT:return img_textures.preview(data,asset,selection)
     if asset.get('layout') == sprite_sheets.LAYOUT:return sprite_sheets.preview(data,asset,selection)
     if asset.get('layout') == rnc_inline_meshes.LAYOUT:return rnc_inline_meshes.preview(data,asset,selection)
