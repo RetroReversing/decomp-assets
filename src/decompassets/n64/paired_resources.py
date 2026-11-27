@@ -75,6 +75,37 @@ def unpack_asset(image, asset):
     return decode(image, asset['offset'], asset['size'])
 
 
+def local_segments(data):
+    """Identify file-local address spaces from tables of display-list pointers."""
+    from . import display_meshes
+
+    # Some resources start with 24-byte records whose first word points to a
+    # local display list. A different segment in that list can name a texture
+    # loaded separately; it must not be interpreted relative to this file.
+    command = re.compile(rb'\xfd...(.)...\xf5.{7}\xe6.{7}\xf3.{7}\xe7.{7}\xf5.{7}\xf2.{7}', re.DOTALL)
+    vertex = re.compile(rb'[\x01\x04].......', re.DOTALL)
+    found = set()
+    for start in range(0, min(len(data)-72, 2048), 4):
+        pointers = [int.from_bytes(data[start+i*24:start+i*24+4], 'big') for i in range(3)]
+        segment = pointers[0] >> 24
+        if not 1 <= segment <= 15 or len(set(pointers)) != 3 or any(pointer >> 24 != segment for pointer in pointers):
+            continue
+        for pointer in pointers:
+            at = pointer & 0xffffff
+            if at % 8 or at+8 > len(data) or data[at:at+8] != bytes.fromhex('e700000000000000'):
+                break
+            end = min(len(data), at+512)
+            loads = any(match[1][0] == segment for match in command.finditer(data, at, end))
+            if not loads and not any(match.start() % 8 == 0 and data[match.start()+4] == segment
+                                     and display_meshes.geometry(data, match.start(), len(data), {segment:0},
+                                                                 vertex_end=match.start())
+                                     for match in vertex.finditer(data, at, end)):
+                break
+        else:
+            found.add(segment)
+    return found
+
+
 def directories(image, check):
     """Yield members bounded by consecutive entries, independently of contents."""
     skipped_until = 0
