@@ -209,6 +209,7 @@ def regions(image, *, context=None, **kwargs):
         yay0_scenes,
         zip_object_models,
         zip_object_textures,
+        zlib_indexed_images,
         zlib_meshes,
         zlib_textures,
     )
@@ -350,6 +351,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(compressed_meshes)
     known.extend(gzip_meshes.regions(image,**kwargs))
     known.extend(zlib_textures.regions(image,**kwargs))
+    known.extend(zlib_indexed_images.regions(image,**kwargs))
     known.extend(zlib_meshes.regions(image,**kwargs))
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
@@ -551,6 +553,7 @@ def preview(data, asset, selection):
         yay0_scenes,
         zip_object_models,
         zip_object_textures,
+        zlib_indexed_images,
         zlib_meshes,
         zlib_textures,
     )
@@ -653,6 +656,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == zlib_meshes.LAYOUT:return zlib_meshes.preview(data,asset,selection)
     if asset.get('layout') == paged_textures.LAYOUT:return paged_textures.preview(data,asset,selection)
     if asset.get('layout') == zlib_textures.LAYOUT:return zlib_textures.preview(data,asset,selection)
+    if asset.get('layout') == zlib_indexed_images.LAYOUT:return zlib_indexed_images.preview(data,asset,selection)
     if asset.get('layout') == relative_textures.LAYOUT:return relative_textures.preview(data,asset,selection)
     if asset.get('layout') == relative_models.LAYOUT:return relative_models.preview(data,asset,selection)
     if asset.get('layout') == relative_objects.LAYOUT:return relative_objects.preview(data,asset,selection)
