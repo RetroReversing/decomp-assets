@@ -731,7 +731,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == refpack_triangles.LAYOUT:return refpack_triangles.preview(data,asset,selection)
     if asset.get('layout') == refpack_stadium.LAYOUT:return refpack_stadium.preview(data,asset,selection)
     if asset.get('layout') == refpack_opcodes.LAYOUT:return refpack_opcodes.preview(data,asset,selection)
-    if asset.get('layout') == refpack_midx.LAYOUT:return refpack_midx.preview(data,asset,selection)
+    if asset.get('layout') in (refpack_midx.LAYOUT, refpack_midx.RAW_LAYOUT):return refpack_midx.preview(data,asset,selection)
     if asset.get('layout') == refpack_first_cache.LAYOUT:return refpack_first_cache.preview(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
     if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)

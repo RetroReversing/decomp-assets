@@ -6,13 +6,14 @@ import struct
 from .. import formats, refpack
 
 LAYOUT = 'refpack-midx'
+RAW_LAYOUT = 'midx-sequence'
 RATE = 16000
 MAX_EVENTS = 65536
 MAX_SECONDS = 12
 
 
-def sequence(data):
-    """Read complete fixed-time MIDI events; unknown opcodes and truncated scores stay unclassified."""
+def sequence(data, *, trailing=False):
+    """Read complete fixed-time MIDI events; optionally return the end within a larger data range."""
     if len(data) < 8 or data[:4] != b'MIDx' or len(data) > 256*1024:
         return None
     at = 4
@@ -29,7 +30,9 @@ def sequence(data):
             kind = data[at]
             at += 1
             if kind == 0x2f:
-                return (events, tick, notes) if notes and not any(data[at:]) else None
+                if not notes or not trailing and any(data[at:]):
+                    return None
+                return (events, tick, notes, at) if trailing else (events, tick, notes)
             lengths = {0xf8:0, 0x51:3, 0x2d:6, 0x2e:2}
             if kind not in lengths or at+lengths[kind] > len(data):
                 return None
@@ -56,6 +59,7 @@ def sequence(data):
 
 def regions(image, *, check=lambda: None, **kwargs):
     found = []
+    compressed_ranges = []
     at = 0
     while (at := image.find(b'\x10\xfb', at)) >= 0:
         start = at
@@ -65,6 +69,7 @@ def regions(image, *, check=lambda: None, **kwargs):
             data, used = refpack.unpack(memoryview(image)[start:])
         except (ValueError, IndexError):
             continue
+        compressed_ranges.append((start, start+used))
         parsed = sequence(data)
         if not parsed:
             continue
@@ -75,6 +80,24 @@ def regions(image, *, check=lambda: None, **kwargs):
                           samples=[dict(offset=start, size=used, codec='MIDx', label='Sequence', preview_available=True)],
                           reason='A complete RefPack stream contains bounded timed MIDI events and an end marker.',
                           preview_settings=dict(source='rom', format='auto', offset=start)))
+    at = 0
+    while (at := image.find(b'MIDx', at)) >= 0:
+        start = at
+        at += 4
+        if any(lo <= start < hi for lo, hi in compressed_ranges):
+            continue
+        check()
+        parsed = sequence(memoryview(image)[start:start+256*1024], trailing=True)
+        if not parsed:
+            continue
+        _, ticks, notes, size = parsed
+        found.append(dict(offset=start, size=size, kind='music sequence', media='audio',
+                          audio_kind='indexed sample directory', layout=RAW_LAYOUT, confidence='validated',
+                          label='MIDx music sequence', notes=notes, ticks=ticks,
+                          samples=[dict(offset=start, size=size, codec='MIDx', label='Sequence', preview_available=True)],
+                          reason='Bounded timed MIDI events form a complete sequence with an end marker.',
+                          preview_settings=dict(source='rom', format='auto', offset=start)))
+        at = start+size
     return found
 
 
@@ -122,10 +145,14 @@ def _render(events, final_tick):
 
 def preview(image, asset, selection):
     formats.integer(selection.get('sample', 0), 'Sequence', 0, 0)
-    try:
-        data, used = refpack.unpack(memoryview(image)[asset['offset']:])
-    except (ValueError, IndexError) as exc:
-        raise formats.AssetError('The music sequence changed. Rescan ROM Explorer.') from exc
+    if asset.get('layout') == RAW_LAYOUT:
+        data = image[asset['offset']:asset['offset']+asset['size']]
+        used = len(data)
+    else:
+        try:
+            data, used = refpack.unpack(memoryview(image)[asset['offset']:])
+        except (ValueError, IndexError) as exc:
+            raise formats.AssetError('The music sequence changed. Rescan ROM Explorer.') from exc
     parsed = sequence(data)
     if not parsed or used != asset['size']:
         raise formats.AssetError('The music sequence changed. Rescan ROM Explorer.')
