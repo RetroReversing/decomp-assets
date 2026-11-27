@@ -35,7 +35,7 @@ def mesh(data):
     faces = []
     while cursor+2 <= end:
         code, arg = data[cursor:cursor+2]
-        if code in (0x40, 0x50):
+        if code == 0x40:
             if arg >= 16 or cursor+6 > end:
                 return None
             loaded.add(arg)
