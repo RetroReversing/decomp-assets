@@ -1,5 +1,6 @@
 import struct
 
+from decompassets import formats
 from decompassets.n64 import runtime_textures
 
 
@@ -38,4 +39,31 @@ def test_reject_ambiguous_or_incomplete_evidence():
     assert not runtime_textures.regions(image, [ram])
     image, ram = fixture()
     struct.pack_into('>I', ram, 44, 0x01000000)  # mismatched tile slot
+    assert not runtime_textures.regions(image, [ram])
+
+
+def test_runtime_indexed_texture_uses_the_immediately_loaded_palette():
+    image = bytearray(4096)
+    ram = bytearray(4096)
+    palette = bytes(range(32))
+    pixels = bytes((i * 29) % 256 for i in range(1024))
+    image[992:1024] = b''.join(palette[i:i + 2][::-1] for i in range(0, 32, 2))
+    image[1024:2048] = pixels
+    ram[2016:2048] = palette
+    ram[2048:3072] = pixels
+    commands = [(0xe3001001, 0x8000), (0xfd100000, 0x800007e0), (0xe8000000, 0),
+                (0xf5000100, 0x07000000), (0xe6000000, 0), (0xf0000000, 0x0703c000),
+                (0xe7000000, 0), (0xfd500000, 0x80000800), (0xf5500000, 0x07000000),
+                (0xe6000000, 0), (0xf3000000, 0x071ff200), (0xe7000000, 0),
+                (0xf5400800, 0), (0xf2000000, (63 << 14) | (31 << 2))]
+    for n, (a, b) in enumerate(commands):
+        struct.pack_into('>II', ram, n * 8, a, b)
+    asset, = runtime_textures.regions(image, [ram])
+    assert (asset['format'], asset['palette_offset'], asset['palette_little_endian']) == ('ci4', 992, True)
+    result = runtime_textures.preview(image, asset, {})
+    assert result['details']['width'] == 64 and result['details']['height'] == 32
+    expected = formats.preview(bytes(image) + palette, dict(format='ci4', width=64, height=32,
+                                                            offset=1024, palette_offset=len(image)))
+    assert result['data_url'] == expected['data_url']
+    image[992] ^= 1
     assert not runtime_textures.regions(image, [ram])
