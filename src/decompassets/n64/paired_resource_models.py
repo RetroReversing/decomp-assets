@@ -1,4 +1,4 @@
-"""Local F3DEX2 meshes in paired cartridge resources."""
+"""Local F3DEX and F3DEX2 meshes in paired cartridge resources."""
 
 import re
 
@@ -7,7 +7,7 @@ from . import display_meshes, paired_resources
 
 LAYOUT = 'paired-resource-models'
 _SEGMENTS = {6: 0}
-_VERTEX_LOAD = re.compile(rb'\x01...\x06...', re.DOTALL)
+_VERTEX_LOAD = re.compile(rb'[\x01\x04]...\x06...', re.DOTALL)
 
 
 def meshes(data):
@@ -29,7 +29,7 @@ def meshes(data):
 
 def asset(offset, size, directory, entries):
     return dict(offset=offset, size=size, kind='3d model', media='model', layout=LAYOUT,
-                directory=directory, label=f'{len(entries)} local F3DEX2 meshes', confidence='validated',
+                directory=directory, label=f'{len(entries)} local display-list meshes', confidence='validated',
                 meshes=entries, nodes=len(entries),
                 reason='The local vertex loads and triangles resolve before the display list ends.',
                 preview_settings=dict(format='auto', source='rom', offset=offset))
