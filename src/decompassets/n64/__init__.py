@@ -2,6 +2,7 @@
 
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
 - rnc_textures.py: descriptor-table texture banks inside byte-sum RNC blocks.
+- rnc_segmented_resources.py: display lists, textures and vertices in checked consecutive RNC blocks.
 - texture_packs.py: texture packs with a trailing count, inside archives.
 - relative_directory.py, relative_textures.py: compressed resource tables and display-list textures.
 - display_lists.py: textures that uncompressed display lists load, in files placed by their vertices and pointers.
@@ -179,6 +180,7 @@ def regions(image, *, context=None, **kwargs):
         rnc_quad_models,
         rnc_reloc_display,
         rnc_rgba_tiles,
+        rnc_segmented_resources,
         rnc_tiled_images,
         rnx,
         romdisk_art,
@@ -311,6 +313,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(sized_lz_catalog.regions(image,**kwargs))
     known.extend(siff_models.regions(image,**kwargs))
     known.extend(segmented_model_resources.regions(image,**kwargs))
+    known.extend(rnc_segmented_resources.regions(image,**kwargs))
     stages = stage_banks.regions(image, **kwargs)
     known.extend(stages)
     known.extend(stage_meshes.regions(image, stages, kwargs.get("check", lambda: None)))
@@ -533,6 +536,7 @@ def preview(data, asset, selection):
         rnc_quad_models,
         rnc_reloc_display,
         rnc_rgba_tiles,
+        rnc_segmented_resources,
         rnc_textures,
         rnc_tiled_images,
         rnx,
@@ -722,6 +726,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == stage_banks.TEXTURE:return stage_banks.preview(data,asset,selection)
     if asset.get('layout') == stage_meshes.MODEL:return stage_meshes.preview(data,asset,selection)
     if asset.get('layout') == segmented_model_resources.LAYOUT:return segmented_model_resources.preview(data,asset,selection)
+    if asset.get('layout') in (rnc_segmented_resources.MODEL,rnc_segmented_resources.TEXTURE):return rnc_segmented_resources.preview(data,asset,selection)
     if asset.get('layout') in (siff_models.MODEL,siff_models.TEXTURE):return siff_models.preview(data,asset,selection)
     if asset.get('layout') == gzip_meshes.LAYOUT:return gzip_meshes.preview(data,asset,selection)
     if asset.get('layout')=='blast':return blast_textures.preview(data,asset,selection)
