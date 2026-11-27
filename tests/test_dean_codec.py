@@ -78,6 +78,12 @@ def test_dean_preview_decodes_pcm_with_rom_codebooks():
     assert samples[index] == expected and samples[0] < 0 < samples[-1]
 
 
+def test_dean_codebooks_accept_an_eight_byte_alignment_gap():
+    image = _image(padding=8)
+    assert dean_codec.table_offset(image) == 0
+    assert len(dean_codec.decode(image, 0, bytes(12) + b'\x80\0' + bytes(2), 1)) == 256
+
+
 def test_dean_rejects_invalid_codebook_pointer_and_truncated_frame():
     image = _image()
     damaged = bytearray(image)

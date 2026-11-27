@@ -61,7 +61,7 @@ def _book(image, at, bias):
 
 
 def _tables(image, anchor, *, linked_program=False):
-    for padding in (24, 16):
+    for padding in (24, 16, 8):
         if tables := _book_layout(image, anchor, padding, linked_program):
             return tables
     return None
