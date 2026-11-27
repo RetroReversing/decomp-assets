@@ -35,3 +35,15 @@ def test_token_array_expansion_and_truncation():
     # An encoded array of three implicit byte tokens.
     assert ljam_models._tokens(b'\x14\x03\x00\x0c\x00\x01\x02') == [(12,0),(12,1),(12,2)]
     assert ljam_models._mesh(b'\x14\xff\xff\x0c') is None
+
+
+def test_multiple_groups_rebase_local_indices_without_overlap():
+    points = b''.join(_float(v) for v in (0,0,0, 1,0,0, 0,1,0, 2,0,0, 3,0,0, 2,1,0))
+    face = b'\x0c\x00\x0c\x01\x0c\x02'
+    def group(vertex, triangle):
+        return b'\x27'+_short(0)+b'\x31\x0c\x00'+_short(vertex)+_short(3)+b'\x2d'+_short(triangle)+_short(1)
+    def geometry(second):
+        return (b'\x27'+_array(1,b'\x02mat\0')+b'\x34'+_array(6,points)
+                +b'\x2d'+_array(2,face*2)+b'\x2e'+_array(6,group(0,0)+group(3,second)))
+    assert ljam_models._mesh(geometry(1))[1] == [[0,1,2],[3,4,5]]
+    assert ljam_models._mesh(geometry(0)) is None

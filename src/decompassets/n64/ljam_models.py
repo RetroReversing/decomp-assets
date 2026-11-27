@@ -127,13 +127,28 @@ def _mesh(data):
                 read(6)
             else:
                 raise ValueError('unsupported record')
-        groups = [m for m in metadata or [] if m[0] == 0x31]
-        runs = [m for m in metadata or [] if m[0] == 0x2d]
-        if (not vertices or not faces or len(groups) != 1 or len(runs) != 1
-                or groups[0][1:] != (0,0,len(vertices)) or runs[0][1:] != (0,len(faces))
-                or any(max(face) >= len(vertices) for face in faces)):
+        if not vertices or not faces or not metadata:
             return None
-        return vertices, faces
+        resolved, seen, active = [None]*len(faces), set(), None
+        for item in metadata:
+            if item[0] == 0x31:
+                if active is not None or item[1] != 0 or not 0 < item[3] <= len(vertices)-item[2]:
+                    return None
+                active = (item[2], item[3])
+            elif item[0] == 0x2d:
+                first, count = item[1:]
+                if active is None or not 0 < count <= len(faces)-first:
+                    return None
+                offset, length = active
+                for index in range(first, first+count):
+                    if index in seen or max(faces[index]) >= length:
+                        return None
+                    seen.add(index)
+                    resolved[index] = [offset+vertex for vertex in faces[index]]
+                active = None
+        if active is not None or len(seen) != len(faces):
+            return None
+        return vertices, resolved
     except (ValueError, IndexError, struct.error, OverflowError):
         return None
 
@@ -152,7 +167,7 @@ def regions(image, *, check=lambda: None, **kwargs):
             found[(start,size)] = dict(offset=start,size=size,kind='3d model',media='model',layout=LAYOUT,
                 label='Archive geometry',confidence='validated',nodes=1,vertices=len(vertices),triangles=len(faces),
                 meshes=[dict(name='Mesh 1',vertices=len(vertices),triangles=len(faces))],
-                reason='A bounded archive geometry record resolves every local triangle index.',
+                reason='Bounded archive geometry groups resolve every local triangle index.',
                 preview_settings=dict(source='rom',format='auto',offset=start,mesh=0))
     return list(found.values())
 
