@@ -35,8 +35,9 @@ class KeyMapError(BankError):
     """A bank has sample controls but no usable MIDI note mapping."""
 
 
-def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, sample_only=False, check=lambda: None):
+def bank(image, offset, *, relocated=False, relocation_base=None, control_end=None, sample_only=False, partial_samples=False, check=lambda: None):
     """Check relocation flags, pointer graphs, predictor books and record extents."""
+    if partial_samples and not sample_only:raise BankError('Partial banks are available only as samples.')
     if relocated and (offset < len(B1_WRAPPER) or image[offset-len(B1_WRAPPER):offset] != B1_WRAPPER):
         raise BankError('Missing relocated B1 wrapper.')
     end = offset+8
@@ -46,7 +47,7 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
 
     def resolve(value):
         return value-relocation_base if value and relocation_base is not None else value
-    samples = {}; sounds = 0; visited = {}; programs = {}
+    samples = {}; sounds = 0; visited = {}; programs = {}; extents = set()
     limit = min(len(image),offset+MAX_CONTROL,control_end if control_end is not None else len(image))
 
     def take(at, size, alignment=4):
@@ -97,14 +98,22 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
             if codec not in (0,1) or flags!=expected_flag or not 0<length<=MAX_BYTES:raise BankError('Invalid wavetable.')
             sample=dict(relative_offset=base,size=length,rate=rate,codec='N64 VADPCM' if codec==0 else 'PCM16 big endian',
                         bank=bank_index,instrument=instrument_index,sound=index,key_base=keys[4])
+            if partial_samples:
+                extents.add((base,length))
+                if len(extents)>4096:raise BankError('Bank sample limit reached.')
             if codec==0:
                 # Some bank builders retain an even-byte pad after odd frame counts.
-                if length%9 not in (0,1) or length<9 or length%9==1 and length%2:raise BankError('ADPCM needs complete nine-byte frames, with at most an even-byte pad.')
+                if length%9 not in (0,1) or length<9 or length%9==1 and length%2:
+                    if partial_samples:continue
+                    raise BankError('ADPCM needs complete nine-byte frames, with at most an even-byte pad.')
                 order,predictors=struct.unpack('>II',take(book,8))
-                if order!=2 or not 1<=predictors<=8:raise BankError('Unsupported ADPCM book.')
+                if order!=2 or not 1<=predictors<=8:
+                    if partial_samples:continue
+                    raise BankError('Unsupported ADPCM book.')
                 take(book,8+order*predictors*16)
                 sample.update(book_offset=offset+book+8,predictors=predictors,samples=length//9*16,encoded_size=length//9*9)
             else:
+                if partial_samples:continue
                 if length%2:raise BankError('PCM needs complete samples.')
                 sample['samples']=length//2
             if loop:
@@ -112,7 +121,7 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
                 if not start<=finish<=sample['samples']:raise BankError('Loop exceeds sample extent.')
                 sample['loop']=dict(start=start,end=finish,count=count)
             samples[sample_key]=sample
-            if len(samples)>MAX_SAMPLES:raise BankError('Bank sample limit reached.')
+            if len(samples)>(4096 if partial_samples else MAX_SAMPLES):raise BankError('Bank sample limit reached.')
 
     if offset+8>len(image) or image[offset:offset+2]!=b'B1':raise BankError('Not a B1 bank.')
     count=int.from_bytes(image[offset+2:offset+4],'big')
@@ -126,12 +135,14 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
         instrument(resolve(percussion),rate,index,'percussion')
         for number in range(instruments):instrument(pointer(at+12+number*4),rate,index,number)
     if not samples:raise BankError('Bank has no supported samples.')
-    if sample_only and len(unmapped) < 2:
+    if sample_only and not partial_samples and len(unmapped) < 2:
         raise KeyMapError('A single invalid key map does not establish a sample-only bank.')
     for voices in visited.values():
         for voice in voices:
             voice['sample'] = samples[voice.pop('sample_key')]
-    return dict(offset=offset,size=end-offset,samples=list(samples.values()),sound_count=sounds,programs=programs)
+    result = dict(offset=offset,size=end-offset,samples=list(samples.values()),sound_count=sounds,programs=programs)
+    if partial_samples:result['extents'] = sorted(extents)
+    return result
 
 
 def loader_tables(image, context, *, check=lambda: None):

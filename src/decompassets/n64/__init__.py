@@ -27,6 +27,7 @@
 - dialogue.py: scene headings, cue text and speaker keys in indexed RAW! scripts.
 - dean_audio.py: DEAN stream directories and audio metadata.
 - audio.py: libultra B1 sound banks, their sample tables and mono VADPCM previews.
+- rnc_control_audio.py: checked compressed controls and a uniquely corroborated sample table.
 - ptr_audio.py: libmus PtrTablesV2 banks, marked wave tables and sequences.
 - rnc_meshes.py: EMsh polygon tables and delta-encoded positions in byte-sum RNC blocks.
 - models.py: indexed geometry with byte-plane vertices and cache-relative polygons.
@@ -179,6 +180,7 @@ def regions(image, *, context=None, **kwargs):
         rle_texture_tables,
         rnc_adpcm,
         rnc_chunk_models,
+        rnc_control_audio,
         rnc_indexed_sprites,
         rnc_inline_meshes,
         rnc_quad_models,
@@ -397,6 +399,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(iguana_textures.regions(image,models=iguana_models,**kwargs))
     known.extend(iguana_models)
     known.extend(iguana_audio.regions(image,**kwargs))
+    known.extend(rnc_control_audio.regions(image,**kwargs))
     known.extend(uso_models.regions(image,**kwargs))
     known.extend(uv_models.regions(image,**kwargs))
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
@@ -539,6 +542,7 @@ def preview(data, asset, selection):
         rle_texture_tables,
         rnc_adpcm,
         rnc_chunk_models,
+        rnc_control_audio,
         rnc_display_models,
         rnc_indexed_sprites,
         rnc_inline_meshes,
@@ -600,6 +604,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uso-music':return uso_audio.music_preview(data,asset,selection)
     if asset.get('layout')=='uso-audio':return uso_audio.preview(data,asset,selection)
     if asset.get('layout')=='uso-polygon-models':return uso_models.preview(data,asset,selection)
+    if asset.get('layout') == rnc_control_audio.LAYOUT:return rnc_control_audio.preview(data,asset,selection)
     if asset.get('layout') in ('iguana-dean','iguana-compact-midi'):return iguana_audio.preview(data,asset,selection)
     if asset.get('layout') == packed_model_tables.LAYOUT:return packed_model_tables.preview(data,asset,selection)
     if asset.get('layout') == rle_texture_tables.LAYOUT:return rle_texture_tables.preview(data,asset,selection)
