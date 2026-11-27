@@ -55,9 +55,54 @@ def directories(image, check=lambda: None):
             yield start, fonts, waves, ctl, wave, at + 24
 
 
+def contiguous_directories(image, check=lambda: None):
+    """Find consecutive font, wave and sequence payloads immediately after their linked tables.
+
+    Some EAD programs omit the six explicit ROM extents. Their three complete
+    tables and sequence-to-font map instead bound three consecutive payloads.
+    Sound fonts and ADPCM frames are validated separately before exposing audio.
+    """
+    for hit in _HEADER.finditer(image):
+        sequence_at = hit.start()
+        if sequence_at % 16 or not (sequences := _table(image, sequence_at)):
+            continue
+        sequence_rows, wave_at = sequences
+        if len(sequence_rows) < 3 or not (waves_table := _table(image, wave_at)):
+            continue
+        waves, control = waves_table
+        if len(waves) < 2:
+            continue
+        seq_size = sum(row[1] for row in sequence_rows)
+        wave_size = sum(row[1] for row in waves)
+        if (not 0 < seq_size <= len(image) or not 0 < wave_size <= len(image)
+                or not uso_audio_directory._entries(image, sequence_at, seq_size, aliases=True)
+                or not uso_audio_directory._entries(image, wave_at, wave_size, aliases=False)):
+            continue
+        candidates = []
+        for earlier in _HEADER.finditer(image, max(0, sequence_at-8192), sequence_at):
+            font_at = earlier.start()
+            if font_at % 16 or not (font_table := _table(image, font_at)):
+                continue
+            fonts, map_at = font_table
+            control_size = sum(row[1] for row in fonts)
+            if (len(fonts) < 3 or not 0 < control_size <= len(image)
+                    or not uso_audio_directory._entries(image, font_at, control_size, aliases=True)
+                    or any(row[4] >= len(waves) or row[5] != 255 and row[5] >= len(waves) for row in fonts)
+                    or uso_audio_directory._fonts(image, map_at, sequence_at, len(sequence_rows), len(fonts)) is None):
+                continue
+            wave = control+control_size
+            sequence = wave+wave_size
+            if sequence+seq_size <= len(image):
+                candidates.append((font_at, fonts, waves, control, wave, control))
+        if len(candidates) == 1:
+            check()
+            yield candidates[0]
+
+
 def regions(image, *, check=lambda: None, **kwargs):
     result = []
-    for start, fonts, waves, control, wave, end in directories(image, check):
+    found = (*directories(image, check), *contiguous_directories(image, check))
+    for start, fonts, waves, control, wave, end in found:
         samples = {}
         for row in fonts:
             offset, size = row[:2]

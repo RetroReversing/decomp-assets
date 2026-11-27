@@ -98,7 +98,13 @@ class _Evidence:
         for k in range(len(image)//8 - 2, -1, -1):
             if not k & 0x1FFF:check()
             at = 8*k
-            if image[at+6] == 0 and image[at+7] == 0 and (any(image[at:at+6]) or any(image[at+8:at+16])):run[k] = run[k+2]+1
+            # An end-of-list command followed by a zero command has the same zero
+            # flag bytes as a vertex. Counting it as one can shift a whole file's
+            # inferred placement onto display lists and turn commands into palettes.
+            end_command = image[at] in END_LISTS and not any(image[at+1:at+16])
+            if (not end_command and image[at+6] == 0 and image[at+7] == 0
+                    and (any(image[at:at+6]) or any(image[at+8:at+16]))):
+                run[k] = run[k+2]+1
         self.run = run
         words = {}
         for index, (word,) in enumerate(struct.iter_unpack('>I', image[:len(image)//4*4])):

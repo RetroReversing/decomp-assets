@@ -104,3 +104,12 @@ def test_a_tile_sized_before_its_texels_load_reads_the_new_texels():
     data = b''.join(commands) + bytes(0x108)
     found = list(display_lists._textures(data, dict(start=0, end=8*len(commands))))
     assert [(t['address'], t['width'], t['height']) for t in found] == [(fresh, 4, 2)]
+
+
+@pytest.mark.parametrize('opcode', [0xB8, 0xDF])
+def test_end_list_command_is_not_used_as_a_vertex(opcode):
+    """A list ending at a guessed vertex address cannot prove a file displacement."""
+    image = bytes(0x20) + bytes([opcode]) + bytes(15) + vertex(7) + bytes(16)
+    evidence = display_lists._Evidence(image, lambda: None)
+    assert not evidence.fits([(0x20, 1)], 0)
+    assert evidence.fits([(0x30, 1)], 0)
