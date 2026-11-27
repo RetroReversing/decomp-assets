@@ -68,9 +68,10 @@ def inflate(source, check=lambda: None):
 
 
 def preview(image, asset, selection):
-    from . import ring12_graphics, textures
+    from . import ring12_graphics, runtime_packed_graphics, textures
     start = asset['offset']
-    packed = (ring12_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'ring12'
+    packed = (runtime_packed_graphics.unpack_mio(image[start:start+asset['size']]) if asset.get('codec') == 'mio0'
+              else ring12_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'ring12'
               else inflate(image[start:start+asset['size']]))
     if not packed or packed[1] != asset['size']:
         raise formats.AssetError('The packed graphics block changed. Scan ROM Explorer again.')
@@ -88,6 +89,6 @@ def preview(image, asset, selection):
         data = data[:offset]+pixels+data[offset+len(pixels):]
     result = textures.preview(data, {**item,'offset':start,'reason':asset['reason']}, {})
     result['settings'] = dict(source='rom',format='auto',offset=start,texture=index)
-    codec = '12-bit ring LZ' if asset.get('codec') == 'ring12' else '14-bit ring LZ'
+    codec = {'ring12': '12-bit ring LZ', 'mio0': 'MIO0'}.get(asset.get('codec'), '14-bit ring LZ')
     result['decoded'] = dict(codec=codec,bytes=len(data),block_offset=start,member=asset['label'])
     return result

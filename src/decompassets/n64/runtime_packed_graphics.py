@@ -1,4 +1,5 @@
 """Link runtime texture loads to indexed, compressed cartridge resources."""
+import re
 import struct
 from itertools import pairwise
 
@@ -7,6 +8,7 @@ from . import display_lists, display_meshes, mwo_graphics, ring12_graphics, tabl
 from .paired_resource_textures import _COMMAND, _LOAD
 
 MODEL = "runtime-packed-model"
+MIO_TEXTURES = "runtime-mio0-textures"
 _MAX_EXPANDED = 128 * 1024 * 1024
 
 
@@ -26,12 +28,23 @@ def descriptors(image, check=lambda: None):
             yield start, end
 
 
+def unpack_mio(image):
+    """Decode one bounded MIO0 stream and retain its exact stored extent."""
+    try:
+        data, codec, used = formats.unpack_extent(image)
+    except formats.AssetError:
+        return None
+    return (data, used) if codec == 'MIO0' else None
+
+
 def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     """Only assets whose decoded texels and palette are observed in runtime RAM."""
     snapshots = list(snapshots)
     candidates = [(start,end,'mwo') for start,end in descriptors(image, check)]
     candidates += [(start,end,'table-lz') for start,end in table_lz_graphics.descriptors(image, check)]
     candidates += [(start,end,'ring12') for start,end in ring12_graphics.descriptors(image, check)]
+    candidates += [(m.start(), min(len(image), m.start()+formats.MAX_BYTES), 'mio0')
+                   for m in re.finditer(b'MIO0', image) if m.start() % 4 == 0]
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -54,7 +67,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
             check(); progress(dict(phase='Checking runtime packed textures', done=number, total=len(candidates)))
         parsed = (mwo_graphics.inflate(image[start:end]) if codec == 'mwo'
                   else table_lz_graphics.inflate(memoryview(image)[start:end], check) if codec == 'table-lz'
-                  else ring12_graphics.inflate(memoryview(image)[start:end], check))
+                  else ring12_graphics.inflate(memoryview(image)[start:end], check) if codec == 'ring12'
+                  else unpack_mio(image[start:end]))
         if not parsed:
             continue
         data, used = parsed
@@ -101,7 +115,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
             first = textures[0]
             found.append(dict(offset=start, size=used, expanded_size=len(data), kind='image',
                               layout=(mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES
-                                      if codec == 'table-lz' else ring12_graphics.TEXTURES), codec=codec,
+                                      if codec == 'table-lz' else ring12_graphics.TEXTURES if codec == 'ring12'
+                                      else MIO_TEXTURES), codec=codec,
                               label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
                               levels=first['levels'], preview_settings=dict(first['preview_settings'] | {
@@ -156,6 +171,7 @@ def preview_model(image, asset, selection):
     codec = asset.get('codec')
     packed = (table_lz_graphics.inflate(image[start:start+asset['size']]) if codec == 'table-lz'
               else ring12_graphics.inflate(image[start:start+asset['size']]) if codec == 'ring12'
+              else unpack_mio(image[start:start+asset['size']]) if codec == 'mio0'
               else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
     item = asset['meshes'][index]
