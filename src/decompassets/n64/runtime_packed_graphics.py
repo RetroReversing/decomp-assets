@@ -4,7 +4,7 @@ import struct
 from itertools import pairwise
 
 from .. import formats
-from . import display_lists, display_meshes, mwo_graphics, ring12_graphics, table_lz_graphics
+from . import block16_graphics, display_lists, display_meshes, mwo_graphics, ring12_graphics, table_lz_graphics
 from .paired_resource_textures import _COMMAND, _LOAD
 
 MODEL = "runtime-packed-model"
@@ -43,6 +43,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     candidates = [(start,end,'mwo') for start,end in descriptors(image, check)]
     candidates += [(start,end,'table-lz') for start,end in table_lz_graphics.descriptors(image, check)]
     candidates += [(start,end,'ring12') for start,end in ring12_graphics.descriptors(image, check)]
+    candidates += [(start,end,'block16') for start,end in block16_graphics.descriptors(image, check)]
     candidates += [(m.start(), min(len(image), m.start()+formats.MAX_BYTES), 'mio0')
                    for m in re.finditer(b'MIO0', image) if m.start() % 4 == 0]
     observations = []
@@ -68,6 +69,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
         parsed = (mwo_graphics.inflate(image[start:end]) if codec == 'mwo'
                   else table_lz_graphics.inflate(memoryview(image)[start:end], check) if codec == 'table-lz'
                   else ring12_graphics.inflate(memoryview(image)[start:end], check) if codec == 'ring12'
+                  else block16_graphics.inflate(memoryview(image)[start:end], check) if codec == 'block16'
                   else unpack_mio(image[start:end]))
         if not parsed:
             continue
@@ -116,7 +118,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
             found.append(dict(offset=start, size=used, expanded_size=len(data), kind='image',
                               layout=(mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES
                                       if codec == 'table-lz' else ring12_graphics.TEXTURES if codec == 'ring12'
-                                      else MIO_TEXTURES), codec=codec,
+                                      else block16_graphics.TEXTURES if codec == 'block16' else MIO_TEXTURES), codec=codec,
                               label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
                               levels=first['levels'], preview_settings=dict(first['preview_settings'] | {
@@ -172,6 +174,7 @@ def preview_model(image, asset, selection):
     codec = asset.get('codec')
     packed = (table_lz_graphics.inflate(image[start:start+asset['size']]) if codec == 'table-lz'
               else ring12_graphics.inflate(image[start:start+asset['size']]) if codec == 'ring12'
+              else block16_graphics.inflate(image[start:start+asset['size']]) if codec == 'block16'
               else unpack_mio(image[start:start+asset['size']]) if codec == 'mio0'
               else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
