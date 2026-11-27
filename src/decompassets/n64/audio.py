@@ -370,9 +370,9 @@ def _parallel_tables(image, candidates, check):
             position += 4
             if start % 4 or start >= offset:
                 continue
-            words = min(48, (min(offset, limit) - start) // 4)
+            words = min(3*MAX_CANDIDATES, (min(offset, limit) - start) // 4)
             values = struct.unpack_from(f'>{words}I', image, start)
-            for count in range(2, min(16, words // 3) + 1):
+            for count in range(2, min(MAX_CANDIDATES, words // 3) + 1):
                 origins = values[:count]
                 ends = values[count:count * 2]
                 waves = values[count * 2:count * 3]

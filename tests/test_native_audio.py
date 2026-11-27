@@ -453,3 +453,20 @@ def test_large_sparse_instrument_bank():
     struct.pack_into('>H', bank, 32, 1025)
     with pytest.raises(audio.BankError):
         audio.bank(bank, 0)
+
+
+def test_large_parallel_control_and_wave_tables_are_not_truncated():
+    single, _, base = fixture(raw=True)
+    control, waves = single[128:base], single[base:]
+    count, first = 20, 1024
+    controls = [first + len(control)*i for i in range(count)]
+    wave_start = first + len(control)*count
+    stride = (len(waves)+15) & ~15
+    wave_starts = [wave_start + stride*i for i in range(count)]
+    directory = struct.pack(f'>{count*3}I', *controls, *controls[1:], wave_start, *wave_starts)
+    image = directory.ljust(first, b'\0') + control*count + waves.ljust(stride, b'\0')*count
+    banks = [asset for asset in audio.regions(image) if asset.get('label') == 'N64 sound-bank controls']
+    assert len(banks) == count
+    assert all(bank['table_confidence'] == 'validated' for bank in banks)
+    assert [bank['table_offset'] for bank in banks] == wave_starts
+    assert wav(audio.preview(image, banks[-1], {'sample': 1}))[1]
