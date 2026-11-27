@@ -1,6 +1,7 @@
 """Nintendo 64 asset recognisers. Each one accepts a candidate only when its whole structure checks out.
 
 - textures.py: indexed texture banks (CI4/CI8, RGBA32, the six-level RGBA16 mipmap layout), raw or RNC-packed.
+- constructed_resource_textures.py: indexed packed textures identified by loader and drawing code.
 - rnc_textures.py: descriptor-table texture banks inside byte-sum RNC blocks.
 - rnc_segmented_resources.py: display lists, textures and vertices in checked consecutive RNC blocks.
 - rnc_inline_meshes.py: local display-list meshes in checked RNC blocks with inline vertices.
@@ -75,6 +76,7 @@ def regions(image, *, context=None, **kwargs):
         bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
+        constructed_resource_textures,
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
@@ -393,6 +395,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uso_textures.regions(image,**kwargs))
     iguana_models = []
     known.extend(paired_resources.regions(image,**kwargs))
+    known.extend(constructed_resource_textures.regions(image,context=context,**kwargs))
     known.extend(paired_rle_images.regions(image,**kwargs))
     known.extend(paired_rle_models.regions(image,**kwargs))
     known.extend(iain.regions(image,**kwargs))
@@ -441,6 +444,7 @@ def preview(data, asset, selection):
         bounded_lz_models,
         cartridge_scores,
         chunked_package_images,
+        constructed_resource_textures,
         dean_audio,
         deflate_catalog,
         deflate_catalog_models,
@@ -640,6 +644,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==iain_models.LAYOUT:return iain_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
+    if asset.get('layout')==constructed_resource_textures.LAYOUT:return constructed_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==iain_textures.LAYOUT:return iain_textures.preview(data,asset,selection)
     if asset.get('layout') == f3dex_tiles.LAYOUT:return f3dex_tiles.preview(data,asset,selection)
     if asset.get('layout') == bounded_lz_models.LAYOUT:return bounded_lz_models.preview(data,asset,selection)
