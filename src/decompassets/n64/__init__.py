@@ -201,6 +201,7 @@ def regions(image, *, context=None, **kwargs):
         rnc_reloc_display,
         rnc_rgba_tiles,
         rnc_segmented_resources,
+        rnc_shpn_images,
         rnc_tiled_images,
         rnx,
         romdisk_art,
@@ -317,6 +318,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(offset_textures.regions(image,**kwargs))
     known.extend(offset_models.regions(image,**kwargs))
     known.extend(shpn_images.regions(image,**kwargs))
+    known.extend(rnc_shpn_images.regions(image,**kwargs))
     known.extend(named_tim_archives.regions(image,**kwargs))
     known.extend(named_cmp_textures.regions(image,**kwargs))
     known.extend(named_prm_models.regions(image,**kwargs))
@@ -600,6 +602,7 @@ def preview(data, asset, selection):
         rnc_reloc_display,
         rnc_rgba_tiles,
         rnc_segmented_resources,
+        rnc_shpn_images,
         rnc_textures,
         rnc_tiled_images,
         rnx,
@@ -737,6 +740,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == lzss_archive_models.LAYOUT:return lzss_archive_models.preview(data,asset,selection)
     if asset.get('layout') == 'ring-lzss-model-images':return lzss_archive_models.preview_image(data,asset,selection)
     if asset.get('layout') in (shpn_images.LAYOUT, shpn_images.RAW_LAYOUT):return shpn_images.preview(data,asset,selection)
+    if asset.get('layout') == rnc_shpn_images.LAYOUT:return rnc_shpn_images.preview(data,asset,selection)
     if asset.get('layout') == named_tim_archives.LAYOUT:return named_tim_archives.preview(data,asset,selection)
     if asset.get('layout') == named_cmp_textures.LAYOUT:return named_cmp_textures.preview(data,asset,selection)
     if asset.get('layout') == named_prm_models.LAYOUT:return named_prm_models.preview(data,asset,selection)
