@@ -113,6 +113,7 @@ def regions(image, *, context=None, **kwargs):
         iguana_textures,
         img_textures,
         indexed_archive_models,
+        indexed_deflate_models,
         indexed_pic_images,
         indexed_resource_models,
         indexed_resource_textures,
@@ -251,6 +252,8 @@ def regions(image, *, context=None, **kwargs):
            +sound_banks+rare_audio.regions(image,**kwargs)+paired_audio.regions(image,**kwargs)
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
+    known.extend(indexed_deflate_models.regions(image, **kwargs))
+    known.extend(indexed_deflate_models.texture_regions(image, **kwargs))
     known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
     known.extend(lzo_models.regions(image, **kwargs))
@@ -506,6 +509,7 @@ def preview(data, asset, selection):
         iguana_textures,
         img_textures,
         indexed_archive_models,
+        indexed_deflate_models,
         indexed_pic_images,
         indexed_resource_models,
         indexed_resource_textures,
@@ -819,6 +823,8 @@ def preview(data, asset, selection):
     if asset.get('layout')==inline_tiles.LAYOUT:return inline_tiles.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
+    if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
+    if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)
     if asset.get('layout') in ('rare-model', rare_assets.SEQUEL_MESH):return rare_models.preview(data,asset,selection)
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
