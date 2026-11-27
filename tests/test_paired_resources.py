@@ -91,6 +91,18 @@ def test_paired_scene_previews_local_display_list_meshes():
     assert preview(flagged, asset, {'mesh': 1})['surfaces'] == result['surfaces']
 
 
+def test_paired_scene_previews_legacy_display_list_and_rejects_bad_slots():
+    vertices = b''.join(struct.pack('>3hH2h4B', x, y, 0, 0, 0, 0, 255, 255, 255, 255)
+                        for x, y in ((0, 0), (8, 0), (0, 8)))
+    mesh = struct.pack('>6I', 0x04000c2f, 0x06000000, 0xbf000000, 0x00000204, 0xb8000000, 0)
+    asset, = paired_resources.regions(image := _directory(vertices + mesh))
+    result = preview(image, asset, {})
+    assert result['vertices'] == [(0, 0, 0), (8, 0, 0), (0, 8, 0)]
+    assert result['surfaces'][0]['indices'] == (0, 1, 2)
+    invalid = struct.pack('>6I', 0x04000c2f, 0x06000000, 0xbf000000, 0x00000206, 0xb8000000, 0)
+    assert not paired_resources.regions(_directory(vertices + invalid))
+
+
 def test_flagged_zlib_resource_exposes_textures_and_checks_its_exact_extent():
     payload = zlib.compress(_texture())
     image = bytes(2) + _flagged(_texture()) + b'padding'
