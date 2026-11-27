@@ -619,6 +619,7 @@ def preview(data, asset, selection):
         stage_banks,
         stage_meshes,
         striped_images,
+        table_lz_graphics,
         tagged_deflate,
         terminated_rgba_tiles,
         texture_packs,
@@ -825,6 +826,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
+    if asset.get('layout') == table_lz_graphics.TEXTURES:return table_lz_graphics.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)

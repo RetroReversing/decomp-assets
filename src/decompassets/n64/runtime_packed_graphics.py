@@ -3,7 +3,7 @@ import struct
 from itertools import pairwise
 
 from .. import formats
-from . import display_lists, display_meshes, mwo_graphics
+from . import display_lists, display_meshes, mwo_graphics, table_lz_graphics
 from .paired_resource_textures import _COMMAND, _LOAD
 
 MODEL = "runtime-packed-model"
@@ -29,7 +29,8 @@ def descriptors(image, check=lambda: None):
 def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     """Only assets whose decoded texels and palette are observed in runtime RAM."""
     snapshots = list(snapshots)
-    candidates = list(descriptors(image, check))
+    candidates = [(start,end,'mwo') for start,end in descriptors(image, check)]
+    candidates += [(start,end,'table-lz') for start,end in table_lz_graphics.descriptors(image, check)]
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -40,32 +41,36 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                 continue
             source, *_ = _COMMAND.iter_unpack(match[0])
             pointer = source[1] & 0x1fffffff
-            prefix = ram[pointer:pointer+64]
-            if len(prefix) == 64 and len(set(prefix)) >= 8:
-                observations.append((ram, match.start(), match.end(), pointer, prefix))
+            for shift in (0, 64, 128, 256, 512, 1024, 1536, 1792):
+                prefix = ram[pointer+shift:pointer+shift+64]
+                if len(prefix) == 64 and len(set(prefix)) >= 8:
+                    observations.append((ram, match.start(), match.end(), pointer, shift, prefix))
+                    break
     found = []
     expanded = 0
-    for number, (start, end) in enumerate(candidates):
+    for number, (start, end, codec) in enumerate(candidates):
         if number % 16 == 0:
             check(); progress(dict(phase='Checking runtime packed textures', done=number, total=len(candidates)))
-        parsed = mwo_graphics.inflate(image[start:end])
+        parsed = (mwo_graphics.inflate(image[start:end]) if codec == 'mwo'
+                  else table_lz_graphics.inflate(memoryview(image)[start:end], check))
         if not parsed:
             continue
         data, used = parsed
         expanded += len(data)
         if expanded > _MAX_EXPANDED:
             break
-        if any(image[start+used:end]) or len(data) < 64:
+        if (len(data) < 64 or codec == 'mwo' and any(image[start+used:end])
+                or codec == 'table-lz' and end-start-used > 15):
             continue
         items = {}
         bases = {}
-        for ram, command_start, command_end, pointer, prefix in observations:
+        for ram, command_start, command_end, pointer, shift, prefix in observations:
             # A later resource can have replaced the block header. A unique
             # observed texel prefix identifies its original address instead.
             offset = data.find(prefix)
             if offset < 0 or data.find(prefix, offset+1) >= 0:
                 continue
-            base = pointer-offset
+            base = pointer+shift-offset
             if base < 0 or base+len(data) > len(ram):
                 continue
             bases[(id(ram), base)] = ram
@@ -88,11 +93,12 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
             textures = list(items.values())
             first = textures[0]
             found.append(dict(offset=start, size=used, expanded_size=len(data), kind='image',
-                              layout=mwo_graphics.TEXTURES, label='Runtime-backed packed textures',
+                              layout=mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES,
+                              label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
                               levels=first['levels'], preview_settings=dict(first['preview_settings'] | {
                                   'source':'rom', 'offset':start}),
-                              reason='The bounded DMA descriptor and LZSS resource match captured RAM; '
+                              reason='The bounded resource and decoded pixels match captured RAM; '
                                      'runtime display commands identify the texture and palette.'))
         meshes = []
         seen_commands = set()
@@ -130,7 +136,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                                        vertices=len(vertices), triangles=len(faces)))
         if meshes:
             found.append(dict(offset=start, size=used, kind='3d model', media='model', layout=MODEL,
-                              label='Runtime-backed packed models', confidence='validated', meshes=meshes,
+                              label='Runtime-backed packed models', confidence='validated', meshes=meshes, codec=codec,
                               vertices=sum(m['vertices'] for m in meshes), triangles=sum(m['triangles'] for m in meshes),
                               preview_settings=dict(source='rom', format='auto', offset=start),
                               reason='Captured display lists and their vertex loads match this decoded resource.'))
@@ -139,7 +145,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
 
 def preview_model(image, asset, selection):
     start = asset['offset']
-    packed = mwo_graphics.inflate(image[start:start+asset['size']])
+    packed = (table_lz_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'table-lz'
+              else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
     item = asset['meshes'][index]
     commands = bytes.fromhex(item['commands'])
