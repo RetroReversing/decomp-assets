@@ -52,6 +52,38 @@ def test_bad_flags_loops_tuning_and_sample_bounds_are_not_classified():
     assets=ptr_audio.regions(data);assert len(assets)==1 and not assets[0]['samples']
 
 
+def test_one_bad_loop_in_large_bank_omits_only_that_sample():
+    count = 17
+    control = bytearray(208 + count*104)
+    control[:16] = ptr_audio.MAGIC
+    struct.pack_into('>4I', control, 32, count, 116, 136, 48)
+    for index in range(count):
+        at = 208 + index*104
+        struct.pack_into('>I', control, 48 + index*4, at)
+        struct.pack_into('>II', control, at, 16+index*32, 18)
+        struct.pack_into('>II', control, at+12, at+60 if index == 0 else 0, at+20)
+        struct.pack_into('>II', control, at+20, 2, 1)
+    struct.pack_into('>III', control, 208+60, 16, 48, 0xffffffff)
+    image = bytes(64)+control+ptr_audio.WAVES+bytes(count*32)
+    bank = ptr_audio.bank(image, 64)
+    assert len(bank['samples']) == 16 and bank['skipped_invalid_loops'] == 1
+    assets = ptr_audio.regions(image)
+    assert len(assets[0]['samples']) == 16 and assets[0]['skipped_invalid_loops'] == 1
+    assert 'omitted' in assets[0]['reason']
+    assert all(item['instrument'] != 0 for item in assets[0]['samples'])
+
+    # A second bad loop or one whose start already exceeds the sample stays invalid.
+    broken = bytearray(image)
+    struct.pack_into('>I', broken, 64+208+104+12, 208+104+60)
+    struct.pack_into('>III', broken, 64+208+104+60, 16, 48, 0xffffffff)
+    with pytest.raises(ptr_audio.audio.BankError):
+        ptr_audio.bank(broken, 64)
+    struct.pack_into('>I', broken, 64+208+104+12, 0)
+    struct.pack_into('>I', broken, 64+208+60, 33)
+    with pytest.raises(ptr_audio.audio.BankError):
+        ptr_audio.bank(broken, 64)
+
+
 def test_budget_cancellation_and_preview_limits(monkeypatch):
     def stop():raise RuntimeError('Stopped')
     with pytest.raises(RuntimeError,match='Stopped'):ptr_audio.regions(fixture(),check=stop)
