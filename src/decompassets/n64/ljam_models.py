@@ -129,24 +129,25 @@ def _mesh(data):
                 raise ValueError('unsupported record')
         if not vertices or not faces or not metadata:
             return None
-        resolved, seen, active = [None]*len(faces), set(), None
+        resolved, seen, active, cache = [None]*len(faces), set(), False, [None]*256
         for item in metadata:
             if item[0] == 0x31:
-                if active is not None or item[1] != 0 or not 0 < item[3] <= len(vertices)-item[2]:
+                slot, offset, length = item[1:]
+                if active or not 0 < length <= len(vertices)-offset or slot+length > len(cache):
                     return None
-                active = (item[2], item[3])
+                cache[slot:slot+length] = range(offset, offset+length)
+                active = True
             elif item[0] == 0x2d:
                 first, count = item[1:]
-                if active is None or not 0 < count <= len(faces)-first:
+                if not active or not 0 < count <= len(faces)-first:
                     return None
-                offset, length = active
                 for index in range(first, first+count):
-                    if index in seen or max(faces[index]) >= length:
+                    if index in seen or any(cache[vertex] is None for vertex in faces[index]):
                         return None
                     seen.add(index)
-                    resolved[index] = [offset+vertex for vertex in faces[index]]
-                active = None
-        if active is not None or len(seen) != len(faces):
+                    resolved[index] = [cache[vertex] for vertex in faces[index]]
+                active = False
+        if active or len(seen) != len(faces):
             return None
         return vertices, resolved
     except (ValueError, IndexError, struct.error, OverflowError):
