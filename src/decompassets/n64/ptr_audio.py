@@ -168,9 +168,10 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
         if preceding >= 0 and not info.get('compressed_control'):
             base = tables[preceding]
             finish = max(base+s['relative_offset']+s['size'] for s in info['samples'])
-            # Some resource streams store one wave table, its eight-byte
-            # terminator/alignment, then the matching raw control graph.
-            if (((finish+7)&~7)+8 == info['offset'] and not any(image[finish:info['offset']])
+            # Resource streams can put aligned controls immediately after
+            # waves, sometimes with one extra eight-byte zero terminator.
+            aligned = (finish+7)&~7
+            if (info['offset'] in (aligned, aligned+8) and not any(image[finish:info['offset']])
                     and fits(image,info,base,local_budget,check)):
                 pairs.append(base)
         if not info.get('compressed_control'):
