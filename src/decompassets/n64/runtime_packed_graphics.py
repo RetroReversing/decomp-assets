@@ -99,6 +99,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     # Raw streams have no signature. Only probe aligned boundaries after zero
     # padding; complete runtime pixel or vertex matches are required below.
     candidates += list(islice(_deflate_candidates(image,check),4096))
+    from . import runtime_deflate_models
+    model_observations = runtime_deflate_models.observations(snapshots, check)
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -135,6 +137,16 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
         if (len(data) < 64 or codec == 'mwo' and any(image[start+used:end])
                 or codec in ('table-lz', 'ring12') and end-start-used > 15):
             continue
+        if codec == 'deflate' and model_observations:
+            local_meshes = runtime_deflate_models.meshes(data, model_observations, check)
+            if local_meshes:
+                found.append(dict(offset=start, size=used, kind='3d model', media='model',
+                                  layout=runtime_deflate_models.LAYOUT, codec=codec,
+                                  label='Runtime-backed compressed models', confidence='validated',
+                                  meshes=local_meshes, vertices=sum(m['vertices'] for m in local_meshes),
+                                  triangles=sum(m['triangles'] for m in local_meshes),
+                                  preview_settings=dict(source='rom', format='auto', offset=start),
+                                  reason='A captured graphics task calls these lists; their relocated vertex loads match the decoded resource.'))
         items = {}
         bases = {}
         for ram, command_start, command_end, pointer, shift, prefix in observations:
