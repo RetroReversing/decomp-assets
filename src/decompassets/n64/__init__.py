@@ -92,6 +92,7 @@ def regions(image, *, context=None, **kwargs):
         diet_audio,
         display_lists,
         ead_direct_audio,
+        early_ial_audio,
         embedded_ci8,
         embedded_geometry,
         emsh_links,
@@ -334,6 +335,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(refpack_midx.regions(image,**kwargs))
     known.extend(refpack_first_cache.regions(image,**kwargs))
     known.extend(ead_direct_audio.regions(image,**kwargs))
+    known.extend(early_ial_audio.regions(image,**kwargs))
     known.extend(bnkb_audio.regions(image,**kwargs))
     known.extend(exs_images.regions(image,**kwargs))
     known.extend(exs_models.regions(image,**kwargs))
@@ -502,6 +504,7 @@ def preview(data, asset, selection):
         diet_audio,
         display_meshes,
         ead_direct_audio,
+        early_ial_audio,
         embedded_ci8,
         embedded_geometry,
         eurocom,
@@ -768,6 +771,7 @@ def preview(data, asset, selection):
     if asset.get('layout') in (refpack_midx.LAYOUT, refpack_midx.RAW_LAYOUT):return refpack_midx.preview(data,asset,selection)
     if asset.get('layout') == refpack_first_cache.LAYOUT:return refpack_first_cache.preview(data,asset,selection)
     if asset.get('layout') == ead_direct_audio.LAYOUT:return ead_direct_audio.preview(data,asset,selection)
+    if asset.get('layout') == early_ial_audio.LAYOUT:return early_ial_audio.preview(data,asset,selection)
     if asset.get('layout') == bnkb_audio.LAYOUT:return bnkb_audio.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.MODEL:return mio0_graphics.preview(data,asset,selection)
     if asset.get('layout') == mio0_graphics.IMAGE:return mio0_graphics.preview_image(data,asset,selection)
