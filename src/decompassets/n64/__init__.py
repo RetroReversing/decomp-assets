@@ -433,6 +433,8 @@ def regions(image, *, context=None, **kwargs):
     known.extend(eurocom.regions(image,**kwargs))
     known.extend(uso_textures.regions(image,**kwargs))
     iguana_models = []
+    from . import chunked_lz_images
+    known.extend(chunked_lz_images.regions(image,**kwargs))
     known.extend(paired_resources.regions(image,**kwargs))
     known.extend(constructed_resource_textures.regions(image,context=context,**kwargs))
     known.extend(runtime_textures.regions(image, (context or {}).get("runtime_snapshots", ()), check=kwargs.get("check", lambda: None)))
@@ -715,6 +717,8 @@ def preview(data, asset, selection):
     if asset.get('layout')=='iguana-qmesh':return iguana_models.preview(data,asset,selection)
     if asset.get('layout')==iguana_skin_models._LAYOUT:return iguana_skin_models.preview(data,asset,selection)
     if asset.get('layout')==iain_models.LAYOUT:return iain_models.preview(data,asset,selection)
+    from . import chunked_lz_images
+    if asset.get('layout')==chunked_lz_images.LAYOUT:return chunked_lz_images.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_models.LAYOUT:return paired_resource_models.preview(data,asset,selection)
     if asset.get('layout')==paired_resource_textures.LAYOUT:return paired_resource_textures.preview(data,asset,selection)
     if asset.get('layout')==constructed_resource_textures.LAYOUT:return constructed_resource_textures.preview(data,asset,selection)
