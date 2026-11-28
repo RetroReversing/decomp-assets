@@ -132,9 +132,10 @@ def filesystem_directories(image, check=lambda: None):
                 if not at % (1024*1024):
                     check()
                 a, b, p, q, c, d, r, s, e, f, t, u = struct.unpack_from('>12I', image, at)
-                if (b-a == control_size and d-c == sequence_size and f-e == wave_size
+                if (0 <= b-a-control_size <= 0x20 and d-c == sequence_size and f-e == wave_size
                         and b == c and d == e and a == p and c == r and e == t
-                        and q == s == u == 0 and at+48 <= a < f <= len(image)):
+                        and q == s == u == 0 and at+48 <= a < f <= len(image)
+                        and not any(image[a+control_size:b])):
                     matches.append((a, e))
             if len(matches) == 1:
                 check()
