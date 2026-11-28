@@ -99,6 +99,11 @@ def regions(image, snapshots, *, check=lambda: None):
                               width=width, height=height, format=fmt,
                               preview_settings=dict(source='rom', format='auto', offset=offset),
                               reason='A runtime display-list load gives this format and size; its complete pixels uniquely match the ROM.')
+            # A 32-bit block loaded with zero DXT is already interleaved for
+            # TMEM's odd-line bank swap; reverse that swap for a linear image.
+            if fmt == 'rgba8888' and not (block[1] & 0xfff) and stride % 16 == 0:
+                asset['odd_row_swap'] = 8
+                asset['reason'] += ' Its zero-DXT 32-bit block uses interleaved odd rows.'
             if palette:
                 if palette[0] is not None:
                     asset.update(palette_offset=palette[0], palette_little_endian=palette[1])
@@ -116,6 +121,18 @@ def preview(image, asset, selection):
     if offset < 0 or size < 0 or offset + size > len(image):
         raise formats.AssetError('The runtime texture is outside the image. Scan ROM Explorer again.')
     options = dict(format=asset['format'], width=asset['width'], height=asset['height'], offset=offset)
+    if asset.get('odd_row_swap') == 8 and asset['format'] == 'rgba8888':
+        stride = asset['width'] * 4
+        if stride % 16 or size != stride * asset['height']:
+            raise formats.AssetError('The runtime texture layout changed. Scan ROM Explorer again.')
+        pixels = bytearray(image[offset:offset + size])
+        for row in range(1, asset['height'], 2):
+            for at in range(row * stride, (row + 1) * stride, 16):
+                pixels[at:at + 16] = pixels[at + 8:at + 16] + pixels[at:at + 8]
+        result = formats.preview(pixels, dict(options, offset=0))
+        result['details']['note'] = asset['reason']
+        result['settings'] = dict(source='rom', format='auto', offset=offset)
+        return result
     if asset['format'] in ('ci4', 'ci8'):
         if asset.get('palette'):
             try:

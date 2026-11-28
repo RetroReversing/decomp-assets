@@ -99,3 +99,26 @@ def test_runtime_indexed_texture_keeps_separately_loaded_ia_palette():
     image[200] ^= 1
     with pytest.raises(formats.AssetError):
         runtime_textures.preview(image, asset, {})
+
+
+def test_zero_dxt_rgba32_swaps_odd_row_halves():
+    width, height = 8, 4
+    linear = bytes((i * 37) % 256 for i in range(width * height * 4))
+    stored = bytearray(linear)
+    for row in range(1, height, 2):
+        for at in range(row * width * 4, (row + 1) * width * 4, 16):
+            stored[at:at + 16] = stored[at + 8:at + 16] + stored[at:at + 8]
+    image, ram = bytearray(4096), bytearray(4096)
+    image[1024:1024 + len(stored)] = ram[2048:2048 + len(stored)] = stored
+    commands = [(0xfd180000, 0x80000800), (0xf5180000, 0x07000000), (0xe6000000, 0),
+                (0xf3000000, 0x0701f000), (0xe7000000, 0), (0xf5180400, 0),
+                (0xf2000000, (7 << 14) | (3 << 2))]
+    for n, (a, b) in enumerate(commands):
+        struct.pack_into('>II', ram, n * 8, a, b)
+    asset, = runtime_textures.regions(image, [ram])
+    assert asset['odd_row_swap'] == 8
+    assert runtime_textures.preview(image, asset, {})['data_url'] == formats.preview(
+        linear, dict(format='rgba8888', width=width, height=height, offset=0))['data_url']
+    struct.pack_into('>I', ram, 28, 0x0701f100)
+    asset, = runtime_textures.regions(image, [ram])
+    assert 'odd_row_swap' not in asset
