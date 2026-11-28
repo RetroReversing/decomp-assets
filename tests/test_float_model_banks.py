@@ -21,6 +21,7 @@ def test_bank_recognition_and_selected_geometry():
     data = bank()
     asset, = banks.regions(data)
     assert asset['nodes'] == 2
+    assert (asset['vertices'], asset['triangles']) == (6, 2)
     preview = banks.preview(data, asset, {'mesh': 1})
     assert preview['vertices'] == [(0., 0., 0.), (1., 0., 0.), (0., 1., 0.)]
     assert preview['surfaces'][0]['indices'] == (0, 1, 2)

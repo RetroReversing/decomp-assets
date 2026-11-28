@@ -56,6 +56,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
                   for i, (points, faces) in enumerate(entries)]
         found.append(dict(offset=base, size=end, kind='3d model', media='model', layout=LAYOUT,
                           confidence='validated', meshes=meshes, nodes=len(meshes),
+                          vertices=sum(len(points) for points, _ in entries),
+                          triangles=sum(len(faces) for _, faces in entries),
                           label=f'{len(meshes)} local float meshes',
                           reason='The bank bounds consecutive float vertices and triangle indices for every mesh.',
                           preview_settings=dict(format='auto', source='rom', offset=base)))
