@@ -46,20 +46,21 @@ def unpack(image, start, end, expected):
 
 def texture(data):
     """Require a trailing F3DEX2 texture setup, its tile and bounded pixels."""
-    if len(data) < 96 or data[-16:] != b'\xdf' + bytes(15):
+    if len(data) < 96 or not any(data.endswith(bytes([op]) + bytes(padding))
+                                 for op in (0xdf, 0xb8) for padding in (7, 15)):
         return None
     commands = [struct.unpack_from('>II', data, pos) for pos in range(len(data)-160, len(data)-8, 8) if pos >= 0]
     tile = None
     for x, y in commands:
         if x >> 24 == 0xf5 and (y >> 24) & 7 == 0:
             tile = ((x >> 21) & 7, (x >> 19) & 3)
-        elif x >> 24 == 0xf2 and (y >> 24) & 7 == 0 and tile in ((0, 2), (2, 0)):
+        elif x >> 24 == 0xf2 and (y >> 24) & 7 == 0 and tile in ((0, 2), (2, 0), (4, 1), (3, 2)):
             w, h = ((y >> 12) & 0xfff)//4+1, (y & 0xfff)//4+1
             if not (1 <= w <= 512 and 1 <= h <= 512):
                 return None
-            fmt = 'rgba5551-be' if tile == (0, 2) else 'ci4'
-            offset = 0 if fmt == 'rgba5551-be' else 32
-            size = w*h*2 if offset == 0 else (w*h+1)//2
+            fmt = {(0, 2): 'rgba5551-be', (2, 0): 'ci4', (4, 1): 'i8', (3, 2): 'ia16'}[tile]
+            offset = 32 if fmt == 'ci4' else 0
+            size = (w*h+1)//2 if fmt == 'ci4' else w*h if fmt == 'i8' else w*h*2
             if offset + size > len(data)-80:
                 return None
             pointers = [b for a, b in commands if a >> 24 == 0xfd]
