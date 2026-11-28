@@ -54,6 +54,25 @@ def test_adjacency_is_explicitly_tentative_and_raw_pcm_needs_a_named_base():
     with pytest.raises(AssetError,match='unresolved'):audio.preview(image,found[0],{})
 
 
+def test_zero_padding_to_32_byte_boundary_can_precede_adpcm_samples():
+    image, _, base = fixture()
+    image = bytearray(image)
+    struct.pack_into('>I', image, 128 + 280, 32)
+    image[base + 32:base + 50] = image[base + 40:base + 58]
+    image = image[:base] + bytes(16) + image[base:]
+    found = audio.regions(image)
+    assert found[0]['table_offset'] == base + 16
+    assert found[0]['table_confidence'] == 'tentative'
+    assert any(wav(audio.preview(image, found[0], {}))[1])
+
+
+def test_silent_padding_does_not_choose_between_two_valid_tables():
+    image, _, base = fixture()
+    image = image[:base] + bytes(16 + len(image) - base + 16)
+    found = audio.regions(image)
+    assert len(found) == 1 and found[0]['audio_kind'] == 'unresolved bank'
+
+
 @pytest.mark.parametrize('offset,payload',[(128+4,b'\xff'*4),(128+34,b'\1'),(128+265,b'\1'),
     (128+320,struct.pack('>I',3)),(128+196,struct.pack('>i',-2)),(128+224,bytes([127,0]))])
 def test_bad_pointers_flags_books_envelopes_and_key_maps_are_rejected(offset,payload):

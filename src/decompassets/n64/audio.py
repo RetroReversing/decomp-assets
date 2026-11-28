@@ -608,7 +608,12 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             bases = [adjacent]
         else:
             preferred=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES]
-            bases=list(dict.fromkeys([*preferred,adjacent,*anchored]))
+            # Some banks pad the control graph to the next 32-byte boundary.
+            # Test both positions: silent samples can also make the padding
+            # look like audio, so only a unique fully checked table may win.
+            padded=(adjacent+31)//32*32
+            padding=[padded] if padded>adjacent and not any(image[adjacent:padded]) else []
+            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored]))
         fits=[]
         for base in bases:
             info['corroborated']=bool(uv or partition) or base in loader_refs or base in anchored
