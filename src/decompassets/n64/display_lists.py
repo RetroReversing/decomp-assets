@@ -208,7 +208,7 @@ def _tile(tiles, sizes, loaded, number):
                 swapped=source['swapped'] and height > 1)
 
 
-def _textures(image, group):
+def _textures(image, group, *, draws_only=False):
     """Walk the file's commands as the RDP would, and yield each tile that is drawn from loaded texels.
 
     A tile is read when something is drawn, from what TMEM holds then: some games set a tile's size before
@@ -216,16 +216,21 @@ def _textures(image, group):
     the one the draw uses (G_TEXTURE's tile, or a texture rectangle's). TMEM's palette half is tracked entry by
     entry: a smaller palette load replaces only the entries it covers."""
     timg = None;tiles = {};sizes = {};loaded = {};palettes = {};palette_type = 2;touched = set();current = 0;loads = 0
+    enabled = False;scale = (0, 0)
     for at in range(group['start'], min(group['end'] + 0x100, len(image) - 8), 8):
         w0, w1 = struct.unpack_from('>II', image, at)
         cmd = w0 >> 24
         if cmd in DRAWS:
             used = (w1 >> 24) & 7 if cmd in (0xE4, 0xE5) else current
             if touched or cmd not in END_LISTS:
-                for number in sorted(touched | ({used} if cmd not in END_LISTS else set())):
+                for number in sorted(({used} if enabled and cmd not in END_LISTS else set()) if draws_only else
+                                     touched | ({used} if cmd not in END_LISTS else set())):
                     found = _tile(tiles, sizes, loaded, number)
                     found = found and _palette(found, palettes, palette_type)
-                    if found:yield found
+                    if found:
+                        tile = tiles[number]
+                        yield dict(found, draw_at=at, scale=scale, wrap_s=tile['wrap_s'], wrap_t=tile['wrap_t'],
+                                   shift_s=tile['shift_s'], shift_t=tile['shift_t']) if draws_only else found
             touched = set()
         if cmd == G_SETTIMG:
             space = _space(w1)
@@ -233,9 +238,11 @@ def _textures(image, group):
                                                    space=space, address=w1 & 0xFFFFFF, at=at)
         elif cmd == G_SETTILE:
             tiles[(w1 >> 24) & 7] = dict(fmt=(w0 >> 21) & 7, siz=(w0 >> 19) & 3, line=(w0 >> 9) & 0x1FF,
-                                         tmem=w0 & 0x1FF, palette=(w1 >> 20) & 0xF)
+                                         tmem=w0 & 0x1FF, palette=(w1 >> 20) & 0xF, wrap_s=(w1 >> 8) & 3,
+                                         wrap_t=(w1 >> 18) & 3, shift_s=w1 & 15, shift_t=(w1 >> 10) & 15)
         elif cmd in (0xBB, 0xD7):
             current = (w0 >> 8) & 7
+            enabled = bool(w0 & (0xff if cmd == 0xBB else 0xfe));scale = (w1 >> 16, w1 & 0xffff)
         elif cmd in (G_LOADBLOCK, G_LOADTILE, G_LOADTLUT) and timg:
             tile = tiles.get((w1 >> 24) & 7)
             if not tile:continue
