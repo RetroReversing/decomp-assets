@@ -723,13 +723,18 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             bases = [adjacent]
         else:
             preferred=sorted(loader_refs,key=lambda at:(at not in matched,at!=adjacent,at))[:MAX_TABLE_PROBES]
+            # Some control graphs end on an eight-byte boundary. Keep both
+            # possible starts and require a unique complete ADPCM validation.
+            end = offset+info['size']
+            aligned8 = (end+7)//8*8
+            short = [aligned8] if aligned8 < adjacent and not any(image[end:aligned8]) else []
             # Some banks pad the control graph to the next 32-byte boundary.
             # Test both positions: silent samples can also make the padding
             # look like audio, so only a unique fully checked table may win.
             padded=(adjacent+31)//32*32
             padding=[padded] if padded>adjacent and not any(image[adjacent:padded]) else []
             preceding = _preceding_dense_table(image, info)
-            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored,*preceding,
+            bases=list(dict.fromkeys([*preferred,*short,adjacent,*padding,*anchored,*preceding,
                                       *([offset] if offset in file_relative else [])]))
         fits=[]
         for base in bases:

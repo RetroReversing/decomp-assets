@@ -66,6 +66,20 @@ def test_zero_padding_to_32_byte_boundary_can_precede_adpcm_samples():
     assert any(wav(audio.preview(image, found[0], {}))[1])
 
 
+def test_eight_byte_aligned_adpcm_table_is_checked_as_an_alternative():
+    image, _, base = fixture()
+    image = image[:base-8] + image[base:]
+    found = audio.regions(image)
+    assert found[0]['table_offset'] == base-8
+    assert found[0]['table_confidence'] == 'tentative'
+    assert any(wav(audio.preview(image, found[0], {}))[1])
+
+    # Silence can satisfy both alignments; do not choose either without evidence.
+    ambiguous = image[:base-8] + bytes(len(image)-base+24)
+    found = audio.regions(ambiguous)
+    assert len(found) == 1 and found[0]['audio_kind'] == 'unresolved bank'
+
+
 def test_silent_padding_does_not_choose_between_two_valid_tables():
     image, _, base = fixture()
     image = image[:base] + bytes(16 + len(image) - base + 16)
