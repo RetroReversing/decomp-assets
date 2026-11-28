@@ -158,7 +158,9 @@ def _controls(image, tables, *, check):
 def regions(image, *, check=lambda:None, progress=lambda _:None):
     """Keep ambiguous wave-table placement unresolved instead of choosing the nearest."""
     tables=[m.start() for m in itertools.islice(re.finditer(re.escape(WAVES),image),MAX_BANKS)]
-    results=[];budget=[MAX_FRAME_CHECKS]
+    # Keep local-pair validation independent of the global search, but cap its
+    # total work too: a file can contain many large, otherwise valid banks.
+    results=[];budget=[MAX_FRAME_CHECKS];local_budget=[MAX_FRAME_CHECKS]
     for index,info in enumerate(_controls(image,tables,check=check)):
         check();progress(dict(phase='Recognizing libmus audio banks',done=index))
         preceding = bisect_left(tables,info['offset'])-1
@@ -169,7 +171,7 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             # Some resource streams store one wave table, its eight-byte
             # terminator/alignment, then the matching raw control graph.
             if (((finish+7)&~7)+8 == info['offset'] and not any(image[finish:info['offset']])
-                    and fits(image,info,base,[MAX_FRAME_CHECKS],check)):
+                    and fits(image,info,base,local_budget,check)):
                 pairs.append(base)
         if not info.get('compressed_control'):
             # Some resource files store the validated control first, followed
@@ -178,7 +180,7 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             finish = info['offset']+info['size']
             base = (finish+15)&~15
             if (base in tables and not any(image[finish:base])
-                    and fits(image,info,base,[MAX_FRAME_CHECKS],check)):
+                    and fits(image,info,base,local_budget,check)):
                 pairs.append(base)
         paired = pairs[0] if len(pairs) == 1 else None
         if len(pairs) > 1:

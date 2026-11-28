@@ -49,6 +49,16 @@ def test_control_followed_by_aligned_wave_table_is_local_pair(monkeypatch):
     assert bank['table_offset'] == 320
 
 
+def test_adjacent_banks_share_a_bounded_validation_budget(monkeypatch):
+    image = fixture()[64:]
+    image += bytes((-len(image))%16) + image
+    monkeypatch.setattr(ptr_audio, 'MAX_FRAME_CHECKS', 4)
+    banks = [a for a in ptr_audio.regions(image) if a.get('bank_offset') == a['offset']]
+    assert len(banks) == 2
+    assert banks[0]['table_confidence'] == 'adjacent wave and control pair'
+    assert banks[1]['table_confidence'] == 'unresolved'
+
+
 @pytest.mark.parametrize('offset,value',[(16,0x80000000),(32,999999),(36,0xfffffffc),(44,0xfffffffc),(72,3),(76,9),(48+16,0xfffffffc)])
 def test_invalid_relocated_graphs_and_books_are_rejected(offset,value):
     data=bytearray(fixture());struct.pack_into('>I',data,64+offset,value)
