@@ -69,7 +69,92 @@ def regions(image, snapshots, *, check=lambda: None):
                                   reason='A unique captured vertex load maps this list to the analysis image; every other loaded vertex matches the same mapping.')
                 if len(found) >= 128:
                     return list(found.values())
-    return list(found.values()) + _segmented(image, snapshots, check)
+    return list(found.values()) + _segmented(image, snapshots, check) + _single_vertex_batches(image, snapshots, check)
+
+
+def _single_vertex_batches(image, snapshots, check):
+    """Find task-reached Fast3D triangle batches that load each cache slot separately."""
+    found = {}; tried = set()
+    for ram in snapshots:
+        for root in list(_tasks(ram))[:32]:
+            segments, stack, pc, visited = {}, [], root, set()
+
+            def resolve(pointer, segments=segments):
+                slot = pointer >> 24
+                if slot in (0x80, 0xa0):
+                    return pointer & 0x1fffffff
+                return segments.get(slot, -0x1000000) + (pointer & 0xffffff)
+
+            for step in range(65536):
+                if not step % 1024:check()
+                if pc in visited or pc % 8 or not 0 <= pc <= len(ram)-8:
+                    break
+                visited.add(pc)
+                word, pointer = struct.unpack_from('>II', ram, pc)
+                op = word >> 24
+                if op == 0xbc and word & 255 == 6 and not (word >> 8 & 0xffff) % 4:
+                    slot = (word >> 8 & 0xffff)//4
+                    if slot < 16 and (pointer >> 24 in (0, 0x80, 0xa0)):
+                        segments[slot] = pointer & 0x1fffffff
+                elif op == 6:
+                    target = resolve(pointer)
+                    if not 0 <= target <= len(ram)-8 or target % 8 or len(stack) >= 32:
+                        break
+                    if not word & 0x10000:stack.append(pc+8)
+                    pc = target
+                    continue
+                elif op == 0xb8:
+                    if not stack:break
+                    pc = stack.pop()
+                    continue
+                elif op == 4 and display_lists._vertex_count(word) == 1:
+                    end = pc
+                    while end+8 <= len(ram) and end-pc < 0x4000 and ram[end] in (4, 0xbf, 0xb1):
+                        end += 8
+                    if end-pc >= 48:
+                        commands = bytearray(ram[pc:end]); spans = []; delta = None
+                        for at in range(0, len(commands), 8):
+                            w, p = struct.unpack_from('>II', commands, at)
+                            if w >> 24 != 4:continue
+                            if display_lists._vertex_count(w) != 1:break
+                            address = resolve(p)
+                            if not 0 <= address <= len(ram)-16:break
+                            data = bytes(ram[address:address+16])
+                            if delta is None:
+                                offset = image.find(data)
+                                if offset < 0 or image.find(data, offset+1) >= 0:break
+                                delta = offset-address
+                            offset = address+delta
+                            if offset < 0 or offset+16 > len(image) or image[offset:offset+16] != data:break
+                            spans.append((offset, offset+16))
+                            struct.pack_into('>I', commands, at+4, 0x80000000 | address)
+                        else:
+                            if spans:
+                                lo, hi = min(a for a, _ in spans), max(b for _, b in spans)
+                                if hi-lo <= _MAX_SPAN:
+                                    data = bytes(image[lo:hi]); base = lo-delta
+                                    commands.extend(bytes.fromhex('b800000000000000'))
+                                    key = (lo, hi, bytes(commands))
+                                    if key not in tried:
+                                        tried.add(key)
+                                        parsed = mwo_graphics._geometry(bytes(commands), data, base, 0, len(commands))
+                                        if parsed:
+                                            combined, offset, _ = parsed
+                                            geometry = display_meshes.geometry(combined, offset, len(combined), {128: -base})
+                                            if geometry:
+                                                _, points, faces = geometry
+                                                if len(faces) >= 3 and all(len({p[axis] for p in points}) >= 2 for axis in range(3)):
+                                                    found[key] = dict(offset=lo, size=hi-lo, kind='3d model', media='model',
+                                                        layout=LAYOUT, label='Runtime-backed local mesh', confidence='validated',
+                                                        vertices=len(points), triangles=len(faces), digest=hashlib.sha256(data).hexdigest(),
+                                                        commands=commands.hex(), base=base,
+                                                        preview_settings=dict(source='rom', format='auto', offset=lo),
+                                                        reason='A reached graphics task loads individual vertices; every load matches one cartridge mapping.')
+                                                    if len(found) >= 128:return list(found.values())
+                    pc = end
+                    continue
+                pc += 8
+    return list(found.values())
 
 
 def preview(image, asset, selection):
