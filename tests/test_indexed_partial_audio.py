@@ -20,6 +20,7 @@ def test_archive_pairs_controls_with_bounded_sample_table():
     bank, *samples = indexed_partial_audio.regions(image)
     assert len(samples) == 2
     assert len(bank['samples']) == 2
+    assert [sample['label'] for sample in bank['samples']] == ['Sample 1', 'Sample 2']
     assert bank['table_confidence'] == 'validated'
     from decompassets.n64 import audio
     rate, pcm = wav(audio.preview(image, bank, {}))
