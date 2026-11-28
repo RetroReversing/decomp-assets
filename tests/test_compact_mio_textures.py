@@ -41,3 +41,20 @@ def test_rejects_invalid_reference_and_bad_display_list():
     image[0x1808] = 0
     assert textures.unpack(image, 0x1800, 0x1800+len(_packed(data)), len(data)) is None
     assert textures.texture(data[:-16] + bytes(16)) is None
+
+
+def test_f3d_terminator_and_intensity_pixels():
+    pixels = bytes(range(16))
+    commands = [(0xfd900000, 0x01000000), (0xf5880800, 0),
+                (0xf2000000, (12 << 12) | 12), (0xb8000000, 0), (0, 0)]
+    data = pixels + bytes(48) + b''.join(struct.pack('>II', *x) for x in commands)
+    assert textures.texture(data) == dict(format='i8', width=4, height=4, offset=0)
+    assert textures.texture(data[:-16] + bytes(16)) is None
+
+
+def test_f3d_ci4_palette_and_pixels():
+    commands = [(0xfd100000, 0x01000000), (0xfd500000, 0x01000020),
+                (0xf5400800, 0), (0xf2000000, (12 << 12) | 12), (0xb8000000, 0)]
+    data = bytes(32 + 8 + 48) + b''.join(struct.pack('>II', *x) for x in commands)
+    assert textures.texture(data) == dict(format='ci4', width=4, height=4, offset=32,
+                                          palette_offset=0, palette_format='rgba5551-be')
