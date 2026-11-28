@@ -163,6 +163,7 @@ def regions(image, *, context=None, **kwargs):
         named_file_models,
         named_file_textures,
         named_prm_models,
+        named_record_midi,
         named_record_textures,
         named_resource_images,
         named_resource_models,
@@ -472,6 +473,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(uv_sequences.regions(image,sound_banks=sound_banks,**kwargs))
     known.extend(parallel_midi.regions(image, **kwargs))
     known.extend(lz_standard_midi.regions(image,sound_banks=sound_banks,**kwargs))
+    known.extend(named_record_midi.regions(image,sound_banks=sound_banks,**kwargs))
     known.extend(uso_audio.regions(image,**kwargs))
     assets=known+resources.regions(image,known=known,**kwargs)
     native_scene.link(assets)
@@ -594,6 +596,7 @@ def preview(data, asset, selection):
         named_file_models,
         named_file_textures,
         named_prm_models,
+        named_record_midi,
         named_record_textures,
         named_resource_images,
         named_resource_models,
@@ -854,6 +857,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == embedded_ci8.LAYOUT:return embedded_ci8.preview(data,asset,selection)
     if asset.get('layout') == indexed_pic_images.LAYOUT:return indexed_pic_images.preview(data,asset,selection)
     if asset.get('layout') == named_file_models.LAYOUT:return named_file_models.preview(data,asset,selection)
+    if asset.get('layout') == named_record_midi.LAYOUT:return named_record_midi.preview(data,asset,selection)
     if asset.get('layout') == named_file_textures.LAYOUT:return named_file_textures.preview(data,asset,selection)
     if asset.get('layout') == named_record_textures.LAYOUT:return named_record_textures.preview(data,asset,selection)
     if asset.get('layout') == be_iwad_images.LAYOUT:return be_iwad_images.preview(data,asset,selection)
