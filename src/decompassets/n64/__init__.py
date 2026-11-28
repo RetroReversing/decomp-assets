@@ -625,6 +625,7 @@ def preview(data, asset, selection):
         runtime_packed_graphics,
         runtime_textures,
         runtime_tiled_textures,
+        runtime_zip_models,
         rzip_audio,
         rzip_catalog,
         rzip_models,
@@ -860,6 +861,7 @@ def preview(data, asset, selection):
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
     if asset.get('layout') == runtime_direct_models.LAYOUT:return runtime_direct_models.preview(data,asset,selection)
+    if asset.get('layout') == runtime_zip_models.LAYOUT:return runtime_zip_models.preview(data,asset,selection)
     if asset.get('layout') in (table_lz_graphics.TEXTURES,ring12_graphics.TEXTURES,runtime_packed_graphics.MIO_TEXTURES,runtime_packed_graphics.ERZ_TEXTURES,runtime_packed_graphics.RNC_TEXTURES,block16_graphics.TEXTURES):return table_lz_graphics.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
