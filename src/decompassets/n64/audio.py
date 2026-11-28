@@ -131,7 +131,9 @@ def bank(image, offset, *, relocated=False, relocation_base=None, control_end=No
                 sample['samples']=length//2
             if loop:
                 start,finish,count=struct.unpack_from('>III',take(loop,44 if codec==0 else 12))
-                if not start<=finish<=sample['samples']:raise BankError('Loop exceeds sample extent.')
+                if not start<=finish<=sample['samples']:
+                    if partial_samples:continue
+                    raise BankError('Loop exceeds sample extent.')
                 sample['loop']=dict(start=start,end=finish,count=count)
             samples[sample_key]=sample
             if len(samples)>(4096 if partial_samples else MAX_SAMPLES):raise BankError('Bank sample limit reached.')

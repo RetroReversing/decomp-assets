@@ -633,3 +633,17 @@ def test_consecutive_b1_files_use_offsets_from_each_file_start():
     broken[second - 1] = 1
     assert not audio._file_relative_tables(broken, list(audio._candidates(broken)), lambda: None)
     assert not audio._file_relative_tables(image[:second], list(audio._candidates(image[:second])), lambda: None)
+
+
+def test_partial_samples_skip_only_invalid_loop():
+    image, _, _ = fixture()
+    image = bytearray(image)
+    loop = (len(image) + 3) & ~3
+    image.extend(bytes(loop + 44 - len(image)))
+    struct.pack_into('>I', image, 128 + 256 + 12, loop - 128)
+    struct.pack_into('>III', image, loop, 0, 1000, 1)
+    with pytest.raises(audio.BankError, match='Loop'):
+        audio.bank(image, 128)
+    parsed = audio.bank(image, 128, sample_only=True, partial_samples=True)
+    assert len(parsed['samples']) == 1
+    assert parsed['samples'][0]['relative_offset'] == 40
