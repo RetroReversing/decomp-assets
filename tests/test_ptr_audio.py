@@ -396,3 +396,18 @@ def test_named_effect_directory_may_have_an_empty_slot():
     scores = libmus_song.binary_effects(raw, {4}, allow_empty=True)
     assert not scores[0]['notes'] and scores[1]['notes'][0].wave == 4
     assert libmus_song.binary_effects(raw, {3}, allow_empty=True) is None
+
+
+def test_preceding_waves_with_only_alignment_resolve_a_local_pair():
+    control = fixture()[64:308]
+    table = fixture()[320:]
+    image = table + bytes(-len(table) % 8) + control + bytes(16) + table
+    bank, *_ = ptr_audio.regions(image)
+    assert bank['table_offset'] == 0
+    assert bank['table_confidence'] == 'adjacent wave and control pair'
+    assert any(wav(ptr_audio.preview(image, bank, {'sample': 1}))[2])
+    # A nonzero byte in the alignment is not evidence of an adjacent pair.
+    broken = bytearray(image)
+    broken[len(table)] = 1
+    bank, *_ = ptr_audio.regions(bytes(broken))
+    assert bank['table_confidence'] == 'unresolved'
