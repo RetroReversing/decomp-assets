@@ -30,8 +30,8 @@ def wav(result):
 
 
 def test_ambiguous_missing_and_invalid_wave_tables_remain_unplayable():
-    image=fixture();table=image[320:]
-    for data in [image[:320],image[:320]+bytes(16)+table+bytes(16)+table,image[:336]+b'\x0f'+image[337:]]:
+    image=fixture()
+    for data in [image[:320],image[:336]+b'\x0f'+image[337:]]:
         assets=ptr_audio.regions(data)
         assert len(assets)==1 and assets[0]['samples']==[] and assets[0]['table_confidence']=='unresolved'
         with pytest.raises(AssetError,match='no uniquely fitting'):ptr_audio.preview(data,assets[0],{})
@@ -410,4 +410,21 @@ def test_preceding_waves_with_only_alignment_resolve_a_local_pair():
     broken = bytearray(image)
     broken[len(table)] = 1
     bank, *_ = ptr_audio.regions(bytes(broken))
+    assert bank['table_confidence'] == 'identical candidate samples; placement unresolved'
+
+
+def test_identical_candidate_samples_play_without_claiming_the_table_location():
+    image = fixture()
+    table = image[320:]
+    ambiguous = image[:320] + bytes(16) + table + bytes(16) + table
+    bank, *_ = ptr_audio.regions(ambiguous)
+    assert bank['table_confidence'] == 'identical candidate samples; placement unresolved'
+    assert len(bank['table_candidates']) == 2
+    assert any(wav(ptr_audio.preview(ambiguous, bank, {}))[2])
+    # A different valid sample leaves the placement and playback unresolved.
+    changed = bytearray(ambiguous)
+    changed[-1] ^= 1
+    bank, *_ = ptr_audio.regions(bytes(changed))
     assert bank['table_confidence'] == 'unresolved'
+    with pytest.raises(AssetError, match='no uniquely fitting'):
+        ptr_audio.preview(bytes(changed), bank, {})
