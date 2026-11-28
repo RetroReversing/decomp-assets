@@ -11,6 +11,7 @@
 - fla2.py: texture banks packed with FLA2, the LZ variant of a platformer about a magic glove.
 - ffs.py: I64 images in an FFS filesystem packed as one chunked RNC stream.
 - runtime_audio.py: sound-table evidence from relocated control graphs in RAM.
+- runtime_ptr_audio.py: relocated libmus controls captured in RAM.
 - rare_models.py: model textures in a deflated asset table.
 - zlib_meshes.py: packed vertex batches and triangles in checked zlib members.
 - zlib_textures.py: RGBA sprites and textures with dimensions recorded inside zlib members.
@@ -907,6 +908,9 @@ def preview(data, asset, selection):
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)
     if asset.get('layout') in ('rare-model', rare_assets.SEQUEL_MESH):return rare_models.preview(data,asset,selection)
     if asset.get('font_layout')=='native-i4-pointer-glyphs':return fonts.preview(data,asset,selection)
+    if asset.get('layout') == 'runtime-libmus-controls':
+        from . import runtime_ptr_audio
+        return runtime_ptr_audio.preview(data,asset,selection)
     if asset.get('audio_kind') in ('libmus sample bank','libmus sequence'):return ptr_audio.preview(data,asset,selection)
     if asset.get('layout')=='archived-pd3v-model':return archived_models.preview(data,asset,selection)
     if asset.get('layout')=='rnx-ci4-atlas':return rnx_atlas.preview(data,asset,selection)
