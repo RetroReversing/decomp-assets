@@ -139,6 +139,7 @@ def regions(image, *, context=None, **kwargs):
         ljam_textures,
         lz_banks,
         lz_indexed_images,
+        lz_section_meshes,
         lz_standard_midi,
         lz_texture_directories,
         lzo_models,
@@ -428,6 +429,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(inline_meshes.regions(image,**kwargs))
     known.extend(mwo_graphics.regions(image,context=context,**kwargs))
     known.extend(lz_indexed_images.regions(image,**kwargs))
+    known.extend(lz_section_meshes.regions(image,**kwargs))
     known.extend(libmus_song.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     known.extend(named_file_effects.regions(image,pointer_banks,check=kwargs.get('check',lambda:None)))
     borg_rows = borg.entries(image, kwargs.get('check', lambda: None))
@@ -560,6 +562,7 @@ def preview(data, asset, selection):
         lz_banks,
         lz_directory_models,
         lz_indexed_images,
+        lz_section_meshes,
         lz_standard_midi,
         lz_texture_directories,
         lzo_models,
@@ -873,6 +876,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==yay0_atlases.LAYOUT:return yay0_atlases.preview(data,asset,selection)
     if asset.get('layout') in (mwo_graphics.TEXTURES,mwo_graphics.MODELS):return mwo_graphics.preview(data,asset,selection)
     if asset.get('layout')==lz_indexed_images.LAYOUT:return lz_indexed_images.preview(data,asset,selection)
+    if asset.get('layout')==lz_section_meshes.LAYOUT:return lz_section_meshes.preview(data,asset,selection)
     if asset.get('layout')=='borg-audio':return borg_audio.preview(data,asset,selection)
     if asset.get('layout')=='borg-model':return borg_models.preview(data,asset,selection)
     if asset.get('layout')=='borg-texture':return borg.preview(data,asset,selection)
