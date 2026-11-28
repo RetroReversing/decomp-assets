@@ -99,9 +99,52 @@ def contiguous_directories(image, check=lambda: None):
             yield candidates[0]
 
 
+def filesystem_directories(image, check=lambda: None):
+    """Find EAD payloads through three adjacent uncompressed filesystem records."""
+    for hit in _HEADER.finditer(image):
+        sequence_at = hit.start()
+        if sequence_at % 16 or not (sequence_table := _table(image, sequence_at)):
+            continue
+        sequences, wave_at = sequence_table
+        if len(sequences) < 3 or not (wave_table := _table(image, wave_at)):
+            continue
+        waves, end = wave_table
+        if len(waves) < 2:
+            continue
+        sequence_size = sum(row[1] for row in sequences)
+        wave_size = sum(row[1] for row in waves)
+        if not (uso_audio_directory._entries(image, sequence_at, sequence_size, aliases=True)
+                and uso_audio_directory._entries(image, wave_at, wave_size, aliases=True)):
+            continue
+        for earlier in _HEADER.finditer(image, max(0, sequence_at-8192), sequence_at):
+            font_at = earlier.start()
+            if font_at % 16 or not (font_table := _table(image, font_at)):
+                continue
+            fonts, map_at = font_table
+            control_size = sum(row[1] for row in fonts)
+            if (len(fonts) < 3 or not control_size
+                    or not uso_audio_directory._entries(image, font_at, control_size, aliases=True)
+                    or any(row[4] >= len(waves) or row[5] != 255 and row[5] >= len(waves) for row in fonts)
+                    or uso_audio_directory._fonts(image, map_at, sequence_at, len(sequences), len(fonts)) is None):
+                continue
+            matches = []
+            for at in range(0, len(image)-48+1, 16):
+                if not at % (1024*1024):
+                    check()
+                a, b, p, q, c, d, r, s, e, f, t, u = struct.unpack_from('>12I', image, at)
+                if (b-a == control_size and d-c == sequence_size and f-e == wave_size
+                        and b == c and d == e and a == p and c == r and e == t
+                        and q == s == u == 0 and at+48 <= a < f <= len(image)):
+                    matches.append((a, e))
+            if len(matches) == 1:
+                check()
+                control, wave = matches[0]
+                yield font_at, fonts, waves, control, wave, end
+
+
 def regions(image, *, check=lambda: None, **kwargs):
     result = []
-    found = (*directories(image, check), *contiguous_directories(image, check))
+    found = (*directories(image, check), *contiguous_directories(image, check), *filesystem_directories(image, check))
     for start, fonts, waves, control, wave, end in found:
         samples = {}
         for row in fonts:
@@ -110,6 +153,7 @@ def regions(image, *, check=lambda: None, **kwargs):
                 continue
             font = image[control+offset:control+offset+size]
             bank_ids = {row[4], row[5]} - {255}
+            bank_ids = {i if waves[i][1] else waves[i][0] for i in bank_ids}
             wave_size = max((waves[i][1] for i in bank_ids), default=0)
             groups = uso_audio._groups(font, wave_size, check, known_font=True)
             for group in groups:
