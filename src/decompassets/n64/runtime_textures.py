@@ -93,7 +93,8 @@ def regions(image, snapshots, *, check=lambda: None):
             palette = _indexed_palette(image, ram, match.start(), pointer, offset, fmt, (tile[1] >> 20) & 15) if kind == 2 else None
             if kind == 2 and palette is None:
                 continue
-            key = offset, width, height, fmt, palette
+            row_swap = 8 if fmt == 'rgba8888' and not (block[1] & 0xfff) and stride % 16 == 0 else 0
+            key = offset, width, height, fmt, palette, row_swap
             asset = dict(offset=offset, size=count, kind='image', layout=LAYOUT, confidence='validated',
                               label=f'{fmt.upper()} {width}×{height} · runtime texture',
                               width=width, height=height, format=fmt,
@@ -101,8 +102,8 @@ def regions(image, snapshots, *, check=lambda: None):
                               reason='A runtime display-list load gives this format and size; its complete pixels uniquely match the ROM.')
             # A 32-bit block loaded with zero DXT is already interleaved for
             # TMEM's odd-line bank swap; reverse that swap for a linear image.
-            if fmt == 'rgba8888' and not (block[1] & 0xfff) and stride % 16 == 0:
-                asset['odd_row_swap'] = 8
+            if row_swap:
+                asset['odd_row_swap'] = row_swap
                 asset['reason'] += ' Its zero-DXT 32-bit block uses interleaved odd rows.'
             if palette:
                 if palette[0] is not None:
