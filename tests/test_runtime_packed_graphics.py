@@ -91,3 +91,22 @@ def test_runtime_erz_texture_requires_checksums_and_matching_pixels():
     assert not runtime_packed_graphics.regions(damaged, [ram])
     ram[0x880] ^= 1
     assert not runtime_packed_graphics.regions(image, [ram])
+
+
+def test_runtime_rnc_texture_requires_checksums_and_matching_pixels():
+    from decompassets import n64
+
+    from .test_rnc import literal_block
+
+    _, ram = fixture()
+    stream = literal_block(bytes(ram[0x800:0x900]))
+    start = 0x102
+    image = bytes(start) + stream
+    asset = next(a for a in runtime_packed_graphics.regions(image, [ram]) if a.get('codec') == 'rnc')
+    assert asset['offset'] == start and asset['size'] == len(stream)
+    assert n64.preview(image, asset, {})['mime'] == 'image/png'
+    damaged = bytearray(image)
+    damaged[-1] ^= 1
+    assert not runtime_packed_graphics.regions(damaged, [ram])
+    ram[0x880] ^= 1
+    assert not runtime_packed_graphics.regions(image, [ram])
