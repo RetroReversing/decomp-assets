@@ -1,5 +1,7 @@
 import struct
 
+import pytest
+
 from decompassets import formats
 from decompassets.n64 import runtime_textures
 
@@ -67,3 +69,33 @@ def test_runtime_indexed_texture_uses_the_immediately_loaded_palette():
     assert result['data_url'] == expected['data_url']
     image[992] ^= 1
     assert not runtime_textures.regions(image, [ram])
+
+
+def test_runtime_indexed_texture_keeps_separately_loaded_ia_palette():
+    image, ram = bytearray(4096), bytearray(4096)
+    palette = bytes(range(32))
+    pixels = bytes((i * 29) % 256 for i in range(1024))
+    image[100:132] = image[200:232] = palette  # repeated colours have no unique source offset
+    image[1024:2048] = pixels
+    ram[1800:1832] = palette
+    ram[2048:3072] = pixels
+    commands = [(0xe3000e02, 0xc000), (0xfd100000, 0x80000708), (0xe8000000, 0),
+                (0xf5000100, 0x07000000), (0xe6000000, 0), (0xf0000000, 0x0703c000),
+                (0xe7000000, 0), (0xfd500000, 0x80000800), (0xf5500000, 0x07000000),
+                (0xe6000000, 0), (0xf3000000, 0x071ff200), (0xe7000000, 0),
+                (0xf5400800, 0), (0xf2000000, (63 << 14) | (31 << 2))]
+    for n, (a, b) in enumerate(commands):
+        struct.pack_into('>II', ram, n * 8, a, b)
+    asset, = runtime_textures.regions(image, [ram])
+    assert asset['palette'] == palette.hex() and asset['palette_format'] == 'ia16'
+    result = runtime_textures.preview(image, asset, {})
+    expected = formats.preview(bytes(image)+palette, dict(format='ci4', width=64, height=32,
+                               offset=1024, palette_offset=len(image), palette_format='ia16'))
+    assert result['data_url'] == expected['data_url']
+    struct.pack_into('>I', ram, 28, 0x06000000)  # loaded TLUT and tile must use the same tile slot
+    assert not runtime_textures.regions(image, [ram])
+    struct.pack_into('>I', ram, 28, 0x07000000)
+    image[100] ^= 1
+    image[200] ^= 1
+    with pytest.raises(formats.AssetError):
+        runtime_textures.preview(image, asset, {})
