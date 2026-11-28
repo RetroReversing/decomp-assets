@@ -361,6 +361,25 @@ def _fits(image, info, base, budget, check):
     return True
 
 
+def _mixed_adpcm_evidence(image, info, base):
+    """A large, varied ADPCM bank can identify the adjacent mixed-format table."""
+    compressed = {(s['relative_offset'], s['encoded_size']) for s in info['samples']
+                  if s['codec'] == 'N64 VADPCM'}
+    if (len(compressed) < 32 or sum(size // 9 for _, size in compressed) < 4096
+            or not any(s['codec'] != 'N64 VADPCM' for s in info['samples'])):
+        return False
+    frames = set()
+    for offset, size in compressed:
+        start = base + offset
+        if start < base or start + size > len(image):
+            return False
+        for at in range(start, start + size, 9):
+            frames.add(bytes(image[at:at+9]))
+            if len(frames) >= 64:
+                return True
+    return False
+
+
 def _candidates(image):
     for hit in re.finditer(rb'B1\x00[\x01-\x80]',image):
         offset=hit.start()
@@ -677,7 +696,9 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored,*preceding]))
         fits=[]
         for base in bases:
-            info['corroborated']=bool(uv or partition) or base in loader_refs or base in anchored
+            info['corroborated']=(bool(uv or partition) or base in loader_refs or base in anchored
+                                  or (base in (adjacent, (adjacent+31)//32*32)
+                                      and _mixed_adpcm_evidence(image, info, base)))
             if _fits(image,info,base,budget,check):fits.append(base)
         if len(fits)!=1:
             if sample_only:

@@ -556,3 +556,40 @@ def test_uncached_record_exposes_and_checks_preceding_adpcm():
     assert wav(audio.preview(image, banks[0], {}))[1]
     image[0x100] = 0x0f
     assert not [a for a in audio.regions(image) if a.get('audio_kind') == 'sample bank']
+
+
+def test_large_mixed_bank_can_infer_its_adjacent_table(monkeypatch):
+    import copy
+
+    image, _, base = fixture()
+    info = audio.bank(image, 128)
+    compressed = info['samples'][0]
+    raw_image, _, _ = fixture(raw=True)
+    raw = audio.bank(raw_image, 128)['samples'][0]
+    table = bytearray()
+    samples = []
+    for n in range(32):
+        sample = copy.deepcopy(compressed)
+        sample.update(relative_offset=len(table), size=1152, encoded_size=1152)
+        samples.append(sample)
+        for frame in range(128):
+            table += bytes([0, n, frame]) + bytes([n ^ frame]) * 6
+    sample = copy.deepcopy(raw)
+    sample['relative_offset'] = len(table)
+    samples.append(sample)
+    table += struct.pack('>16h', *([500, -500] * 8))
+    info['samples'] = samples
+    image = image[:base] + table
+    monkeypatch.setattr(audio, 'bank', lambda *args, **kwargs: copy.deepcopy(info))
+    found = audio.regions(image)
+    assert found[0]['table_offset'] == base
+    assert found[0]['table_confidence'] == 'tentative'
+    assert wav(audio.preview(image, found[0], {'sample': 32}))[1]
+
+    broken = bytearray(image)
+    broken[base + 1152] = 15
+    assert audio.regions(broken)[0]['audio_kind'] == 'unresolved bank'
+    silent = image[:base] + bytes(len(table))
+    assert audio.regions(silent)[0]['audio_kind'] == 'unresolved bank'
+    info['samples'] = samples[:31] + samples[-1:]
+    assert audio.regions(image)[0]['audio_kind'] == 'unresolved bank'
