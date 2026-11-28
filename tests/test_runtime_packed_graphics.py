@@ -1,4 +1,5 @@
 import struct
+import zlib
 
 from decompassets.n64 import mwo_graphics, runtime_packed_graphics
 
@@ -110,3 +111,18 @@ def test_runtime_rnc_texture_requires_checksums_and_matching_pixels():
     assert not runtime_packed_graphics.regions(damaged, [ram])
     ram[0x880] ^= 1
     assert not runtime_packed_graphics.regions(image, [ram])
+
+
+def test_runtime_raw_deflate_needs_complete_stream_and_matching_pixels():
+    from decompassets import n64
+
+    _,ram = fixture()
+    compressor = zlib.compressobj(wbits=-15)
+    stream = compressor.compress(bytes(ram[0x800:0x900])) + compressor.flush()
+    image = bytes(0x100)+stream
+    asset = next(a for a in runtime_packed_graphics.regions(image,[ram]) if a.get('codec') == 'deflate')
+    assert asset['offset'] == 0x100 and asset['size'] == len(stream)
+    assert n64.preview(image,asset,{})['mime'] == 'image/png'
+    assert runtime_packed_graphics.unpack_deflate(stream[:-1]) is None
+    ram[0x880] ^= 1
+    assert not runtime_packed_graphics.regions(image,[ram])
