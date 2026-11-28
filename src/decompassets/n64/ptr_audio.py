@@ -42,7 +42,7 @@ def bank(image,offset, *, check=lambda:None):
     if not 1<=count<=MAX_SAMPLES:raise audio.BankError('Invalid pointer-bank sample count.')
     note_data=take(notes,count,1);tune_data=take(tuning,count*4);pointers=take(table,count*4)
     if any(tune_data[i:i+3]!=b'\0\0\0' for i in range(1,len(tune_data),4)):raise audio.BankError('Invalid unrelocated tuning arrays.')
-    samples=[]
+    samples=[];skipped_loops=0
     for index in range(count):
         check();at=struct.unpack_from('>I',pointers,index*4)[0]
         if not at:continue
@@ -60,12 +60,19 @@ def bank(image,offset, *, check=lambda:None):
             item['samples']=length//2
         if loop:
             start,finish,repeats=struct.unpack_from('>III',take(loop,44 if codec==0 else 12))
-            if not start<=finish<=item['samples']:raise audio.BankError('Loop exceeds sample extent.')
+            if not start<=finish<=item['samples']:
+                # A large bank can contain one broken loop without invalidating
+                # its other independent wave records. Never expose that sample.
+                if not (codec == 0 and start <= item['samples'] < finish <= 2*item['samples']):
+                    raise audio.BankError('Loop exceeds sample extent.')
+                skipped_loops+=1
+                continue
             item['loop']=dict(start=start,end=finish,count=repeats)
         samples.append(item)
-    if not samples:raise audio.BankError('No supported waves.')
+    if not samples or skipped_loops and (skipped_loops != 1 or len(samples)<16):
+        raise audio.BankError('No sufficiently validated waves.')
     name=bytes(image[offset+20:offset+32]).split(b'\0')[0].decode('ascii',errors='replace')
-    return dict(offset=offset,size=end-offset,samples=samples,name=name)
+    return dict(offset=offset,size=end-offset,samples=samples,name=name,skipped_invalid_loops=skipped_loops)
 
 
 def fits(image,info,base,budget,check):
@@ -172,7 +179,9 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
         if paired is not None:
             reason = 'A marked WaveTables block ends at the zero padding before this validated control graph. '
             reason += 'The bank stores no rate. 22050 Hz is an editable preview default.'
-        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('adjacent wave and control pair' if paired is not None else 'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason)
+        if info['skipped_invalid_loops']:
+            reason += ' One sample with an out-of-range loop was omitted.'
+        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('adjacent wave and control pair' if paired is not None else 'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason,skipped_invalid_loops=info['skipped_invalid_loops'])
         if 'compressed_control' in info:
             common.update(compressed_control=info['compressed_control'])
             common.update((key, info[key]) for key in ('control_codec', 'control_byte_order') if key in info)
