@@ -105,6 +105,7 @@ def regions(image, *, context=None, **kwargs):
         ffs,
         fla2,
         fla2_models,
+        flag_lz_graphics,
         fonts,
         graphbin,
         grid_tile_meshes,
@@ -292,6 +293,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(relative_textures.regions(image,**kwargs))
     known.extend(compact_mio_textures.regions(image,**kwargs))
     known.extend(compact_mio_models.regions(image,**kwargs))
+    known.extend(flag_lz_graphics.regions(image,**kwargs))
     known.extend(relative_models.regions(image,**kwargs))
     known.extend(relative_objects.regions(image,**kwargs))
     known.extend(relative_audio.regions(image,**kwargs))
@@ -519,6 +521,7 @@ def preview(data, asset, selection):
         ffs,
         fla2,
         fla2_models,
+        flag_lz_graphics,
         fonts,
         graphbin,
         grid_tile_meshes,
@@ -806,6 +809,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == relative_textures.LAYOUT:return relative_textures.preview(data,asset,selection)
     if asset.get('layout') == compact_mio_textures.LAYOUT:return compact_mio_textures.preview(data,asset,selection)
     if asset.get('layout') == compact_mio_models.LAYOUT:return compact_mio_models.preview(data,asset,selection)
+    if asset.get('layout') in (flag_lz_graphics.TEXTURES, flag_lz_graphics.MODELS):return flag_lz_graphics.preview(data,asset,selection)
     if asset.get('layout') == relative_models.LAYOUT:return relative_models.preview(data,asset,selection)
     if asset.get('layout') == relative_objects.LAYOUT:return relative_objects.preview(data,asset,selection)
     if asset.get('layout') in (relative_audio.BANK, relative_audio.SONG):return relative_audio.preview(data,asset,selection)
