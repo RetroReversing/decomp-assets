@@ -10,6 +10,9 @@ _LIMIT = 4 * 1024 * 1024
 
 def decode(source, expected):
     """Decode independent input chunks with a shared backward-copy window."""
+    if source[:5] == b'\x03\0\0\x10\0':
+        from . import chunked_bits
+        return chunked_bits.decode(source, expected)
     if not 0 < expected <= _LIMIT or len(source) < 6 or len(source) > _LIMIT:
         return None
     result = bytearray()
