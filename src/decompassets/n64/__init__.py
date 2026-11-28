@@ -103,6 +103,7 @@ def regions(image, *, context=None, **kwargs):
         fat_models,
         fat_textures,
         ffs,
+        ffs_models,
         fla2,
         fla2_models,
         flag_lz_graphics,
@@ -257,7 +258,7 @@ def regions(image, *, context=None, **kwargs):
     sound_banks = audio.regions(image,context=context,**kwargs)
     pointer_banks = ptr_audio.regions(image,**kwargs)
     known=(textures.regions(image,**kwargs)+texture_packs.regions(image,**kwargs)+display_lists.regions(image,models=display_meshes,**kwargs)
-           +ffs.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+rare_assets.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+mainfs_models.regions(image,**kwargs)+fla2.regions(image,**kwargs)
+           +ffs.regions(image,**kwargs)+ffs_models.regions(image,**kwargs)+rare_models.regions(image,**kwargs)+rare_assets.regions(image,**kwargs)+uv_textures.regions(image,**kwargs)+blast_textures.regions(image,**kwargs)+reloc_files.regions(image,**kwargs)+mainfs.regions(image,**kwargs)+mainfs_models.regions(image,**kwargs)+fla2.regions(image,**kwargs)
            +sound_banks+rare_audio.regions(image,**kwargs)+paired_audio.regions(image,**kwargs)
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
@@ -519,6 +520,7 @@ def preview(data, asset, selection):
         fat_models,
         fat_textures,
         ffs,
+        ffs_models,
         fla2,
         fla2_models,
         flag_lz_graphics,
@@ -874,6 +876,7 @@ def preview(data, asset, selection):
     if asset.get('layout')==inline_tiles.LAYOUT:return inline_tiles.preview(data,asset,selection)
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
+    if asset.get('layout')==ffs_models.LAYOUT:return ffs_models.preview(data,asset,selection)
     if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
     from . import runtime_deflate_models
     if asset.get('layout') == runtime_deflate_models.LAYOUT:return runtime_deflate_models.preview(data,asset,selection)
