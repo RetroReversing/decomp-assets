@@ -163,6 +163,7 @@ def regions(image, *, context=None, **kwargs):
         named_file_models,
         named_file_textures,
         named_prm_models,
+        named_record_textures,
         named_resource_images,
         named_resource_models,
         named_tim_archives,
@@ -363,6 +364,7 @@ def regions(image, *, context=None, **kwargs):
     known.extend(be_iwad_images.regions(image,**kwargs))
     known.extend(be_iwad_maps.regions(image,**kwargs))
     known.extend(named_file_textures.regions(image,**kwargs))
+    known.extend(named_record_textures.regions(image,**kwargs))
     known.extend(named_file_models.regions(image,**kwargs))
     known.extend(iwad_sprites.regions(image,**kwargs))
     known.extend(iwad_maps.regions(image,**kwargs))
@@ -592,6 +594,7 @@ def preview(data, asset, selection):
         named_file_models,
         named_file_textures,
         named_prm_models,
+        named_record_textures,
         named_resource_images,
         named_resource_models,
         named_tim_archives,
@@ -852,6 +855,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == indexed_pic_images.LAYOUT:return indexed_pic_images.preview(data,asset,selection)
     if asset.get('layout') == named_file_models.LAYOUT:return named_file_models.preview(data,asset,selection)
     if asset.get('layout') == named_file_textures.LAYOUT:return named_file_textures.preview(data,asset,selection)
+    if asset.get('layout') == named_record_textures.LAYOUT:return named_record_textures.preview(data,asset,selection)
     if asset.get('layout') == be_iwad_images.LAYOUT:return be_iwad_images.preview(data,asset,selection)
     if asset.get('layout') in (iwad_sprites.LAYOUT, iwad_sprites.TEXTURE):return iwad_sprites.preview(data,asset,selection)
     if asset.get('layout') == iwad_maps.LAYOUT:return iwad_maps.preview(data,asset,selection)
