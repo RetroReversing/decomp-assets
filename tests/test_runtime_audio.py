@@ -25,6 +25,8 @@ def test_runtime_control_relocations_prove_sample_table():
     assert len(found) == 3
     assert found[0]['table_offset'] == table
     assert found[0]['table_confidence'] == 'runtime relocated controls'
+    assert [sample['label'] for sample in found[0]['samples']] == ['Sample 1', 'Sample 2']
+    assert found[1]['samples'][0]['label'] == 'Sample 1'
     assert audio.preview(image, found[0], {})['media'] == 'audio'
 
 

@@ -85,7 +85,8 @@ def regions(image, snapshots, *, check=lambda: None):
     for offset, (base, info) in tables(image, snapshots, check=check).items():
         reason = ('A relocated B1 control graph in repeated RAM snapshots gives a consistent cartridge sample-table '
                   'base, and every ADPCM frame selector passed. Pitch, mixing and loop playback are separate.')
-        samples = [{**sample, 'offset': base+sample['relative_offset']} for sample in info['samples']]
+        samples = [{**sample, 'offset': base+sample['relative_offset'], 'label': f'Sample {i+1}'}
+                   for i, sample in enumerate(info['samples'])]
         common = dict(media='audio', audio_kind='sample bank', table_confidence='runtime relocated controls',
                       table_offset=base, bank_offset=offset, reason=reason)
         found.append(dict(offset=offset, size=info['size'], kind='audio', label='N64 sound-bank controls',
