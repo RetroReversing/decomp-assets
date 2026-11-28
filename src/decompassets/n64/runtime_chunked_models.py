@@ -1,5 +1,6 @@
 """Local F3DEX mesh batches proven by runtime and compressed resources."""
 
+import hashlib
 import struct
 
 from .. import formats
@@ -91,19 +92,20 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                 if vertex < 0 or data.find(vertices, vertex + 1) >= 0:
                     continue
                 command = data.find(commands)
-                if command < 0 or data.find(commands, command + 1) >= 0:
-                    continue
+                if command >= 0 and data.find(commands, command + 1) >= 0:
+                    command = -1
                 combined, start = _combined(data, commands, vertex)
                 parsed = display_meshes.geometry(combined, start, len(combined), {128: 0})
                 if (not parsed or len(parsed[2]) < 3
                         or not runtime_zip_models._nonplanar([parsed[1][i] for i in sorted({i for face in parsed[2] for i in face})])):
                     continue
-                key = command, vertex
+                key = commands, vertex
                 if key in seen:
                     continue
                 seen.add(key)
-                meshes.append(dict(name=f'Mesh {len(meshes) + 1}', command=command, command_size=len(commands),
-                                   vertex=vertex, vertices=len(parsed[1]), triangles=len(parsed[2])))
+                meshes.append(dict(name=f'Mesh {len(meshes) + 1}', command=command, captured=commands.hex(),
+                                   vertex=vertex, vertex_digest=hashlib.sha256(vertices).hexdigest(),
+                                   vertices=len(parsed[1]), triangles=len(parsed[2])))
                 total += 1
                 if total >= 512:
                     break
@@ -113,7 +115,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                                   confidence='validated', meshes=meshes, vertices=sum(m['vertices'] for m in meshes),
                                   triangles=sum(m['triangles'] for m in meshes),
                                   preview_settings=dict(source='rom', format='auto', offset=offset),
-                                  reason='The task calls this batch and its commands and all loaded vertices match one decoded resource.'))
+                                  reason='A captured graphics task draws this batch; all its loaded vertices match one decoded resource. '))
             if total >= 512:
                 return found
     return found
@@ -124,9 +126,22 @@ def preview(image, asset, selection):
     data = chunked_lz_images.decode(image[offset:offset + size], asset['expanded'])
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes']) - 1)
     item = asset['meshes'][index]
-    if not data or item['command'] + item['command_size'] > len(data):
+    if not data:
         raise formats.AssetError('The compressed mesh changed. Scan ROM Explorer again.')
-    commands = data[item['command']:item['command'] + item['command_size']]
+    try:
+        commands = (bytes.fromhex(item['captured']) if 'captured' in item else
+                    data[item['command']:item['command'] + item['command_size']])
+    except (KeyError, TypeError, ValueError):
+        raise formats.AssetError('The captured mesh changed. Scan ROM Explorer again.') from None
+    if len(commands) < 8:
+        raise formats.AssetError('The compressed mesh changed. Scan ROM Explorer again.')
+    count = display_lists._vertex_count(struct.unpack_from('>I', commands)[0])
+    vertices = data[item['vertex']:item['vertex'] + count * 16]
+    if (len(vertices) != count * 16 or ('vertex_digest' in item
+            and hashlib.sha256(vertices).hexdigest() != item['vertex_digest'])):
+        raise formats.AssetError('The compressed mesh vertices changed. Scan ROM Explorer again.')
+    if item['command'] >= 0 and data[item['command']:item['command'] + len(commands)] != commands:
+        raise formats.AssetError('The compressed mesh commands changed. Scan ROM Explorer again.')
     combined, start = _combined(data, commands, item['vertex'])
     settings = dict(source='rom', format='auto', offset=offset, mesh=index)
     result = display_meshes.preview(combined, dict(offset=start, size=len(combined) - start,

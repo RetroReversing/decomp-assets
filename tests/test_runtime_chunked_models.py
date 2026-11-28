@@ -42,7 +42,7 @@ def test_runtime_chunked_mesh_preview():
 
 def test_rejects_unmatched_task_commands_or_vertices():
     image, ram = fixture()
-    for offset in (0x80c, 0x2108, 0x2034):
+    for offset in (0x80c, 0x2108):
         changed = bytearray(ram)
         changed[offset] ^= 1
         assert not runtime_chunked_models.regions(image, [changed])
@@ -52,3 +52,21 @@ def test_rejects_unmatched_task_commands_or_vertices():
 def test_repeated_frames_are_deduplicated():
     image, ram = fixture()
     assert runtime_chunked_models.regions(image, [ram]) == runtime_chunked_models.regions(image, [ram, ram])
+
+
+def test_captured_commands_can_be_generated_at_runtime():
+    image, ram = fixture()
+    changed = bytearray(ram)
+    changed[0x2028:0x2038] = ram[0x2030:0x2038] + ram[0x2028:0x2030]
+    assets = runtime_chunked_models.regions(image, [changed])
+    assert assets and assets[0]['meshes'][0]['command'] == -1
+    assert n64.preview(image, assets[0], {})['media'] == 'model'
+
+
+def test_previous_scan_mesh_metadata_still_previews():
+    image, ram = fixture()
+    asset = runtime_chunked_models.regions(image, [ram])[0]
+    item = asset['meshes'][0]
+    item['command_size'] = len(bytes.fromhex(item.pop('captured')))
+    item.pop('vertex_digest')
+    assert n64.preview(image, asset, {})['media'] == 'model'
