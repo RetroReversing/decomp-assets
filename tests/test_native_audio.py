@@ -426,6 +426,41 @@ def test_end_anchor_requires_many_dense_nonoverlapping_adpcm_samples():
     assert not audio._end_anchored_tables(info,[0x1010-1])
 
 
+def test_preceding_table_requires_dense_zero_padded_adpcm_extents():
+    samples = [dict(relative_offset=i*16,size=9,codec='N64 VADPCM') for i in range(16)]
+    image = bytearray(0x400)
+    info = dict(offset=0x200,size=32,samples=samples)
+    assert audio._preceding_dense_table(image,info) == [0x100]
+    assert not audio._preceding_dense_table(image,{**info,'samples':samples[:15]})
+    overlap = [dict(s) for s in samples];overlap[3]['relative_offset'] -= 8
+    assert not audio._preceding_dense_table(image,{**info,'samples':overlap})
+    mixed = [dict(s) for s in samples];mixed[0]['codec'] = 'PCM16 big endian'
+    assert not audio._preceding_dense_table(image,{**info,'samples':mixed})
+    image[0x109] = 1
+    assert not audio._preceding_dense_table(image,info)
+
+
+def test_consecutive_records_pair_padded_control_graphs_with_waves():
+    source,_,old_wave = fixture()
+    controls = source[128:old_wave]; waves = source[old_wave:]
+    image = bytearray(0x900)
+    starts = (0x100,0x500)
+    for index,start in enumerate(starts):
+        wave = start+len(controls)+16
+        struct.pack_into('>III',image,index*12,start,wave,wave)
+        image[start:start+len(controls)] = controls
+        image[wave:wave+len(waves)] = waves
+    found = [a for a in audio.regions(image) if a.get('audio_kind') == 'sample bank' and a['offset'] in starts]
+    assert {a['offset'] for a in found} == set(starts)
+    assert all(a['table_confidence'] == 'validated' and wav(audio.preview(image,a,{}))[1] for a in found)
+    # One isolated triple does not establish a directory.
+    image[12:24] = bytes(12)
+    assert not audio._adjacent_control_records(image,[(s,False) for s in starts],lambda:None)
+    struct.pack_into('>III',image,12,starts[1],starts[1]+len(controls)+16,starts[1]+len(controls)+16)
+    image[starts[1]+len(controls)] = 1
+    assert not audio._adjacent_control_records(image,[(s,False) for s in starts],lambda:None)
+
+
 def test_inferred_anchor_is_checked_when_an_unrelated_loader_base_is_present(monkeypatch):
     image, _, base = fixture(raw=True)
     monkeypatch.setattr(audio,'loader_tables',lambda *args,**kwargs:{len(image)-1:[]})

@@ -534,11 +534,70 @@ def _end_anchored_tables(info, boundaries):
     return [end-size for end in boundaries if end-size >= info['offset']+info['size'] and not (end-size)%16]
 
 
+def _preceding_dense_table(image, info):
+    """Propose a tightly packed ADPCM table ending at its control graph.
+
+    Some games place the waves first. Treat this as an inference until a loader
+    confirms it, and still require the normal complete frame validation.
+    """
+    samples = info['samples']
+    ranges = sorted({(s['relative_offset'], s['relative_offset']+s['size']) for s in samples})
+    if (len(ranges) < 16 or any(s['codec'] != 'N64 VADPCM' for s in samples)
+            or ranges[0][0] != 0
+            or any(not 0 <= b[0]-a[1] <= 7 for a,b in zip(ranges,ranges[1:]))):
+        return []
+    end = (ranges[-1][1]+15) & ~15
+    base = info['offset']-end
+    if base < 0 or base % 16:
+        return []
+    gaps = [(a[1],b[0]) for a,b in zip(ranges,ranges[1:])]
+    gaps.append((ranges[-1][1],end))
+    if any(any(image[base+a:base+b]) for a,b in gaps):
+        return []
+    return [base]
+
+
+def _adjacent_control_records(image, candidates, check):
+    """Pair consecutive cartridge records naming controls and following waves."""
+    controls = {offset for offset, relocated in candidates if not relocated}
+    valid = {}
+    for offset in controls:
+        try:
+            info = bank(image, offset, check=check)
+        except BankError:
+            continue
+        marker = struct.pack('>I', offset)
+        at = 0
+        for _ in range(64):
+            at = image.find(marker, at, min(offset, 0x100000))
+            if at < 0:
+                break
+            pos = at; at += 4
+            if pos % 4 or pos+12 > len(image):
+                continue
+            _, end, wave = struct.unpack_from('>III', image, pos)
+            gap = end-(offset+info['size'])
+            if (wave != end or end % 16 or not 0 <= gap <= 32 or end > len(image)
+                    or any(image[offset+info['size']:end])
+                    or any(s['relative_offset']+s['size'] > len(image)-wave for s in info['samples'])):
+                continue
+            valid[pos] = (offset,end,wave)
+    result = {}
+    for pos,record in valid.items():
+        # A lone numerical match is not enough evidence of a directory.
+        if not any(p in valid and valid[p][0] != record[0] for p in (pos-12,pos+12)):
+            continue
+        control,end,wave = record
+        result.setdefault(control,set()).add((end,wave,len(image)))
+    return {control:next(iter(spans)) for control,spans in result.items() if len(spans) == 1}
+
+
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
     parallel = _parallel_tables(image, candidates, check)
+    records = _adjacent_control_records(image, candidates, check)
     directory = _offset_directory_tables(image, check)
     from .fat_textures import file_tables
     data_boundaries = [base for base, _, _, _, _ in file_tables(image, check)]
@@ -575,12 +634,13 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
         sample_directory = _following_sample_directory(image, info) if not relocated else None
-        partition = parallel.get(offset) or directory.get(offset) or _uncached_tables(image, info, check)
+        partition = parallel.get(offset) or directory.get(offset) or records.get(offset) or _uncached_tables(image, info, check)
         if sample_directory:
             _, base, offsets = sample_directory
             partition = (offset+info['size'], base, base+offsets[-1])
         anchored = _end_anchored_tables(info, data_boundaries)
         uv = uv_tables.get(offset) if not relocated else None
+        preceding = []
         if uv:
             control_end, wave, wave_end, _, _ = uv
             if (offset+info['size'] > control_end
@@ -613,7 +673,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             # look like audio, so only a unique fully checked table may win.
             padded=(adjacent+31)//32*32
             padding=[padded] if padded>adjacent and not any(image[adjacent:padded]) else []
-            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored]))
+            preceding = _preceding_dense_table(image, info)
+            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored,*preceding]))
         fits=[]
         for base in bases:
             info['corroborated']=bool(uv or partition) or base in loader_refs or base in anchored
@@ -632,12 +693,14 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
                  'A checked cartridge directory pairs bounded control and sample ranges.' if offset in directory else
+                 'Consecutive cartridge records pair control extents with following sample tables.' if offset in records else
                  'Repeated cartridge addresses pair the controls with the preceding sample table.' if partition and not sample_directory and offset not in parallel else
                  'The following offset directory bounds every sample in the control graph.' if sample_directory else
                  'Parallel cartridge tables pair bounded control ranges with sample-table starts.' if partition else
                  'The loader copies this control graph and passes its sample-table address to the B1 relocator.' if base in matched else
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
                  'Dense samples end at a verified data-file boundary; table placement is inferred.' if base in anchored else
+                 'A dense, zero-padded sample table ends at the control graph; table placement is inferred.' if base in preceding else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
