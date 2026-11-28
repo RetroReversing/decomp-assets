@@ -26,7 +26,8 @@ def regions(image, *, check=lambda: None, progress=lambda _: None):
         info['corroborated'] = True
         if not audio._fits(image, info, table, [audio.MAX_HEADER_CHECKS], check):
             continue
-        samples = [{**sample, 'offset': table + sample['relative_offset']} for sample in info['samples']]
+        samples = [{**sample, 'offset': table + sample['relative_offset'], 'label': f'Sample {i + 1}'}
+                   for i, sample in enumerate(info['samples'])]
         reason = ('A checked section directory bounds the B1 controls and sample table; each listed sample and '
                   'ADPCM frame selector passed. Unsupported samples and invalid loops are omitted. Static structure '
                   'does not prove runtime use. Preview uses the nominal rate without pitch, mixing or loops.')
