@@ -119,6 +119,8 @@ def test_zero_dxt_rgba32_swaps_odd_row_halves():
     assert asset['odd_row_swap'] == 8
     assert runtime_textures.preview(image, asset, {})['data_url'] == formats.preview(
         linear, dict(format='rgba8888', width=width, height=height, offset=0))['data_url']
-    struct.pack_into('>I', ram, 28, 0x0701f100)
-    asset, = runtime_textures.regions(image, [ram])
+    linear_load = bytearray(ram)
+    struct.pack_into('>I', linear_load, 28, 0x0701f100)
+    asset, = runtime_textures.regions(image, [linear_load])
     assert 'odd_row_swap' not in asset
+    assert len(runtime_textures.regions(image, [ram, linear_load])) == 2
