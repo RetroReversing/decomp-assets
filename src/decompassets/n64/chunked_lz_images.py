@@ -60,7 +60,7 @@ def image_info(data):
 
 def directories(image, check=lambda: None):
     """Require a full consecutive directory with at least three members."""
-    for at in range(0, len(image) - 36, 4):
+    for at in range(0, len(image) - 36, 2):
         if at % 0x10000 == 0:
             check()
         first, expanded, packed = struct.unpack_from('>III', image, at)
