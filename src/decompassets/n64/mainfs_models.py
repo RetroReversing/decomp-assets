@@ -87,7 +87,9 @@ def regions(image, *, check=lambda: None, **kwargs):
         if not parsed:
             continue
         vertices, surfaces = parsed
-        following = files[i+1][2] if i+1 < len(files) else len(image)
+        # The filesystem has no end offset for its final member. Do not
+        # label the rest of the cartridge as model data.
+        following = files[i+1][2] if i+1 < len(files) else min(len(image), at + 8 + int.from_bytes(image[at:at+4], 'big'))
         if following <= at:
             continue
         result.append(dict(offset=at, size=following-at, root=root, directory=directory, file=index,

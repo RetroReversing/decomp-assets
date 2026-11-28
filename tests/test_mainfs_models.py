@@ -37,3 +37,12 @@ def test_rejects_truncated_or_invalid_faces():
     bad[pos] = 0x35
     struct.pack_into('>H', bad, pos+1, 9)
     assert mainfs_models.geometry(bytes(bad)) is None
+
+
+def test_final_file_does_not_cover_the_rest_of_the_cartridge():
+    raw = model()
+    image = bytes(0x40) + filesystem([[], [(1, raw, lz(raw))]]) + bytes(4096)
+    found = mainfs_models.regions(image)
+    assert len(found) == 1
+    assert found[0]['size'] == 8 + len(raw)
+    assert found[0]['offset'] + found[0]['size'] < len(image)
