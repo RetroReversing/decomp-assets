@@ -92,16 +92,21 @@ def _local_list(data, start):
     if end is None:
         return None
     local = bytearray(data)
-    loaded = False
+    loaded = set()
     for at in range(start, end, 8):
-        w0, _ = struct.unpack_from('>II', data, at)
+        w0, w1 = struct.unpack_from('>II', data, at)
         cmd = w0 >> 24
         if cmd == 0xde:
-            loaded = False
+            loaded.clear()
         elif cmd == 1:
-            loaded = True
-        elif cmd in (5, 6, 7) and not loaded:
-            local[at:at+8] = b'\xe7\0\0\0\0\0\0\0'
+            count = display_lists._vertex_count(w0)
+            dest = ((w0 >> 1) & 127) - count
+            loaded.update(range(dest, dest+count))
+        elif cmd in (5, 6, 7):
+            words = (w0,) if cmd == 5 else (w0, w1)
+            slots = [(word >> shift) & 255 for word in words for shift in (16, 8, 0)]
+            if any(slot & 1 or slot//2 not in loaded for slot in slots):
+                local[at:at+8] = b'\xe7\0\0\0\0\0\0\0'
     return local, end
 
 

@@ -68,3 +68,13 @@ def test_triangles_after_external_calls_need_another_local_vertex_load():
     data[first_triangle:first_triangle] = bytes.fromhex('de00000003000000')
     meshes, _ = graphics.discover(data)
     assert len(meshes) == 1 and meshes[0]['triangles'] == 1
+
+
+def test_partial_vertex_load_does_not_restore_other_slots_after_external_call():
+    data = bytearray(resource())
+    start = int.from_bytes(data[0x10:0x14], 'big') & 0xffffff
+    triangles = [at for at in range(start, len(data), 8) if data[at] == 5]
+    at = triangles[1]
+    data[at:at] = bytes.fromhex('de00000003000000 01001002 02000020')
+    meshes, _ = graphics.discover(data)
+    assert len(meshes) == 1 and meshes[0]['triangles'] == 1
