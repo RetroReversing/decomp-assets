@@ -149,6 +149,9 @@ def discover(data):
                 if (item['palette_space'] != 2 or not isinstance(pal, int) or pal+full*2 > len(data)
                         or item['fmt'] == 'ci8' and max(data[offset:offset+size], default=0) >= count):
                     continue
+                if item['fmt'] == 'ci4' and count < 16 and any(
+                        max(byte >> 4, byte & 15) >= count for byte in data[offset:offset+size]):
+                    continue
                 settings.update(palette_offset=pal, palette_format=item['palette_format'])
             key = tuple(settings.items())
             if key not in seen:
