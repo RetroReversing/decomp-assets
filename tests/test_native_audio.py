@@ -593,3 +593,29 @@ def test_large_mixed_bank_can_infer_its_adjacent_table(monkeypatch):
     assert audio.regions(silent)[0]['audio_kind'] == 'unresolved bank'
     info['samples'] = samples[:31] + samples[-1:]
     assert audio.regions(image)[0]['audio_kind'] == 'unresolved bank'
+
+
+def test_consecutive_b1_files_use_offsets_from_each_file_start():
+    image, _, base = fixture()
+    control = bytearray(image[128:base])
+    for field in (256, 280):
+        value = struct.unpack_from('>I', control, field)[0]
+        struct.pack_into('>I', control, field, value + len(control))
+    one = bytes(control) + image[base:base+58]
+    one += bytes(-len(one) % 16)
+    image = bytes(128) + one + one
+    first, second = 128, 128 + len(one)
+    banks = [a for a in audio.regions(image) if a.get('audio_kind') == 'sample bank' and a['label'] == 'N64 sound-bank controls']
+    # The first also fits another placement made of zeros, so it stays unresolved.
+    assert [a['offset'] for a in banks] == [second]
+    assert [a['table_offset'] for a in banks] == [second]
+    assert all(a['table_confidence'] == 'tentative' for a in banks)
+    assert any(wav(audio.preview(image, banks[0], {}))[1])
+
+    broken = bytearray(image)
+    broken[first + len(control)] = 15
+    assert not audio._file_relative_tables(broken, list(audio._candidates(broken)), lambda: None)
+    broken = bytearray(image)
+    broken[second - 1] = 1
+    assert not audio._file_relative_tables(broken, list(audio._candidates(broken)), lambda: None)
+    assert not audio._file_relative_tables(image[:second], list(audio._candidates(image[:second])), lambda: None)

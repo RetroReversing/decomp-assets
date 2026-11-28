@@ -611,10 +611,46 @@ def _adjacent_control_records(image, candidates, check):
     return {control:next(iter(spans)) for control,spans in result.items() if len(spans) == 1}
 
 
+def _file_relative_tables(image, candidates, check):
+    """Recognize consecutive B1 files whose sample offsets include their controls."""
+    offsets = {offset for offset, relocated in candidates if not relocated}
+    parsed = {}
+    def get(offset):
+        if offset not in parsed:
+            try:
+                info = bank(image, offset, check=check)
+                if any(s['codec'] != 'N64 VADPCM' for s in info['samples']):
+                    info = None
+            except BankError:
+                info = None
+            parsed[offset] = info
+        return parsed[offset]
+    validated = {}
+    budget = [MAX_HEADER_CHECKS]
+    def fits(offset):
+        if offset not in validated:
+            info = get(offset)
+            validated[offset] = bool(info and _fits(image, info, offset, budget, check))
+        return validated[offset]
+    found = set()
+    for offset in sorted(offsets):
+        check()
+        info = get(offset)
+        if not info:
+            continue
+        end = offset + max(s['relative_offset'] + s['size'] for s in info['samples'])
+        following = (end + 15) & ~15
+        if (following in offsets and not any(image[end:following]) and get(following)
+                and fits(offset) and fits(following)):
+            found.update((offset, following))
+    return found
+
+
 def regions(image, *, context=None, check=lambda: None, progress=lambda _: None):
     context=context or {};tables=loader_tables(image,context,check=check);results=[];budget=[MAX_HEADER_CHECKS]
     uv_tables = _uv_tables(image, check)
     candidates=list(itertools.islice(_candidates(image),MAX_CANDIDATES))
+    file_relative = _file_relative_tables(image, candidates, check)
     parallel = _parallel_tables(image, candidates, check)
     records = _adjacent_control_records(image, candidates, check)
     directory = _offset_directory_tables(image, check)
@@ -693,7 +729,8 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
             padded=(adjacent+31)//32*32
             padding=[padded] if padded>adjacent and not any(image[adjacent:padded]) else []
             preceding = _preceding_dense_table(image, info)
-            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored,*preceding]))
+            bases=list(dict.fromkeys([*preferred,adjacent,*padding,*anchored,*preceding,
+                                      *([offset] if offset in file_relative else [])]))
         fits=[]
         for base in bases:
             info['corroborated']=(bool(uv or partition) or base in loader_refs or base in anchored
@@ -722,6 +759,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
                  'A call to the B1 relocator supplies the sample-table base.' if base in static_refs else
                  'Dense samples end at a verified data-file boundary; table placement is inferred.' if base in anchored else
                  'A dense, zero-padded sample table ends at the control graph; table placement is inferred.' if base in preceding else
+                 'Consecutive validated B1 files use offsets relative to their own starts; table placement is inferred.' if base == offset and offset in file_relative else
                  'Sample-table placement is inferred from adjacent aligned data; it is not confirmed by a named loader call.')+
                 ' Static structure does not prove runtime use. Preview uses the bank nominal sample rate, without pitch, mixing or loop playback.')
         samples=[{**sample,'offset':base+sample['relative_offset']} for sample in info['samples']]
