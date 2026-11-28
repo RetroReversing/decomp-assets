@@ -35,6 +35,8 @@ def test_directory_and_preview():
     data = directory()
     rows = images.regions(data)
     assert len(rows) == 3
+    assert (rows[0]['width'], rows[0]['height'], rows[0]['frames'], rows[0]['palettes']) == (8, 8, 1, 1)
+    assert rows[0]['preview_settings']['display_format'] == 'CI8'
     assert images.image_info(images.decode(data[rows[0]['offset']:][:rows[0]['size']], rows[0]['expanded'])) == (8, 8, 86)
     assert images.preview(data, rows[0], {})
 

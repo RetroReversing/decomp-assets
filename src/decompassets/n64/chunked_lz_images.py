@@ -102,8 +102,10 @@ def regions(image, *, check=lambda: None, **kwargs):
             width, height, _ = info
             found.append(dict(offset=offset, size=size, expanded=expanded, directory=directory,
                               kind='image', layout=LAYOUT, confidence='validated',
-                              label=f'CI8 {width}×{height} packed image',
-                              preview_settings=dict(source='rom', format='auto', offset=offset),
+                              label=f'CI8 {width}×{height} packed image', width=width, height=height,
+                              frames=1, palettes=1, levels=[dict(width=width, height=height, offset=0)],
+                              preview_settings=dict(source='rom', format='auto', display_format='CI8',
+                                                    width=width, height=height, offset=offset),
                               reason='The resource directory, decoded dimensions and embedded palette agree.'))
     return found
 
