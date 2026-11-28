@@ -124,6 +124,7 @@ def regions(image, *, context=None, **kwargs):
         indexed_archive_models,
         indexed_be_textures,
         indexed_deflate_models,
+        indexed_partial_audio,
         indexed_pic_images,
         indexed_resource_models,
         indexed_resource_textures,
@@ -271,6 +272,7 @@ def regions(image, *, context=None, **kwargs):
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(indexed_deflate_models.regions(image, **kwargs))
     known.extend(indexed_be_textures.regions(image, **kwargs))
+    known.extend(indexed_partial_audio.regions(image, **kwargs))
     known.extend(indexed_deflate_models.texture_regions(image, **kwargs))
     known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
