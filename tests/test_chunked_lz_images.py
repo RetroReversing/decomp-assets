@@ -53,3 +53,10 @@ def test_copy_across_chunks():
     source.extend(bytes(0x1000-len(source)))
     source.extend(b'\x03\x01\x00\x00')
     assert images.decode(source, 4) == b'AAAA'
+
+
+def test_halfword_aligned_directory():
+    data = b"\0\0" + directory()
+    rows = images.regions(data)
+    assert len(rows) == 3
+    assert all(row["directory"] == 2 for row in rows)
