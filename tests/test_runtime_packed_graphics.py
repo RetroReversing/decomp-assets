@@ -70,3 +70,24 @@ def test_runtime_mio0_texture_and_preview_need_matching_pixels():
     ram[0x880] ^= 1
     assert not runtime_packed_graphics.regions(image, [ram])
     assert runtime_packed_graphics.unpack_mio(stream[:-1]) is None
+
+
+def test_runtime_erz_texture_requires_checksums_and_matching_pixels():
+    from decompassets import n64
+
+    from .test_rnc import literal_block
+
+    _, ram = fixture()
+    pixels = bytes(ram[0x800:0x900])
+    stream = b'ERZ' + literal_block(pixels)[3:]
+    start = 0x102  # ERZ resources can be halfword aligned.
+    image = bytes(start) + stream
+    assets = runtime_packed_graphics.regions(image, [ram])
+    asset = next(a for a in assets if a.get('codec') == 'erz')
+    assert asset['offset'] == start and asset['size'] == len(stream)
+    assert n64.preview(image, asset, {})['mime'] == 'image/png'
+    damaged = bytearray(image)
+    damaged[-1] ^= 1
+    assert not runtime_packed_graphics.regions(damaged, [ram])
+    ram[0x880] ^= 1
+    assert not runtime_packed_graphics.regions(image, [ram])
