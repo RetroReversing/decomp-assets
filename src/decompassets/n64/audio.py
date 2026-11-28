@@ -578,6 +578,48 @@ def _preceding_dense_table(image, info):
     return [base]
 
 
+def _named_audio_records(image, candidates, check):
+    """Pair adjacent named wave and control records with bounded payloads."""
+    result = {}
+    for offset, relocated in candidates:
+        if relocated or offset < 24:
+            continue
+        start = offset - 24
+        size, reserved = struct.unpack_from('>II', image, start)
+        name = image[start+8:offset].split(b'\0', 1)[0]
+        if (reserved or size < 24 or start+size > len(image) or not name.endswith(b'.ctl')
+                or not re.fullmatch(rb'[A-Za-z0-9_-]+\.ctl', name)):
+            continue
+        try:
+            info = bank(image, offset, check=check)
+        except BankError:
+            continue
+        end = offset+info['size']
+        if not 0 <= start+size-end <= 128 or any(image[end:start+size]):
+            continue
+        marker = name[:-4]+b'.tbl\0'
+        pos = 0
+        found = set()
+        while True:
+            pos = image.find(marker, pos, start)
+            if pos < 0:
+                break
+            check()
+            at = pos-8
+            pos += len(marker)
+            if at < 0:
+                continue
+            wave_size, zero = struct.unpack_from('>II', image, at)
+            wave = at+24
+            if (zero or wave_size < 24 or at+wave_size != start or wave > start
+                    or any(s['relative_offset']+s['size'] > start-wave for s in info['samples'])):
+                continue
+            found.add((start+size, wave, start))
+        if len(found) == 1:
+            result[offset] = next(iter(found))
+    return result
+
+
 def _adjacent_control_records(image, candidates, check):
     """Pair consecutive cartridge records naming controls and following waves."""
     controls = {offset for offset, relocated in candidates if not relocated}
@@ -655,6 +697,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
     file_relative = _file_relative_tables(image, candidates, check)
     parallel = _parallel_tables(image, candidates, check)
     records = _adjacent_control_records(image, candidates, check)
+    named = _named_audio_records(image, candidates, check)
     directory = _offset_directory_tables(image, check)
     from .fat_textures import file_tables
     data_boundaries = [base for base, _, _, _, _ in file_tables(image, check)]
@@ -691,7 +734,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         static_refs = loader_refs.copy()
         loader_refs.update(matched)
         sample_directory = _following_sample_directory(image, info) if not relocated else None
-        partition = parallel.get(offset) or directory.get(offset) or records.get(offset) or _uncached_tables(image, info, check)
+        partition = named.get(offset) or parallel.get(offset) or directory.get(offset) or records.get(offset) or _uncached_tables(image, info, check)
         if sample_directory:
             _, base, offsets = sample_directory
             partition = (offset+info['size'], base, base+offsets[-1])
@@ -757,6 +800,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         reason=(('Relocated B1 wrapper, control graph and every ADPCM frame selector passed. ' if relocated else
                  'B1 control graph and every ADPCM frame selector passed. ')+
                 ('The UV sound FORM pairs the bounded control and wave chunks.' if uv else
+                 'Adjacent named records pair bounded control and sample payloads.' if offset in named else
                  'A checked cartridge directory pairs bounded control and sample ranges.' if offset in directory else
                  'Consecutive cartridge records pair control extents with following sample tables.' if offset in records else
                  'Repeated cartridge addresses pair the controls with the preceding sample table.' if partition and not sample_directory and offset not in parallel else
@@ -773,6 +817,7 @@ def regions(image, *, context=None, check=lambda: None, progress=lambda _: None)
         common=dict(media='audio',audio_kind='sample bank',table_confidence=confidence,loader_refs=loader_refs.get(base,[]),table_offset=base)
         if partition and not uv:
             common['table_layout'] = ('sample-directory' if sample_directory else
+                                      'named-records' if offset in named else
                                       'offset-directory' if offset in directory else 'parallel')
         results.append(dict(offset=offset,size=info['size'],kind='audio',label='N64 sound-bank controls',confidence='validated',
                             reason=reason,preview_settings=dict(format='auto',source='rom',offset=offset),samples=samples,**common))

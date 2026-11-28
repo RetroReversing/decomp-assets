@@ -454,6 +454,28 @@ def test_preceding_table_requires_dense_zero_padded_adpcm_extents():
     assert not audio._preceding_dense_table(image,info)
 
 
+def test_adjacent_named_records_pair_preceding_waves_with_controls():
+    source, _, old_wave = fixture()
+    controls, waves = source[128:old_wave], source[old_wave:]
+    def record(name, payload):
+        return struct.pack('>II', len(payload)+24, 0)+name.ljust(16, b'\0')+payload
+    image = bytearray(128)+record(b'music.tbl', waves)+record(b'music.ctl', controls)
+    control = 128+24+len(waves)+24
+    found = [a for a in audio.regions(image) if a.get('audio_kind') == 'sample bank' and a['offset'] == control]
+    assert len(found) == 1 and found[0]['table_offset'] == 152
+    assert found[0]['table_layout'] == 'named-records'
+    assert found[0]['table_confidence'] == 'validated' and any(wav(audio.preview(image,found[0],{}))[1])
+    candidates = [(control, False)]
+    assert audio._named_audio_records(image, candidates, lambda: None)
+    for at in (128, 132, 136, control-24, control-20, control-16):
+        damaged = bytearray(image)
+        damaged[at] ^= 1
+        assert not audio._named_audio_records(damaged, candidates, lambda: None)
+    damaged = bytearray(image)
+    struct.pack_into('>I', damaged, control+256, len(waves))
+    assert not audio._named_audio_records(damaged, candidates, lambda: None)
+
+
 def test_consecutive_records_pair_padded_control_graphs_with_waves():
     source,_,old_wave = fixture()
     controls = source[128:old_wave]; waves = source[old_wave:]
