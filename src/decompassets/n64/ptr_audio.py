@@ -162,22 +162,35 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
     for index,info in enumerate(_controls(image,tables,check=check)):
         check();progress(dict(phase='Recognizing libmus audio banks',done=index))
         preceding = bisect_left(tables,info['offset'])-1
-        paired = None
+        pairs = []
         if preceding >= 0 and not info.get('compressed_control'):
             base = tables[preceding]
             finish = max(base+s['relative_offset']+s['size'] for s in info['samples'])
             # Some resource streams store one wave table, its eight-byte
             # terminator/alignment, then the matching raw control graph.
             if (((finish+7)&~7)+8 == info['offset'] and not any(image[finish:info['offset']])
-                    and fits(image,info,base,budget,check)):
-                paired = base
-        fitting = [paired] if paired is not None else [base for base in tables if fits(image,info,base,budget,check)]
-        resolved=len(fitting)==1 and budget[0]>0
+                    and fits(image,info,base,[MAX_FRAME_CHECKS],check)):
+                pairs.append(base)
+        if not info.get('compressed_control'):
+            # Some resource files store the validated control first, followed
+            # immediately by its aligned marked waves. A game's relocated
+            # sample pointer independently confirmed this layout at runtime.
+            finish = info['offset']+info['size']
+            base = (finish+15)&~15
+            if (base in tables and not any(image[finish:base])
+                    and fits(image,info,base,[MAX_FRAME_CHECKS],check)):
+                pairs.append(base)
+        paired = pairs[0] if len(pairs) == 1 else None
+        if len(pairs) > 1:
+            fitting = pairs
+        else:
+            fitting = [paired] if paired is not None else [base for base in tables if fits(image,info,base,budget,check)]
+        resolved=len(fitting)==1 and (paired is not None or budget[0]>0)
         base=fitting[0] if resolved else None
         samples=[{**s,'offset':base+s['relative_offset']} for s in info['samples']] if resolved else []
         reason='PtrTablesV2 control graph, tuning arrays, sample extents, loops and predictor books checked. '+('Exactly one marked WaveTables candidate fits every sample and ADPCM frame selector; table placement remains a static inference.' if resolved else 'Wave-table placement is ambiguous or unresolved; sample bytes are not classified.')+' The bank stores no rate: 22050 Hz is an editable preview default. Pitch, mixing, sequences and loop playback are not recreated.'
         if paired is not None:
-            reason = 'A marked WaveTables block ends at the zero padding before this validated control graph. '
+            reason = 'A marked WaveTables block and this validated control graph are adjacent with only alignment padding. '
             reason += 'The bank stores no rate. 22050 Hz is an editable preview default.'
         if info['skipped_invalid_loops']:
             reason += ' One sample with an out-of-range loop was omitted.'

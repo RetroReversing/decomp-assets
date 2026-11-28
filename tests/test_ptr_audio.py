@@ -31,10 +31,22 @@ def wav(result):
 
 def test_ambiguous_missing_and_invalid_wave_tables_remain_unplayable():
     image=fixture();table=image[320:]
-    for data in [image[:320],image+bytes(16)+table,image[:336]+b'\x0f'+image[337:]]:
+    for data in [image[:320],image[:320]+bytes(16)+table+bytes(16)+table,image[:336]+b'\x0f'+image[337:]]:
         assets=ptr_audio.regions(data)
         assert len(assets)==1 and assets[0]['samples']==[] and assets[0]['table_confidence']=='unresolved'
         with pytest.raises(AssetError,match='no uniquely fitting'):ptr_audio.preview(data,assets[0],{})
+
+
+def test_control_followed_by_aligned_wave_table_is_local_pair(monkeypatch):
+    image = fixture()
+    bank, *_ = ptr_audio.regions(image+bytes(16)+image[320:])
+    assert bank['table_offset'] == 320
+    assert bank['table_confidence'] == 'adjacent wave and control pair'
+    assert any(wav(ptr_audio.preview(image, bank, {'sample': 0}))[2])
+    # Earlier unrelated banks can exhaust the global table-search budget.
+    monkeypatch.setattr(ptr_audio, 'MAX_FRAME_CHECKS', 4)
+    bank, *_ = ptr_audio.regions(image)
+    assert bank['table_offset'] == 320
 
 
 @pytest.mark.parametrize('offset,value',[(16,0x80000000),(32,999999),(36,0xfffffffc),(44,0xfffffffc),(72,3),(76,9),(48+16,0xfffffffc)])
