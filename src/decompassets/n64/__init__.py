@@ -122,6 +122,7 @@ def regions(image, *, context=None, **kwargs):
         iguana_textures,
         img_textures,
         indexed_archive_models,
+        indexed_be_textures,
         indexed_deflate_models,
         indexed_pic_images,
         indexed_resource_models,
@@ -269,6 +270,7 @@ def regions(image, *, context=None, **kwargs):
            +pointer_banks+ptr_audio.sequences(image,**kwargs)+models.regions(image,**kwargs)
            +archived_models.regions(image,**kwargs)+rnx.regions(image,**kwargs)+dean_audio.regions(image,**kwargs)+dialogue.regions(image,**kwargs))
     known.extend(indexed_deflate_models.regions(image, **kwargs))
+    known.extend(indexed_be_textures.regions(image, **kwargs))
     known.extend(indexed_deflate_models.texture_regions(image, **kwargs))
     known.extend(cartridge_scores.regions(image, sound_banks, **kwargs))
     known.extend(sprite_constructor.regions(image, context=context, **kwargs))
@@ -549,6 +551,7 @@ def preview(data, asset, selection):
         iguana_textures,
         img_textures,
         indexed_archive_models,
+        indexed_be_textures,
         indexed_deflate_models,
         indexed_pic_images,
         indexed_resource_models,
@@ -904,6 +907,7 @@ def preview(data, asset, selection):
     if asset.get('layout') == runtime_zip_models.LAYOUT:return runtime_zip_models.preview(data,asset,selection)
     if asset.get('layout') in (table_lz_graphics.TEXTURES,ring12_graphics.TEXTURES,runtime_packed_graphics.MIO_TEXTURES,runtime_packed_graphics.ERZ_TEXTURES,runtime_packed_graphics.RNC_TEXTURES,runtime_packed_graphics.DEFLATE_TEXTURES,block16_graphics.TEXTURES):return table_lz_graphics.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.LAYOUT:return indexed_deflate_models.preview(data,asset,selection)
+    if asset.get('layout') == indexed_be_textures.LAYOUT:return indexed_be_textures.preview(data,asset,selection)
     if asset.get('layout') == indexed_deflate_models.TEXTURE:return indexed_deflate_models.preview_texture(data,asset,selection)
     if asset.get('layout') in (rare_assets.TEXTURES, rare_assets.MESH):return rare_assets.preview(data,asset,selection)
     if asset.get('layout') in ('rare-model', rare_assets.SEQUEL_MESH):return rare_models.preview(data,asset,selection)
