@@ -1,4 +1,4 @@
-"""Bounded BNKb instrument records with embedded N64 predictor books."""
+"""Bounded BNKb instrument records with N64 or EA-XA samples."""
 from . import audio
 
 LAYOUT = 'bnkb-samples'
@@ -40,7 +40,7 @@ def regions(image, *, check=lambda: None, **kwargs):
             rate = record.find(b'\x84\x02')
             length2 = record.find(b'\x85\x02')
             length3 = record.find(b'\x85\x03')
-            if min(base, book, rate) < 0 or max(base+6, book+10, rate+4) > len(record):
+            if base < 0 or base + 6 > len(record):
                 continue
             if length2 >= 0 and length2+4 <= len(record):
                 samples = int.from_bytes(record[length2+2:length2+4], 'big')
@@ -49,7 +49,23 @@ def regions(image, *, check=lambda: None, **kwargs):
             else:
                 continue
             relative = int.from_bytes(record[base+2:base+6], 'big')
-            frequency = int.from_bytes(record[rate+2:rate+4], 'big')
+            frequency = int.from_bytes(record[rate+2:rate+4], 'big') if 0 <= rate <= len(record)-4 else 22050
+            if book < 0:
+                # Codec 7 uses fixed 15-byte EA-XA frames for 28 samples.
+                if image[start+4] != 4 or b'\x83\x01\x07' not in record:
+                    continue
+                wave_size = int.from_bytes(image[start+12:start+16], 'big')
+                size = ((samples+27)//28)*15
+                pos = start+relative
+                if (not 1000 <= frequency <= 64000 or not 0 < samples <= 1000000
+                        or relative < waves or relative+size > waves+wave_size
+                        or start+waves+wave_size > len(image)):
+                    continue
+                entries[pos, size] = dict(offset=pos, size=size, encoded_size=size, samples=samples,
+                                          rate=frequency, codec='EA-XA', rate_inferred=rate < 0)
+                continue
+            if rate < 0 or book+10 > len(record) or rate+4 > len(record):
+                continue
             predictors = int.from_bytes(record[book+6:book+10], 'big')
             size = ((samples+15)//16)*9
             pos = start+relative
@@ -70,7 +86,10 @@ def regions(image, *, check=lambda: None, **kwargs):
         result.append(dict(offset=start, size=waves, kind='audio', media='audio', layout=LAYOUT,
                            audio_kind='sample bank', label=f'BNKb sample bank ({len(samples)} samples)',
                            confidence='validated', samples=samples,
-                           reason='Instrument records locate their samples, sample rates and predictor books.',
+                           reason=('Instrument records locate their samples and codecs. ' 
+                                   'When a rate is absent, the N64 preview defaults to 22050 Hz.'
+                                   if any(s.get('rate_inferred') for s in samples) else
+                                   'Instrument records locate their samples, sample rates and predictor books.'),
                            preview_settings=dict(format='auto', source='rom', offset=start)))
     return result
 
