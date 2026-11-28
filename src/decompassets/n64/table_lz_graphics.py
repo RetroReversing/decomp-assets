@@ -74,6 +74,7 @@ def preview(image, asset, selection):
               else runtime_packed_graphics.unpack_mio(image[start:start+asset['size']]) if asset.get('codec') == 'mio0'
               else runtime_packed_graphics.unpack_erz(image[start:start+asset['size']]) if asset.get('codec') == 'erz'
               else runtime_packed_graphics.unpack_rnc(image[start:start+asset['size']]) if asset.get('codec') == 'rnc'
+              else runtime_packed_graphics.unpack_deflate(image[start:start+asset['size']]) if asset.get('codec') == 'deflate'
               else ring12_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'ring12'
               else inflate(image[start:start+asset['size']]))
     if not packed or packed[1] != asset['size']:
@@ -92,6 +93,6 @@ def preview(image, asset, selection):
         data = data[:offset]+pixels+data[offset+len(pixels):]
     result = textures.preview(data, {**item,'offset':start,'reason':asset['reason']}, {})
     result['settings'] = dict(source='rom',format='auto',offset=start,texture=index)
-    codec = {'ring12': '12-bit ring LZ', 'mio0': 'MIO0', 'erz': 'ERZ', 'block16': '16-bit control LZ/RLE'}.get(asset.get('codec'), '14-bit ring LZ')
+    codec = {'ring12': '12-bit ring LZ', 'mio0': 'MIO0', 'erz': 'ERZ', 'block16': '16-bit control LZ/RLE', 'deflate': 'raw DEFLATE'}.get(asset.get('codec'), '14-bit ring LZ')
     result['decoded'] = dict(codec=codec,bytes=len(data),block_offset=start,member=asset['label'])
     return result

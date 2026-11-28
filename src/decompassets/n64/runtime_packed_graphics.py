@@ -1,7 +1,8 @@
 """Link runtime texture loads to indexed, compressed cartridge resources."""
 import re
 import struct
-from itertools import pairwise
+import zlib
+from itertools import islice, pairwise
 
 from .. import formats, rnc
 from . import block16_graphics, display_lists, display_meshes, mwo_graphics, ring12_graphics, table_lz_graphics
@@ -11,6 +12,7 @@ MODEL = "runtime-packed-model"
 MIO_TEXTURES = "runtime-mio0-textures"
 ERZ_TEXTURES = "runtime-erz-textures"
 RNC_TEXTURES = "runtime-rnc-textures"
+DEFLATE_TEXTURES = "runtime-deflate-textures"
 _MAX_EXPANDED = 128 * 1024 * 1024
 
 
@@ -57,9 +59,33 @@ def unpack_rnc(image):
         return rnc.unpack_at(image, 0, max_output=formats.MAX_BYTES, max_packed=formats.MAX_BYTES)
     except rnc.RncError:
         return None
+
+
+def unpack_deflate(image):
+    """Decode a bounded raw DEFLATE stream and require its end marker."""
+    try:
+        decoder = zlib.decompressobj(-15)
+        data = decoder.decompress(image, formats.MAX_BYTES + 1)
+        if not decoder.eof or len(data) > formats.MAX_BYTES:
+            return None
+        return data, len(image)-len(decoder.unused_data)
+    except zlib.error:
+        return None
+
+
+def _deflate_candidates(image, check):
+    for at in range(16, len(image), 16):
+        if at % 0x40000 == 0:
+            check()
+        if image[at-4:at] == b'\0'*4 and image[at]:
+            yield at, min(len(image),at+formats.MAX_BYTES), 'deflate'
+
+
 def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     """Only assets whose decoded texels and palette are observed in runtime RAM."""
     snapshots = list(snapshots)
+    if not snapshots:
+        return []
     candidates = [(start,end,'mwo') for start,end in descriptors(image, check)]
     candidates += [(start,end,'table-lz') for start,end in table_lz_graphics.descriptors(image, check)]
     candidates += [(start,end,'ring12') for start,end in ring12_graphics.descriptors(image, check)]
@@ -70,6 +96,9 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                    for m in re.finditer(b'ERZ[\x01\x02]', image) if m.start() % 2 == 0]
     candidates += [(m.start(), min(len(image), m.start()+formats.MAX_BYTES), 'rnc')
                    for m in re.finditer(b'RNC[\x01\x02]', image) if m.start() % 2 == 0]
+    # Raw streams have no signature. Only probe aligned boundaries after zero
+    # padding; complete runtime pixel or vertex matches are required below.
+    candidates += list(islice(_deflate_candidates(image,check),4096))
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -95,7 +124,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                   else ring12_graphics.inflate(memoryview(image)[start:end], check) if codec == 'ring12'
                   else block16_graphics.inflate(memoryview(image)[start:end], check) if codec == 'block16'
                   else unpack_erz(image[start:end]) if codec == 'erz'
-                  else unpack_rnc(image[start:end]) if codec == 'rnc' else unpack_mio(image[start:end]))
+                  else unpack_rnc(image[start:end]) if codec == 'rnc'
+                  else unpack_deflate(image[start:end]) if codec == 'deflate' else unpack_mio(image[start:end]))
         if not parsed:
             continue
         data, used = parsed
@@ -145,6 +175,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                                       if codec == 'table-lz' else ring12_graphics.TEXTURES if codec == 'ring12'
                                       else block16_graphics.TEXTURES if codec == 'block16'
                                       else ERZ_TEXTURES if codec == 'erz' else RNC_TEXTURES if codec == 'rnc'
+                                      else DEFLATE_TEXTURES if codec == 'deflate'
                                       else MIO_TEXTURES), codec=codec,
                               label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
@@ -206,6 +237,7 @@ def preview_model(image, asset, selection):
               else unpack_mio(image[start:start+asset['size']]) if codec == 'mio0'
               else unpack_erz(image[start:start+asset['size']]) if codec == 'erz'
               else unpack_rnc(image[start:start+asset['size']]) if codec == 'rnc'
+              else unpack_deflate(image[start:start+asset['size']]) if codec == 'deflate'
               else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
     item = asset['meshes'][index]
