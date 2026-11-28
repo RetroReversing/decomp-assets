@@ -74,3 +74,9 @@ def test_filesystem_payloads_and_aliased_sample_bank(monkeypatch):
     struct.pack_into('>I', data, 0x10c, 0)
     data[0x140:0x170] = data[0x100:0x130]
     assert not list(ead_direct_audio.filesystem_directories(data))
+    data[0x140:0x170] = bytes(0x30)
+    struct.pack_into('>12I', data, 0x100, 0x300, 0x440, 0x300, 0,
+                     0x440, 0x470, 0x440, 0, 0x470, 0x490, 0x470, 0)
+    assert len(list(ead_direct_audio.filesystem_directories(data))) == 1
+    data[0x42f] = 1
+    assert not list(ead_direct_audio.filesystem_directories(data))
