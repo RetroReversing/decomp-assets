@@ -78,3 +78,15 @@ def test_partial_vertex_load_does_not_restore_other_slots_after_external_call():
     data[at:at] = bytes.fromhex('de00000003000000 01001002 02000020')
     meshes, _ = graphics.discover(data)
     assert len(meshes) == 1 and meshes[0]['triangles'] == 1
+
+
+def test_ci4_indices_must_fit_the_loaded_palette(monkeypatch):
+    original = graphics.display_lists._textures
+
+    def partial_palette(data, group):
+        for item in original(data, group):
+            yield dict(item, palette_entries=1)
+
+    monkeypatch.setattr(graphics.display_lists, '_textures', partial_palette)
+    meshes, textures = graphics.discover(resource())
+    assert meshes and not textures  # The second colour was never loaded into TMEM.
