@@ -73,6 +73,7 @@ def preview(image, asset, selection):
     packed = (block16_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'block16'
               else runtime_packed_graphics.unpack_mio(image[start:start+asset['size']]) if asset.get('codec') == 'mio0'
               else runtime_packed_graphics.unpack_erz(image[start:start+asset['size']]) if asset.get('codec') == 'erz'
+              else runtime_packed_graphics.unpack_rnc(image[start:start+asset['size']]) if asset.get('codec') == 'rnc'
               else ring12_graphics.inflate(image[start:start+asset['size']]) if asset.get('codec') == 'ring12'
               else inflate(image[start:start+asset['size']]))
     if not packed or packed[1] != asset['size']:
