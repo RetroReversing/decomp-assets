@@ -3,12 +3,13 @@ import re
 import struct
 from itertools import pairwise
 
-from .. import formats
+from .. import formats, rnc
 from . import block16_graphics, display_lists, display_meshes, mwo_graphics, ring12_graphics, table_lz_graphics
 from .paired_resource_textures import _COMMAND, _LOAD
 
 MODEL = "runtime-packed-model"
 MIO_TEXTURES = "runtime-mio0-textures"
+ERZ_TEXTURES = "runtime-erz-textures"
 _MAX_EXPANDED = 128 * 1024 * 1024
 
 
@@ -37,6 +38,16 @@ def unpack_mio(image):
     return (data, used) if codec == 'MIO0' else None
 
 
+def unpack_erz(image):
+    """Decode one bounded ERZ block only after both checksums pass."""
+    if image[:4] not in (b'ERZ\x01', b'ERZ\x02'):
+        return None
+    try:
+        return rnc.unpack_at(image, 0, max_output=formats.MAX_BYTES, max_packed=formats.MAX_BYTES)
+    except rnc.RncError:
+        return None
+
+
 def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     """Only assets whose decoded texels and palette are observed in runtime RAM."""
     snapshots = list(snapshots)
@@ -46,6 +57,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
     candidates += [(start,end,'block16') for start,end in block16_graphics.descriptors(image, check)]
     candidates += [(m.start(), min(len(image), m.start()+formats.MAX_BYTES), 'mio0')
                    for m in re.finditer(b'MIO0', image) if m.start() % 4 == 0]
+    candidates += [(m.start(), min(len(image), m.start()+formats.MAX_BYTES), 'erz')
+                   for m in re.finditer(b'ERZ[\x01\x02]', image) if m.start() % 2 == 0]
     observations = []
     groups_by_snapshot = []
     for ram in snapshots:
@@ -70,7 +83,7 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
                   else table_lz_graphics.inflate(memoryview(image)[start:end], check) if codec == 'table-lz'
                   else ring12_graphics.inflate(memoryview(image)[start:end], check) if codec == 'ring12'
                   else block16_graphics.inflate(memoryview(image)[start:end], check) if codec == 'block16'
-                  else unpack_mio(image[start:end]))
+                  else unpack_erz(image[start:end]) if codec == 'erz' else unpack_mio(image[start:end]))
         if not parsed:
             continue
         data, used = parsed
@@ -118,7 +131,8 @@ def regions(image, snapshots, *, check=lambda: None, progress=lambda _: None):
             found.append(dict(offset=start, size=used, expanded_size=len(data), kind='image',
                               layout=(mwo_graphics.TEXTURES if codec == 'mwo' else table_lz_graphics.TEXTURES
                                       if codec == 'table-lz' else ring12_graphics.TEXTURES if codec == 'ring12'
-                                      else block16_graphics.TEXTURES if codec == 'block16' else MIO_TEXTURES), codec=codec,
+                                      else block16_graphics.TEXTURES if codec == 'block16'
+                                      else ERZ_TEXTURES if codec == 'erz' else MIO_TEXTURES), codec=codec,
                               label='Runtime-backed packed textures',
                               confidence='validated', textures=textures, frames=1, palettes=first['palettes'],
                               levels=first['levels'], preview_settings=dict(first['preview_settings'] | {
@@ -176,6 +190,7 @@ def preview_model(image, asset, selection):
               else ring12_graphics.inflate(image[start:start+asset['size']]) if codec == 'ring12'
               else block16_graphics.inflate(image[start:start+asset['size']]) if codec == 'block16'
               else unpack_mio(image[start:start+asset['size']]) if codec == 'mio0'
+              else unpack_erz(image[start:start+asset['size']]) if codec == 'erz'
               else mwo_graphics.inflate(image[start:start+asset['size']]))
     index = formats.integer(selection.get('mesh', 0), 'Mesh', 0, len(asset['meshes'])-1)
     item = asset['meshes'][index]
