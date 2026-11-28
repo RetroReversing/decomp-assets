@@ -7,14 +7,20 @@ LAYOUT = 'runtime-observed-texture'
 
 
 def _indexed_palette(image, ram, start, texture, offset, kind, palette_index):
-    """A directly preceding RGBA TLUT and texture, adjacent in both RAM and ROM."""
+    """A directly preceding TLUT load, backed by captured and cartridge bytes."""
     at = start - 56
-    if at < 0 or _COMMAND.unpack_from(ram, at) != (0xe3001001, 0x8000):
+    if at < 0:
+        return None
+    mode = _COMMAND.unpack_from(ram, at)
+    if mode not in ((0xe3001001, 0x8000), (0xe3000e02, 0x8000), (0xe3000e02, 0xc000)):
         return None
     if not _PALETTE.match(ram, at + 8) or _COMMAND.unpack_from(ram, start - 8) != (0xe7000000, 0):
         return None
     _, pointer = _COMMAND.unpack_from(ram, at + 8)
+    _, tile = _COMMAND.unpack_from(ram, at + 24)
     _, command = _COMMAND.unpack_from(ram, at + 40)
+    if tile >> 24 != command >> 24:
+        return None
     entries = 16 if kind == 'ci4' else 256
     first = palette_index * 16 if kind == 'ci4' else 0
     if first + entries > ((command >> 14) & 1023) + 1:
@@ -22,16 +28,21 @@ def _indexed_palette(image, ram, start, texture, offset, kind, palette_index):
     if 0x80000000 <= pointer < 0xc0000000:
         pointer &= 0x1fffffff
     size = entries * 2
-    # Restrict this proof to a whole palette immediately before the pixels;
-    # a larger TLUT may place the selected bank elsewhere.
-    if first or pointer + size != texture or offset < size or pointer + size > len(ram):
+    pointer += first * 2
+    if pointer + size > len(ram):
         return None
     palette = ram[pointer:pointer + size]
-    stored = image[offset - size:offset]
-    if stored == palette:
-        return offset - size, False
-    if stored == b''.join(palette[i:i + 2][::-1] for i in range(0, size, 2)):
-        return offset - size, True
+    palette_format = 'ia16' if mode[1] == 0xc000 else 'rgba5551-be'
+    if not first and pointer + size == texture and offset >= size and palette_format == 'rgba5551-be':
+        stored = image[offset - size:offset]
+        if stored == palette:
+            return offset - size, False, '', palette_format
+        if stored == b''.join(palette[i:i + 2][::-1] for i in range(0, size, 2)):
+            return offset - size, True, '', palette_format
+    # The same colours can occur in several palette tables; their bytes are
+    # still observed at the load, even when no one cartridge offset is unique.
+    if image.find(palette) >= 0:
+        return None, False, bytes(palette).hex(), palette_format
     return None
 
 
@@ -89,8 +100,12 @@ def regions(image, snapshots, *, check=lambda: None):
                               preview_settings=dict(source='rom', format='auto', offset=offset),
                               reason='A runtime display-list load gives this format and size; its complete pixels uniquely match the ROM.')
             if palette:
-                asset.update(palette_offset=palette[0], palette_little_endian=palette[1])
-                asset['reason'] += ' The adjacent palette matches the runtime TLUT load.'
+                if palette[0] is not None:
+                    asset.update(palette_offset=palette[0], palette_little_endian=palette[1])
+                    asset['reason'] += ' The adjacent palette matches the runtime TLUT load.'
+                else:
+                    asset.update(palette=palette[2], palette_format=palette[3])
+                    asset['reason'] += ' The captured TLUT colours also occur in the cartridge; their source offset may be ambiguous.'
             found[key] = asset
     from . import runtime_tiled_textures
     return list(found.values()) + runtime_tiled_textures.regions(image, snapshots, check=check)
@@ -102,6 +117,21 @@ def preview(image, asset, selection):
         raise formats.AssetError('The runtime texture is outside the image. Scan ROM Explorer again.')
     options = dict(format=asset['format'], width=asset['width'], height=asset['height'], offset=offset)
     if asset['format'] in ('ci4', 'ci8'):
+        if asset.get('palette'):
+            try:
+                palette = bytes.fromhex(asset['palette'])
+            except (TypeError, ValueError):
+                raise formats.AssetError('The observed palette is invalid. Scan ROM Explorer again.') from None
+            palette_size = 32 if asset['format'] == 'ci4' else 512
+            if len(palette) != palette_size or image.find(palette) < 0:
+                raise formats.AssetError('The observed palette changed. Scan ROM Explorer again.')
+            options['palette_offset'] = len(image)
+            options['palette_format'] = asset.get('palette_format', 'rgba5551-be')
+            image = bytes(image) + palette
+            result = formats.preview(image, options)
+            result['details']['note'] = asset['reason']
+            result['settings'] = dict(source='rom', format='auto', offset=offset)
+            return result
         palette_offset = asset.get('palette_offset', -1)
         palette_size = 32 if asset['format'] == 'ci4' else 512
         if palette_offset < 0 or palette_offset + palette_size > len(image):
