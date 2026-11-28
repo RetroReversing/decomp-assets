@@ -45,3 +45,13 @@ def test_bolt_dispatches_bounded_texture_geometry_and_voice():
     assert n64.preview(image,audio,{})['mime'] == 'audio/wav'
     assert not bolt.regions(image[:-1])
     assert struct.unpack('<4h',bolt_audio.pcm(voice[12:],2)) == (96,64,96,128)
+
+
+def test_bolt_voice_uses_the_recorded_sample_rate():
+    voice = struct.pack('>HHII', 0x0010, 11025, 2, 0)+b'\x18\x00'
+    image = archive([(25, voice)])
+    row, = bolt.regions(image)
+    assert row['samples'][0]['rate'] == 11025
+    assert n64.preview(image, row, {})['details']['rate'] == 11025
+    for damaged in (voice[:2]+b'\x00\x00'+voice[4:], voice[:-1], voice[:11]+b'\x01'+voice[12:]):
+        assert bolt_audio.voice(damaged) is None

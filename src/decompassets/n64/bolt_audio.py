@@ -15,7 +15,7 @@ def voice(data):
     if len(data) < 14:
         return None
     flags, rate, size, reserved = struct.unpack_from('>HHII',data)
-    if flags not in (0x0010,0x0210) or rate != 16384 or size != len(data)-12 or reserved:
+    if flags not in (0x0010,0x0210) or rate not in (11025, 16384) or size != len(data)-12 or reserved:
         return None
     return dict(codec='Dialogic ADPCM',rate=rate,samples=size*2,size=size)
 
