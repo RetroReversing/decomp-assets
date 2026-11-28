@@ -85,6 +85,24 @@ def test_overlapping_backreference():
         rnc.repack_like(b'abcabcabd', overlap_block())
 
 
+@pytest.mark.parametrize('method', [1, 2])
+def test_erz_uses_checked_rnc_grammar_and_bounds(method):
+    from .test_rnc_shpn_images import _method2
+
+    raw = b'bounded synthetic stream' * 3
+    standard = literal_block(raw) if method == 1 else _method2(raw)
+    block = b'ERZ' + standard[3:]
+    assert rnc.unpack_at(b'prefix' + block, 6) == (raw, len(block))
+    with pytest.raises(rnc.RncError):
+        rnc.unpack_at(block[:-1], 0)
+    with pytest.raises(rnc.RncError):
+        rnc.unpack_at(block, 0, max_output=len(raw)-1)
+    damaged = bytearray(block)
+    damaged[-1] ^= 1
+    with pytest.raises(rnc.RncError):
+        rnc.unpack_at(damaged, 0)
+
+
 def test_rejects_corruption_and_limits():
     block = literal_block(b'hello world')
     with pytest.raises(rnc.RncError, match='sizes'):
