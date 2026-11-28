@@ -864,6 +864,8 @@ def preview(data, asset, selection):
     if asset.get('layout')=='uv-texture':return uv_textures.preview(data,asset,selection)
     if asset.get('layout')=='ffs-i64':return ffs.preview(data,asset,selection)
     if asset.get('layout') == runtime_packed_graphics.MODEL:return runtime_packed_graphics.preview_model(data,asset,selection)
+    from . import runtime_deflate_models
+    if asset.get('layout') == runtime_deflate_models.LAYOUT:return runtime_deflate_models.preview(data,asset,selection)
     if asset.get('layout') == runtime_direct_models.LAYOUT:return runtime_direct_models.preview(data,asset,selection)
     if asset.get('layout') == runtime_zip_models.LAYOUT:return runtime_zip_models.preview(data,asset,selection)
     if asset.get('layout') in (table_lz_graphics.TEXTURES,ring12_graphics.TEXTURES,runtime_packed_graphics.MIO_TEXTURES,runtime_packed_graphics.ERZ_TEXTURES,runtime_packed_graphics.RNC_TEXTURES,runtime_packed_graphics.DEFLATE_TEXTURES,block16_graphics.TEXTURES):return table_lz_graphics.preview(data,asset,selection)
