@@ -45,3 +45,32 @@ def test_consecutive_tables_and_payloads_provide_checked_sample_banks():
     # A broken font map prevents a coincidental set of tables from claiming audio.
     data[0x67] = 3
     assert not list(ead_direct_audio.contiguous_directories(data))
+
+
+def test_filesystem_payloads_and_aliased_sample_bank(monkeypatch):
+    data = bytearray(0x600)
+    struct.pack_into('>H', data, 0x20, 3)
+    for index in range(3):
+        struct.pack_into('>II8B', data, 0x30 + index*16, index*0x60, 0x60, 2, 0, 1, 255, 1, 0, 0, 0)
+    struct.pack_into('>3H', data, 0x60, 6, 8, 10)
+    data[0x66:0x6c] = bytes((1, 0, 1, 1, 1, 2))
+    struct.pack_into('>H', data, 0x70, 3)
+    for index in range(3):
+        struct.pack_into('>II8B', data, 0x80 + index*16, index*0x10, 0x10, 2, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into('>H', data, 0xb0, 2)
+    struct.pack_into('>II8B', data, 0xc0, 0, 0x20, 2, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into('>II8B', data, 0xd0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into('>12I', data, 0x100, 0x300, 0x420, 0x300, 0,
+                     0x420, 0x450, 0x420, 0, 0x450, 0x470, 0x450, 0)
+    sample = uso_audio._Sample(offset=0, size=9, book=8, predictors=1)
+    monkeypatch.setattr(uso_audio, '_groups', lambda *args, **kwargs: [[sample]])
+    banks = ead_direct_audio.regions(data)
+    assert len(banks) == 1 and banks[0]['samples'][0]['offset'] == 0x450
+    assert ead_direct_audio.preview(data, banks[0], {'sample': 0})['media'] == 'audio'
+
+    # Compressed or ambiguous filesystem records do not prove the payload locations.
+    struct.pack_into('>I', data, 0x10c, 0x420)
+    assert not list(ead_direct_audio.filesystem_directories(data))
+    struct.pack_into('>I', data, 0x10c, 0)
+    data[0x140:0x170] = data[0x100:0x130]
+    assert not list(ead_direct_audio.filesystem_directories(data))
