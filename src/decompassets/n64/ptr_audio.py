@@ -155,6 +155,19 @@ def _controls(image, tables, *, check):
     yield from _rnc_controls(image,tables,check)
 
 
+def _equivalent_tables(image, info, bases):
+    """Candidates can preview the same sounds without proving which location was loaded."""
+    if not 2 <= len(bases) <= 8:
+        return False
+    extents = {(s['relative_offset'], s['size']) for s in info['samples']}
+    if sum(size for _, size in extents) > 16 * 1024 * 1024:
+        return False
+    source = memoryview(image)
+    first = bases[0]
+    return all(source[first+offset:first+offset+size] == source[base+offset:base+offset+size]
+               for base in bases[1:] for offset, size in extents)
+
+
 def regions(image, *, check=lambda:None, progress=lambda _:None):
     """Keep ambiguous wave-table placement unresolved instead of choosing the nearest."""
     tables=[m.start() for m in itertools.islice(re.finditer(re.escape(WAVES),image),MAX_BANKS)]
@@ -188,16 +201,23 @@ def regions(image, *, check=lambda:None, progress=lambda _:None):
             fitting = pairs
         else:
             fitting = [paired] if paired is not None else [base for base in tables if fits(image,info,base,budget,check)]
-        resolved=len(fitting)==1 and (paired is not None or budget[0]>0)
+        equivalent = (not pairs and len(fitting) > 1 and budget[0] > 0
+                      and _equivalent_tables(image, info, fitting))
+        resolved=(len(fitting)==1 and (paired is not None or budget[0]>0)) or equivalent
         base=fitting[0] if resolved else None
         samples=[{**s,'offset':base+s['relative_offset']} for s in info['samples']] if resolved else []
         reason='PtrTablesV2 control graph, tuning arrays, sample extents, loops and predictor books checked. '+('Exactly one marked WaveTables candidate fits every sample and ADPCM frame selector; table placement remains a static inference.' if resolved else 'Wave-table placement is ambiguous or unresolved; sample bytes are not classified.')+' The bank stores no rate: 22050 Hz is an editable preview default. Pitch, mixing, sequences and loop playback are not recreated.'
+        if equivalent:
+            reason = ('All fitting marked wave tables contain identical bytes for every sample; their actual placement '
+                      'remains unresolved. The bank stores no rate. 22050 Hz is an editable preview default.')
         if paired is not None:
             reason = 'A marked WaveTables block and this validated control graph are adjacent with only alignment padding. '
             reason += 'The bank stores no rate. 22050 Hz is an editable preview default.'
         if info['skipped_invalid_loops']:
             reason += ' One sample with an out-of-range loop was omitted.'
-        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('adjacent wave and control pair' if paired is not None else 'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason,skipped_invalid_loops=info['skipped_invalid_loops'])
+        common=dict(media='audio',audio_kind='libmus sample bank',bank_offset=info['offset'],rate_basis='Editable preview rate; not stored in the bank',table_confidence=('identical candidate samples; placement unresolved' if equivalent else
+                                'adjacent wave and control pair' if paired is not None else
+                                'unique marked table (static inference)') if resolved else 'unresolved',table_candidates=fitting,table_offset=base,reason=reason,skipped_invalid_loops=info['skipped_invalid_loops'])
         if 'compressed_control' in info:
             common.update(compressed_control=info['compressed_control'])
             common.update((key, info[key]) for key in ('control_codec', 'control_byte_order') if key in info)
