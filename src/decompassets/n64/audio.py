@@ -783,7 +783,10 @@ def preview(image, asset, selection, *, book_image=None):
         from . import dean_audio
         return dean_audio.render_clip(image, sample['dean_codebooks'], raw, rate, sample['dean_frames'],
                                       dict(source='rom', format='auto', offset=asset['offset'], sample=index))
-    if sample['codec'] in ('N64 VADPCM', 'N64 VADPCM (2-bit)'):
+    if sample['codec'] == 'EA-XA':
+        from . import ea_xa
+        pcm = ea_xa.decode(raw, limit)
+    elif sample['codec'] in ('N64 VADPCM', 'N64 VADPCM (2-bit)'):
         books=image if book_image is None else book_image
         at=sample['book_offset'];count=sample['predictors']*16
         if not 0<=at<at+count*2<=len(books):raise AssetError('The ADPCM predictor book exceeds the current image.')
